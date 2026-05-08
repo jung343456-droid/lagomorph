@@ -12,7 +12,7 @@ export default class EnemyManager {
 
     this.foxes     = [];
     this.cores     = [];
-    this.coreCount = 0;
+    this.coreCount = 50;
 
     this._hadEnemies = false;
 

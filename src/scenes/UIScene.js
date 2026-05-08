@@ -49,6 +49,7 @@ export default class UIScene extends Phaser.Scene {
     if (player)        this._updateHP(player.hp, player.maxHp);
     if (attackManager) this._updateChargeGauge(attackManager);
     if (enemyManager)  this._coreText.setText(String(enemyManager.coreCount));
+    if (attackManager && enemyManager) this._updateBSlot(attackManager, enemyManager);
   }
 
   // ── 충전 게이지 (상단 중앙) ──────────────────────────
@@ -195,5 +196,12 @@ export default class UIScene extends Phaser.Scene {
     this.tweens.killTweensOf(rect);
     rect.setAlpha(1);
     this.tweens.add({ targets: rect, alpha: 0.8, duration: 200, ease: 'Quad.In' });
+  }
+
+  _updateBSlot(atk, em) {
+    const bSlot  = this._slotRects[1];
+    if (!bSlot) return;
+    const avail = atk.bCooldownNormalized === 0 && em.coreCount >= 3;
+    bSlot.setAlpha(avail ? 0.8 : 0.35);
   }
 }
