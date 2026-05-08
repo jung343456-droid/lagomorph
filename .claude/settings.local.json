@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install *)",
+      "Bash(python3 -c ' *)",
+      "Bash(identify /c/projects/lagomorph/public/assets/characters/*.png)",
+      "Bash(powershell.exe *)",
+      "Bash(python3 -c \"from PIL import Image; print\\('PIL ok'\\)\")",
+      "Bash(python -c \"from PIL import Image; print\\('PIL ok'\\)\")",
+      "Bash(python3 *)",
+      "Bash(git --version)",
+      "Bash(gh --version)",
+      "Bash(git *)"
+    ]
+  }
+}

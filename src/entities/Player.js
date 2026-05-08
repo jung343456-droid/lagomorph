@@ -1,0 +1,80 @@
+const DISPLAY_W = 64;
+const DISPLAY_H = 72;
+const BODY_SIZE = 28;
+
+export default class Player {
+  constructor(scene, x, y) {
+    this.scene  = scene;
+    this.speed  = 200;
+    this.hp     = 100;
+    this.maxHp  = 100;
+
+    this._invincible = false;
+    this.facingDir   = { x: 0, y: 1 };
+    this._dir        = 'bottom';
+
+    this.gameObject = scene.add.image(x, y, 'soma-bottom');
+    this.gameObject.setDisplaySize(DISPLAY_W, DISPLAY_H);
+    scene.physics.add.existing(this.gameObject);
+    this.gameObject.body.setSize(BODY_SIZE, BODY_SIZE, true);
+    this.gameObject.body.setCollideWorldBounds(true);
+    this.gameObject.setDepth(10);
+  }
+
+  update({ x, y }) {
+    this.gameObject.body.setVelocity(x * this.speed, y * this.speed);
+    if (x !== 0 || y !== 0) {
+      this.facingDir.x = x;
+      this.facingDir.y = y;
+      this._setDir(this._vecToDir(x, y));
+    }
+  }
+
+  /** @returns {boolean} true = 사망 */
+  takeDamage(amount) {
+    if (this._invincible) return false;
+
+    this.hp = Math.max(0, this.hp - amount);
+    this._invincible = true;
+
+    this.scene.tweens.killTweensOf(this.gameObject);
+    this.scene.tweens.add({
+      targets:  this.gameObject,
+      alpha:    0.35,
+      duration: 80,
+      yoyo:     true,
+      repeat:   2,
+      onComplete: () => {
+        this.gameObject.setAlpha(1);
+        this._invincible = false;
+      },
+    });
+
+    return this.hp <= 0;
+  }
+
+  get x() { return this.gameObject.x; }
+  get y() { return this.gameObject.y; }
+
+  // ── private ─────────────────────────────────────────
+
+  _setDir(dir) {
+    if (dir === this._dir) return;
+    this._dir = dir;
+    this.gameObject.setTexture(`soma-${dir}`);
+    // 텍스처 교체 시 스케일이 초기화되므로 재적용
+    this.gameObject.setDisplaySize(DISPLAY_W, DISPLAY_H);
+  }
+
+  _vecToDir(x, y) {
+    const a = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+    if (a >= 337.5 || a <  22.5) return 'right';
+    if (a <  67.5)               return 'bottom-right';
+    if (a < 112.5)               return 'bottom';
+    if (a < 157.5)               return 'bottom-left';
+    if (a < 202.5)               return 'left';
+    if (a < 247.5)               return 'top-left';
+    if (a < 292.5)               return 'top';
+    return 'top-right';
+  }
+}

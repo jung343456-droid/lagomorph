@@ -1,0 +1,17 @@
+# Dependencies (large, auto-generated)
+node_modules/
+
+# Build output
+dist/
+.vite/
+
+# Binary assets (Claude reads text, not images/audio)
+public/assets/characters/
+public/assets/audio/
+public/assets/sprites/
+
+# Design docs (large, rarely needed per-task)
+design/
+
+# Lock file (auto-generated, not useful to read)
+package-lock.json

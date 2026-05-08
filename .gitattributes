@@ -1,0 +1,31 @@
+# Normalize all text files to LF on commit (overrides core.autocrlf)
+* text=auto eol=lf
+
+# JavaScript / Web
+*.js    text eol=lf
+*.ts    text eol=lf
+*.json  text eol=lf
+*.html  text eol=lf
+*.css   text eol=lf
+*.md    text eol=lf
+
+# Config
+.gitignore      text eol=lf
+.gitattributes  text eol=lf
+.claudeignore   text eol=lf
+*.config.js     text eol=lf
+*.config.ts     text eol=lf
+
+# Binary — never convert
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.svg   binary
+*.ttf   binary
+*.woff  binary
+*.woff2 binary
+*.mp3   binary
+*.ogg   binary
+*.wav   binary

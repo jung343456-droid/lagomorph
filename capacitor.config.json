@@ -1,0 +1,14 @@
+{
+  "appId": "com.lagomorph.game",
+  "appName": "Lagomorph",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 0
+    }
+  }
+}
