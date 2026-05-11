@@ -9,7 +9,7 @@ export default class Fox {
 
     this.hp     = 30;
     this.maxHp  = 30;
-    this.speed  = 150;
+    this.speed  = 140;
     this.damage = 8;
 
     this.state      = 'idle';
@@ -21,6 +21,11 @@ export default class Fox {
 
     this.alive     = true;
     this.destroyed = false;
+
+    this._knockbackTimer    = 0;
+    this._knockbackDuration = 0;
+    this._knockbackVx = 0;
+    this._knockbackVy = 0;
 
     this.gameObject = scene.add.rectangle(x, y, 28, 28, FOX_COLOR);
     scene.physics.add.existing(this.gameObject);
@@ -54,8 +59,8 @@ export default class Fox {
 
       case 'chase':
         if (dist >= DETECT_R) { this.state = 'idle'; break; }
-        // 플레이어 HP 30% 이하 → 도주
-        if (player.hp / player.maxHp <= 0.3 && this.fleeGrace <= 0) {
+        // 자신 HP 30% 이하 → 도주
+        if (this.hp / this.maxHp <= 0.3 && this.fleeGrace <= 0) {
           this._prevState = 'idle';
           this.state      = 'flee';
           this.fleeTimer  = 2;
@@ -76,7 +81,13 @@ export default class Fox {
 
       case 'stun':
         this.stunTimer -= dt;
-        this.gameObject.body.setVelocity(0, 0);
+        if (this._knockbackTimer > 0) {
+          this._knockbackTimer -= dt;
+          const t = Math.max(0, this._knockbackTimer) / this._knockbackDuration;
+          this.gameObject.body.setVelocity(this._knockbackVx * t, this._knockbackVy * t);
+        } else {
+          this.gameObject.body.setVelocity(0, 0);
+        }
         if (this.stunTimer <= 0) {
           this.gameObject.setFillStyle(FOX_COLOR);
           this.state = this._prevState;
@@ -88,13 +99,21 @@ export default class Fox {
   }
 
   /** @returns {boolean} true = 처치 */
-  takeDamage(amount) {
+  takeDamage(amount, knockback = null) {
     if (!this.alive || this.state === 'stun') return false;
 
     this.hp -= amount;
     if (this.hp <= 0) {
       this._die();
       return true;
+    }
+
+    if (knockback) {
+      const { dx, dy, force, duration } = knockback;
+      this._knockbackTimer    = duration;
+      this._knockbackDuration = duration;
+      this._knockbackVx = dx * force;
+      this._knockbackVy = dy * force;
     }
 
     this._prevState = this.state;

@@ -27,10 +27,27 @@ export default class GameScene extends Phaser.Scene {
     this.cameras.main.startFollow(this.player.gameObject, true, 0.08, 0.08);
 
     this.scene.launch('UIScene', { gameScene: this });
+
+    this.events.once('player-dead', () => {
+      this.time.delayedCall(400, () => {
+        this.add.rectangle(0, 0, GAME_W, GAME_H, 0x000000, 0.75)
+          .setScrollFactor(0).setDepth(100).setOrigin(0);
+        this.add.text(GAME_W / 2, GAME_H / 2 - 36, 'GAME OVER', {
+          fontSize: '38px', color: '#ff4444', fontFamily: 'monospace',
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(101);
+        this.add.text(GAME_W / 2, GAME_H / 2 + 20, 'TAP TO RESTART', {
+          fontSize: '16px', color: '#aaaaaa', fontFamily: 'monospace',
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(101);
+        this.input.once('pointerdown', () => {
+          this.scene.stop('UIScene');
+          this.scene.restart();
+        });
+      });
+    });
   }
 
   update(_time, delta) {
-    this.player.update(this.input$.getDirection());
+    this.player.update(this.input$.getDirection(), delta);
     this.attackManager.update(delta);
     this.enemyManager.update(delta);
     this.roomManager.update();

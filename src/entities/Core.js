@@ -1,7 +1,8 @@
 export default class Core {
   constructor(scene, x, y) {
     this.scene = scene;
-    this.alive = true;
+    this.alive      = true;
+    this.magnetized = false;
 
     this.gameObject = scene.add
       .circle(x, y, 7, 0x00e5ff)
@@ -33,6 +34,12 @@ export default class Core {
         });
       },
     });
+  }
+
+  startMagnet() {
+    if (this.magnetized) return;
+    this.magnetized = true;
+    this.scene.tweens.killTweensOf(this.gameObject);
   }
 
   collect() {

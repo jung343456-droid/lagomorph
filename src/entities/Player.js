@@ -9,9 +9,10 @@ export default class Player {
     this.hp     = 100;
     this.maxHp  = 100;
 
-    this._invincible = false;
-    this.facingDir   = { x: 0, y: 1 };
-    this._dir        = 'bottom';
+    this._invincible     = false;
+    this._knockbackTimer = 0;
+    this.facingDir       = { x: 0, y: 1 };
+    this._dir            = 'bottom';
 
     this.gameObject = scene.add.image(x, y, 'soma-bottom');
     this.gameObject.setDisplaySize(DISPLAY_W, DISPLAY_H);
@@ -21,7 +22,12 @@ export default class Player {
     this.gameObject.setDepth(10);
   }
 
-  update({ x, y }) {
+  update({ x, y }, delta) {
+    const dt = delta / 1000;
+    if (this._knockbackTimer > 0) {
+      this._knockbackTimer = Math.max(0, this._knockbackTimer - dt);
+      return;
+    }
     this.gameObject.body.setVelocity(x * this.speed, y * this.speed);
     if (x !== 0 || y !== 0) {
       this.facingDir.x = x;
@@ -31,11 +37,17 @@ export default class Player {
   }
 
   /** @returns {boolean} true = 사망 */
-  takeDamage(amount) {
+  takeDamage(amount, knockback = null) {
     if (this._invincible) return false;
 
     this.hp = Math.max(0, this.hp - amount);
     this._invincible = true;
+
+    if (knockback) {
+      const { dx, dy, force, duration } = knockback;
+      this._knockbackTimer = duration;
+      this.gameObject.body.setVelocity(dx * force, dy * force);
+    }
 
     this.scene.tweens.killTweensOf(this.gameObject);
     this.scene.tweens.add({

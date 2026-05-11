@@ -17,6 +17,9 @@ const POOP_SIZE     = 22;
 const MAX_POOPS     = 3;
 const POOP_COLOR    = 0x7B3F20;
 
+const FOX_KNOCKBACK_PER_DMG = 12;
+const FOX_KNOCKBACK_DUR     = 0.22;
+
 // UIScene._buildSkillSlots 와 동일한 레이아웃 상수
 const SLOT_SIZE = 56, SLOT_GAP = 10, UI_MARGIN = 20;
 const B_CX = 390 - UI_MARGIN - SLOT_SIZE / 2 - (SLOT_SIZE + SLOT_GAP); // 276
@@ -246,7 +249,16 @@ export default class AttackManager {
     const fox = em.foxes.find(f => f.gameObject === foxGO);
     if (!fox || !fox.alive) return;
 
-    const dead = fox.takeDamage(poop.damage);
+    const ddx = foxGO.x - poopGO.x;
+    const ddy = foxGO.y - poopGO.y;
+    const len = Math.sqrt(ddx * ddx + ddy * ddy);
+    const nx  = len > 0 ? ddx / len : 1;
+    const ny  = len > 0 ? ddy / len : 0;
+    const dead = fox.takeDamage(poop.damage, {
+      dx: nx, dy: ny,
+      force: poop.damage * FOX_KNOCKBACK_PER_DMG,
+      duration: FOX_KNOCKBACK_DUR,
+    });
     if (dead) em.dropCores(fox.x, fox.y, 3);
 
     this._destroyPoop(poop);
