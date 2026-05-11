@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 
 const MAX_CHARGE = 0.8;
-const BASE_DMG   = 20;
+const BASE_DMG   = 10;
 const BASE_R     = 60;
 
 const MELEE_TIERS = [
@@ -179,7 +179,7 @@ export default class AttackManager {
   }
 
   _inBSlot(p) {
-    const bCY = this.scene.scale.height - UI_MARGIN - SLOT_SIZE / 2;
+    const bCY = this.scene.scale.height - 130; // 조이스틱과 같은 높이
     return Math.abs(p.x - B_CX) <= SLOT_SIZE / 2 && Math.abs(p.y - bCY) <= SLOT_SIZE / 2;
   }
 

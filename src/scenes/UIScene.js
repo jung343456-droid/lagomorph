@@ -167,14 +167,14 @@ export default class UIScene extends Phaser.Scene {
 
   _buildSkillSlots() {
     const slotSize = 56, gap = 10;
-    const bottomY  = this.scale.height - MARGIN;
+    const slotCY   = this.scale.height - 130; // 조이스틱과 같은 높이
     const rightX   = GAME_W - MARGIN;
     [
       { label: 'A', color: 0x4ecca3 },
       { label: 'B', color: 0xe63946 },
     ].forEach((slot, i) => {
       const x = rightX - slotSize / 2 - (slotSize + gap) * i;
-      const y = bottomY - slotSize / 2;
+      const y = slotCY;
       const rect = this.add.rectangle(x, y, slotSize, slotSize, 0x1a1a2e, 0.8).setStrokeStyle(2, slot.color, 0.6);
       this._slotRects.push(rect);
       this.add.text(x, y, slot.label, {

@@ -1,6 +1,7 @@
 const DISPLAY_W = 64;
 const DISPLAY_H = 72;
-const BODY_SIZE = 28;
+const BODY_W    = 48;
+const BODY_H    = 46;
 
 export default class Player {
   constructor(scene, x, y) {
@@ -17,7 +18,7 @@ export default class Player {
     this.gameObject = scene.add.image(x, y, 'soma-bottom');
     this.gameObject.setDisplaySize(DISPLAY_W, DISPLAY_H);
     scene.physics.add.existing(this.gameObject);
-    this.gameObject.body.setSize(BODY_SIZE, BODY_SIZE, true);
+    this.gameObject.body.setSize(BODY_W, BODY_H, true);
     this.gameObject.body.setCollideWorldBounds(true);
     this.gameObject.setDepth(10);
   }
