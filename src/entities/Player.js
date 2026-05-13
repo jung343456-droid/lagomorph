@@ -15,8 +15,9 @@ const BODY_H    = 46; // 물리 히트박스 높이 (px)
 export default class Player {
   constructor(scene, x, y) {
     this.scene  = scene;
-    this.speed  = 200;
-    this.hp     = 100;
+    this.baseSpeed = 200;
+    this.speed     = 200;
+    this.hp        = 100;
     this.maxHp  = 100;
 
     this._invincible     = false;

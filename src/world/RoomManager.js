@@ -58,6 +58,11 @@ export default class RoomManager {
     this.player.gameObject.setPosition(entry.x, entry.y);
     this.player.gameObject.body.reset(entry.x, entry.y);
 
+    // 클리어 방 재진입 시 이동속도 1.5배
+    this.player.speed = roomData.cleared
+      ? this.player.baseSpeed * 1.5
+      : this.player.baseSpeed;
+
     // 적 스폰 또는 즉시 개방
     if (roomData.cleared) {
       this._room.unlockDoors();
