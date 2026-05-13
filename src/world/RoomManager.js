@@ -1,6 +1,6 @@
 import Room, { ROOM_W, ROOM_H, WALL_T, DOOR_W, DOOR_HX, DOOR_VY } from './Room';
 
-const TRIGGER_MARGIN = 20; // 방 가장자리로부터 이 값 이내로 들어오면 전환
+const TRIGGER_MARGIN = 20; // 문 전환 트리거 여백: 방 가장자리에서 이 거리 이내 진입 시 방 전환 (px)
 
 export default class RoomManager {
   constructor(scene, player, enemyManager) {
@@ -46,7 +46,7 @@ export default class RoomManager {
     const wg = this._room.wallGroup;
     this._wallColliders.push(
       this.scene.physics.add.collider(wg, this.player.gameObject),
-      this.scene.physics.add.collider(wg, this.enemyManager.foxGroup),
+      this.scene.physics.add.collider(wg, this.enemyManager.enemyGroup),
     );
 
     // 카메라 고정 (방 크기 = 캔버스 크기이므로 스크롤 없음)

@@ -1,7 +1,16 @@
-const DISPLAY_W = 64;
-const DISPLAY_H = 72;
-const BODY_W    = 48;
-const BODY_H    = 46;
+/**
+ * 플레이어 (VOSS-7 / soma) — 조작 캐릭터
+ * HP 100 / 속도 200
+ *
+ * 이동: 가상 조이스틱 또는 WASD, 8방향 스프라이트 자동 전환
+ * 피격: 무적 시간 동안 깜빡임(alpha 0.35), 이후 재피격 가능
+ *       넉백 지속 중에는 플레이어 입력 무시
+ * 사망: takeDamage() 반환값 true → 호출부에서 player-dead 이벤트 발행
+ */
+const DISPLAY_W = 64; // 스프라이트 표시 너비 (px)
+const DISPLAY_H = 72; // 스프라이트 표시 높이 (px)
+const BODY_W    = 48; // 물리 히트박스 너비 (px)
+const BODY_H    = 46; // 물리 히트박스 높이 (px)
 
 export default class Player {
   constructor(scene, x, y) {

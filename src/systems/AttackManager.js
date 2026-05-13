@@ -1,8 +1,8 @@
 import Phaser from 'phaser';
 
-const MAX_CHARGE = 0.8;
-const BASE_DMG   = 10;
-const BASE_R     = 60;
+const MAX_CHARGE = 0.8; // 최대 충전 시간 (초): 이 시간 이상 누르면 MAX 티어
+const BASE_DMG   = 10;  // 근거리 기본 데미지 (티어 I 기준)
+const BASE_R     = 60;  // 근거리 기본 공격 반경 (px, 티어 I 기준)
 
 const MELEE_TIERS = [
   { threshold: 0,   color: 0x4ecca3, label: '근거리 I',   damage: BASE_DMG,              radius: BASE_R       },
@@ -10,19 +10,19 @@ const MELEE_TIERS = [
   { threshold: 0.8, color: 0xffffff, label: '근거리 MAX', damage: (BASE_DMG * 1.4) | 0,  radius: BASE_R * 1.5 },
 ];
 
-const POOP_COST     = 3;
-const POOP_COOLDOWN = 1.5;
-const POOP_DMG      = 30;
-const POOP_SIZE     = 22;
-const MAX_POOPS     = 3;
-const POOP_COLOR    = 0x7B3F20;
+const POOP_COST     = 3;    // 설치형 공격 1회당 소모 코어 수
+const POOP_COOLDOWN = 0.5;  // 설치형 공격 재사용 대기 시간 (초)
+const POOP_DMG      = 30;   // 설치형 공격 명중 데미지
+const POOP_SIZE     = 22;   // 설치형 오브젝트 크기 (px)
+const MAX_POOPS     = 5;    // 동시에 배치 가능한 최대 설치물 수
+const POOP_COLOR    = 0x7B3F20; // 설치물 색상 (갈색)
 
-const FOX_KNOCKBACK_PER_DMG = 12;
-const FOX_KNOCKBACK_DUR     = 0.22;
+const FOX_KNOCKBACK_PER_DMG = 12;   // 설치형 공격 넉백 강도 = 데미지 × 이 값
+const FOX_KNOCKBACK_DUR     = 0.22; // 설치형 공격 넉백 지속 시간 (초)
 
 // UIScene._buildSkillSlots 와 동일한 레이아웃 상수
-const SLOT_SIZE = 56, SLOT_GAP = 10, UI_MARGIN = 20;
-const B_CX = 390 - UI_MARGIN - SLOT_SIZE / 2 - (SLOT_SIZE + SLOT_GAP); // 276
+const SLOT_SIZE = 56, SLOT_GAP = 10, UI_MARGIN = 20; // 스킬 슬롯 크기·간격·화면 여백 (px)
+const B_CX = 390 - UI_MARGIN - SLOT_SIZE / 2 - (SLOT_SIZE + SLOT_GAP); // B슬롯 중심 x 좌표 (= 276)
 
 export default class AttackManager {
   constructor(scene, player) {
@@ -53,8 +53,8 @@ export default class AttackManager {
 
     scene.physics.add.overlap(
       this._poopGroup,
-      scene.enemyManager.foxGroup,
-      this._onPoopHitFox,
+      scene.enemyManager.enemyGroup,
+      this._onPoopHitEnemy,
       null,
       this,
     );
@@ -234,32 +234,34 @@ export default class AttackManager {
     const { x: px, y: py } = this.player;
     const go = this.scene.add.rectangle(px, py, POOP_SIZE, POOP_SIZE, POOP_COLOR);
     go.setDepth(5);
-    this.scene.physics.add.existing(go, true);
+    this.scene.physics.add.existing(go);
+    go.body.setImmovable(true);
+    go.body.setAllowGravity(false);
     this._poops.push({ go, damage: POOP_DMG });
     this._poopGroup.add(go);
     this._spawnRing(px, py, POOP_COLOR, POOP_SIZE * 2);
   }
 
-  _onPoopHitFox(poopGO, foxGO) {
+  _onPoopHitEnemy(poopGO, enemyGO) {
     if (!poopGO.active) return;
     const poop = this._poops.find(p => p.go === poopGO);
     if (!poop) return;
 
-    const em  = this.scene.enemyManager;
-    const fox = em.foxes.find(f => f.gameObject === foxGO);
-    if (!fox || !fox.alive) return;
+    const em     = this.scene.enemyManager;
+    const enemy  = em.enemies.find(e => e.gameObject === enemyGO);
+    if (!enemy || !enemy.alive) return;
 
-    const ddx = foxGO.x - poopGO.x;
-    const ddy = foxGO.y - poopGO.y;
+    const ddx = enemyGO.x - poopGO.x;
+    const ddy = enemyGO.y - poopGO.y;
     const len = Math.sqrt(ddx * ddx + ddy * ddy);
     const nx  = len > 0 ? ddx / len : 1;
     const ny  = len > 0 ? ddy / len : 0;
-    const dead = fox.takeDamage(poop.damage, {
+    const dead = enemy.takeDamage(poop.damage, {
       dx: nx, dy: ny,
-      force: poop.damage * FOX_KNOCKBACK_PER_DMG,
+      force:    poop.damage * FOX_KNOCKBACK_PER_DMG,
       duration: FOX_KNOCKBACK_DUR,
-    });
-    if (dead) em.dropCores(fox.x, fox.y, 3);
+    }, 'poop');
+    if (dead) em.dropCores(enemy.x, enemy.y, enemy.coreDrops ?? 3);
 
     this._destroyPoop(poop);
   }

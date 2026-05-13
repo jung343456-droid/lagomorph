@@ -1,18 +1,18 @@
-export const ROOM_W = 390;
-export const ROOM_H = 844;
-export const WALL_T = 20;
-export const DOOR_W = 60;
+export const ROOM_W = 390;  // 방 너비 = 캔버스 너비 (px)
+export const ROOM_H = 844;  // 방 높이 = 캔버스 높이 (px)
+export const WALL_T = 20;   // 벽 두께 (px)
+export const DOOR_W = 60;   // 문 통로 너비 (px)
 
-const WALL_COLOR     = 0x3a3a5e;
-const FLOOR_COLOR    = 0x12121e;
-const FLOOR_ALT      = 0x14141f;  // 격자 타일 대비색
-const OBSTACLE_COLOR = 0x2a2a50;
-const DOOR_LOCKED    = 0x111133;
-const DOOR_OPEN_HINT = 0x1e1e3a;  // 열린 문 어두운 배경
+const WALL_COLOR     = 0x3a3a5e; // 벽 색상 (진한 남색)
+const FLOOR_COLOR    = 0x12121e; // 바닥 기본 타일 색상
+const FLOOR_ALT      = 0x14141f; // 바닥 체커보드 대비 타일 색상
+const OBSTACLE_COLOR = 0x2a2a50; // 장애물 색상
+const DOOR_LOCKED    = 0x111133; // 잠긴 문 블록 색상
+const DOOR_OPEN_HINT = 0x1e1e3a; // 열린 문 어두운 배경 색상
 
 // 수평 문 X 시작 / 수직 문 Y 시작
-export const DOOR_HX = (ROOM_W - DOOR_W) / 2;   // 165
-export const DOOR_VY = (ROOM_H - DOOR_W) / 2;   // 392
+export const DOOR_HX = (ROOM_W - DOOR_W) / 2;   // 수평 문(상·하) 좌측 x 좌표 (= 165)
+export const DOOR_VY = (ROOM_H - DOOR_W) / 2;   // 수직 문(좌·우) 상단 y 좌표 (= 392)
 
 export default class Room {
   constructor(scene, data) {

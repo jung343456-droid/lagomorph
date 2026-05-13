@@ -1,44 +1,50 @@
 /**
- * 여우 (Fox) — 추격형
- * HP 30 / 속도 140 / 데미지 8 / 코어 드롭 3
+ * 들쥐 (Rat) — 돌진형 군집
+ * HP 12 / 속도 185 / 데미지 5 / 코어 드롭 1
+ * 스폰: 3마리 묶음 (120° 간격, 18px 반경 분산)
  *
  * 패턴:
- *   idle  → chase(250px 이내 탐지)
- *   chase → 플레이어를 직접 추격
- *   chase → flee(HP 30% 이하 시 2초간 도주, 이후 1.5초 유예 후 재도주 가능)
- *   stun  → 피격 시 0.5초 경직 + 넉백
+ *   idle     → rush(280px 이내 탐지, 플레이어 위치로 방향 고정 후 돌진)
+ *   rush     → 1.2초간 직선 돌진 (도중 방향 보정 없음)
+ *   cooldown → 0.3초 정지 후 재조준 → rush 반복
+ *   stun     → 피격 시 0.5초 경직 + 넉백
  */
-const DETECT_R  = 250;      // 플레이어 탐지 반경 (px)
-const FOX_COLOR = 0xe8600e; // 기본 색상 (주황)
-const HIT_COLOR = 0xff2222; // 피격 깜빡임 색상 (빨강)
+const DETECT_R   = 280;      // 플레이어 탐지 반경 (px)
+const RUSH_SPEED = 185;      // 돌진 속도 (px/s)
+const RUSH_DUR   = 1.2;      // 돌진 지속 시간 (초)
+const COOL_DUR   = 0.3;      // 돌진 후 쿨다운 (초)
+const RAT_W      = 14;       // 스프라이트 크기 (정사각형, px)
+const RAT_COLOR  = 0x888866; // 기본 색상 (올리브 회색)
+const HIT_COLOR  = 0xffffff; // 피격 깜빡임 색상 (흰색)
 
-// 상태: idle | chase | flee | stun
-export default class Fox {
+// 상태: idle | rush | cooldown | stun
+export default class Rat {
   constructor(scene, x, y) {
     this.scene = scene;
 
-    this.hp     = 30;
-    this.maxHp  = 30;
-    this.speed  = 140;
-    this.damage = 8;
+    this.hp     = 12;
+    this.maxHp  = 12;
+    this.speed  = RUSH_SPEED;
+    this.damage = 5;
 
     this.state      = 'idle';
     this._prevState = 'idle';
     this.stunTimer  = 0;
-    this.fleeTimer  = 0;
-    this.fleeGrace  = 0;       // 재도주 방지 유예 시간
     this.attackCooldown = 0;
 
-    this.alive      = true;
-    this.destroyed  = false;
-    this.coreDrops  = 3;
+    this.alive     = true;
+    this.destroyed = false;
+    this.coreDrops = 1;
+
+    this._rushDir    = { x: 0, y: 0 };
+    this._stateTimer = 0;
 
     this._knockbackTimer    = 0;
     this._knockbackDuration = 0;
     this._knockbackVx = 0;
     this._knockbackVy = 0;
 
-    this.gameObject = scene.add.rectangle(x, y, 28, 28, FOX_COLOR);
+    this.gameObject = scene.add.rectangle(x, y, RAT_W, RAT_W, RAT_COLOR);
     scene.physics.add.existing(this.gameObject);
     this.gameObject.body.setCollideWorldBounds(true);
     this.gameObject.setDepth(9);
@@ -50,44 +56,39 @@ export default class Fox {
 
   update(delta, player) {
     if (!this.alive) return;
-
     const dt = delta / 1000;
     this.attackCooldown = Math.max(0, this.attackCooldown - dt);
-    if (this.fleeGrace > 0) this.fleeGrace -= dt;
 
-    const gx   = this.gameObject.x;
-    const gy   = this.gameObject.y;
-    const dx   = player.x - gx;
-    const dy   = player.y - gy;
+    const dx   = player.x - this.gameObject.x;
+    const dy   = player.y - this.gameObject.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
 
     switch (this.state) {
-
       case 'idle':
         this.gameObject.body.setVelocity(0, 0);
-        if (dist < DETECT_R) this.state = 'chase';
+        if (dist < DETECT_R) this._startRush(dx, dy, dist);
         break;
 
-      case 'chase':
-        if (dist >= DETECT_R) { this.state = 'idle'; break; }
-        // 자신 HP 30% 이하 → 도주
-        if (this.hp / this.maxHp <= 0.3 && this.fleeGrace <= 0) {
-          this._prevState = 'idle';
-          this.state      = 'flee';
-          this.fleeTimer  = 2;
-          break;
+      case 'rush':
+        this._stateTimer -= dt;
+        this.gameObject.body.setVelocity(
+          this._rushDir.x * RUSH_SPEED,
+          this._rushDir.y * RUSH_SPEED,
+        );
+        if (this._stateTimer <= 0) {
+          this.state       = 'cooldown';
+          this._stateTimer = COOL_DUR;
+          this.gameObject.body.setVelocity(0, 0);
         }
-        this._moveTo(dx, dy, dist, this.speed);
         break;
 
-      case 'flee':
-        this.fleeTimer -= dt;
-        if (this.fleeTimer <= 0) {
-          this.state     = 'chase';
-          this.fleeGrace = 1.5;  // 1.5초 유예 후 재도주 가능
-          break;
+      case 'cooldown':
+        this._stateTimer -= dt;
+        this.gameObject.body.setVelocity(0, 0);
+        if (this._stateTimer <= 0) {
+          if (dist < DETECT_R) this._startRush(dx, dy, dist);
+          else this.state = 'idle';
         }
-        this._moveTo(dx, dy, dist, -this.speed); // 반대 방향
         break;
 
       case 'stun':
@@ -100,7 +101,7 @@ export default class Fox {
           this.gameObject.body.setVelocity(0, 0);
         }
         if (this.stunTimer <= 0) {
-          this.gameObject.setFillStyle(FOX_COLOR);
+          this.gameObject.setFillStyle(RAT_COLOR);
           this.state = this._prevState;
         }
         break;
@@ -109,16 +110,10 @@ export default class Fox {
     this._syncHpBar();
   }
 
-  /** @returns {boolean} true = 처치 */
   takeDamage(amount, knockback = null) {
     if (!this.alive || this.state === 'stun') return false;
-
     this.hp -= amount;
-    if (this.hp <= 0) {
-      this._die();
-      return true;
-    }
-
+    if (this.hp <= 0) { this._die(); return true; }
     if (knockback) {
       const { dx, dy, force, duration } = knockback;
       this._knockbackTimer    = duration;
@@ -126,11 +121,10 @@ export default class Fox {
       this._knockbackVx = dx * force;
       this._knockbackVy = dy * force;
     }
-
     this._prevState = this.state;
     this.state      = 'stun';
     this.stunTimer  = 0.5;
-    this._blinkRed();
+    this._blinkColor();
     return false;
   }
 
@@ -149,39 +143,38 @@ export default class Fox {
 
   // ── private ─────────────────────────────────────────
 
-  _moveTo(dx, dy, dist, speed) {
-    if (dist < 1) { this.gameObject.body.setVelocity(0, 0); return; }
-    this.gameObject.body.setVelocity((dx / dist) * speed, (dy / dist) * speed);
+  _startRush(dx, dy, dist) {
+    const len       = dist > 0 ? dist : 1;
+    this._rushDir.x = dx / len;
+    this._rushDir.y = dy / len;
+    this.state       = 'rush';
+    this._stateTimer = RUSH_DUR;
   }
 
-  // 체력 바 (여우 머리 위)
   _buildHpBar() {
     const { x, y } = this.gameObject;
-    this._hpBg   = this.scene.add.rectangle(x, y - 22, 28, 4, 0x333333).setDepth(11);
-    this._hpFill = this.scene.add.rectangle(x - 14, y - 22, 28, 4, 0x44dd44)
+    this._hpBg   = this.scene.add.rectangle(x, y - 15, RAT_W, 3, 0x333333).setDepth(11);
+    this._hpFill = this.scene.add.rectangle(x - RAT_W / 2, y - 15, RAT_W, 3, 0x44dd44)
       .setOrigin(0, 0.5).setDepth(11);
   }
 
   _syncHpBar() {
     const { x, y } = this.gameObject;
-    this._hpBg.setPosition(x, y - 22);
-    this._hpFill.setPosition(x - 14, y - 22);
-    this._hpFill.width = 28 * Math.max(0, this.hp / this.maxHp);
+    this._hpBg.setPosition(x, y - 15);
+    this._hpFill.setPosition(x - RAT_W / 2, y - 15);
+    this._hpFill.width = RAT_W * Math.max(0, this.hp / this.maxHp);
   }
 
-  _blinkRed() {
+  _blinkColor() {
     if (this._blinkEvent) this._blinkEvent.remove();
-
     let flip = 0;
     this.gameObject.setFillStyle(HIT_COLOR);
-
     this._blinkEvent = this.scene.time.addEvent({
-      delay: 80,
-      repeat: 4,
+      delay: 80, repeat: 4,
       callback: () => {
         if (this.destroyed) return;
         flip++;
-        this.gameObject.setFillStyle(flip % 2 === 0 ? HIT_COLOR : FOX_COLOR);
+        this.gameObject.setFillStyle(flip % 2 === 0 ? HIT_COLOR : RAT_COLOR);
       },
     });
   }
@@ -189,11 +182,9 @@ export default class Fox {
   _die() {
     this.alive = false;
     this.gameObject.body.setEnable(false);
-
     if (this._blinkEvent) { this._blinkEvent.remove(); this._blinkEvent = null; }
     this._hpBg.destroy();
     this._hpFill.destroy();
-
     this.scene.tweens.add({
       targets:  this.gameObject,
       alpha:    0,
@@ -201,10 +192,7 @@ export default class Fox {
       scaleY:   1.8,
       duration: 260,
       ease:     'Quad.Out',
-      onComplete: () => {
-        this.gameObject.destroy();
-        this.destroyed = true;
-      },
+      onComplete: () => { this.gameObject.destroy(); this.destroyed = true; },
     });
   }
 }
