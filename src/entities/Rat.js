@@ -7,7 +7,7 @@
  *   idle     → rush(280px 이내 탐지, 플레이어 위치로 방향 고정 후 돌진)
  *   rush     → 1.2초간 직선 돌진 (도중 방향 보정 없음)
  *   cooldown → 0.3초 정지 후 재조준 → rush 반복
- *   stun     → 피격 시 0.5초 경직 + 넉백
+ *   stun     → 피격 시 0.4초 경직 + 넉백
  */
 const DETECT_R   = 280;      // 플레이어 탐지 반경 (px)
 const RUSH_SPEED = 185;      // 돌진 속도 (px/s)

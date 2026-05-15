@@ -6,7 +6,7 @@
  *   idle  → chase(250px 이내 탐지)
  *   chase → 플레이어를 직접 추격
  *   chase → flee(HP 30% 이하 시 2초간 도주, 이후 1.5초 유예 후 재도주 가능)
- *   stun  → 피격 시 0.5초 경직 + 넉백
+ *   stun  → 피격 시 0.4초 경직 + 넉백
  */
 const DETECT_R  = 250;      // 플레이어 탐지 반경 (px)
 const FOX_COLOR = 0xe8600e; // 기본 색상 (주황)
