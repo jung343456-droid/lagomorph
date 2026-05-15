@@ -19,9 +19,10 @@ export default class Room {
     this.scene = scene;
     this.data  = data;
 
-    this.wallGroup   = scene.physics.add.staticGroup();
-    this._doorBlocks = {};  // dir → rect
-    this._gfx        = [];  // 비물리 시각 오브젝트
+    this.wallGroup      = scene.physics.add.staticGroup();
+    this.obstacleGroup  = scene.physics.add.staticGroup();
+    this._doorBlocks    = {};  // dir → rect
+    this._gfx           = [];  // 비물리 시각 오브젝트
 
     this._buildFloor();
     this._buildWalls();
@@ -50,8 +51,16 @@ export default class Room {
     this._drawOpenDoorHints();
   }
 
+  destroyObstacle(go) {
+    if (!go?.active) return;
+    this.obstacleGroup.remove(go, true, true);
+    const idx = this._gfx.indexOf(go);
+    if (idx !== -1) this._gfx.splice(idx, 1);
+  }
+
   destroy() {
     this.wallGroup.destroy(true);
+    this.obstacleGroup.destroy(true);
     this._gfx.forEach(g => { if (g?.active) g.destroy(); });
   }
 
@@ -124,8 +133,7 @@ export default class Room {
 
       const obs = this.scene.add.rectangle(x, y, w, h, OBSTACLE_COLOR);
       obs.setDepth(2);
-      this.scene.physics.add.existing(obs, true);
-      this.wallGroup.add(obs);
+      this.obstacleGroup.add(obs);
       this._gfx.push(obs);
     }
   }

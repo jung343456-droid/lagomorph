@@ -19,7 +19,7 @@ const FANG_COLOR        = 0x8b0000;   // 1페이즈 색상 (암적색)
 const FANG_RAGE_COLOR   = 0xcc2200;   // 2페이즈 색상 (분노 적색)
 const HIT_COLOR         = 0xffffff;
 
-const BASE_CHASE_SPEED  = 80;         // 기본 추격 속도 (px/s)
+const BASE_CHASE_SPEED  = 150;        // 기본 추격 속도 (px/s)
 const DASH_SPEED        = 400;        // 돌진 속도 (px/s)
 const DASH_DURATION     = 0.35;       // 돌진 1회 지속 시간 (초)
 const WALL_STUN_DUR     = 2.0;        // 벽 충돌 스턴 지속 시간 (초)
@@ -43,7 +43,7 @@ const ROOM_SAFE_MARGIN  = WALL_T + 18; // 가장자리 안전 구역 폭 (px)
 
 const PATTERN_CD_MIN    = 3.0;        // 패턴 최소 간격 (초)
 const PATTERN_CD_MAX    = 5.0;        // 패턴 최대 간격 (초)
-const PHASE2_SPEED_MULT = 1.4;        // 2페이즈 이동속도 배율
+const PHASE2_SPEED_MULT = 1.2;        // 2페이즈 이동속도 배율
 const COMBO_COUNT       = 5;          // 2페이즈 돌진 연속 횟수
 const COMBO_DELAY       = 0.4;        // 콤보 돌진 간격 (초)
 
@@ -90,6 +90,8 @@ export default class Fang {
     this._knockbackDuration = 0;
     this._knockbackVx = 0;
     this._knockbackVy = 0;
+
+    this._hitObstacle = false;
 
     this.gameObject = scene.add.rectangle(x, y, FANG_W, FANG_H, FANG_COLOR);
     scene.physics.add.existing(this.gameObject);
@@ -236,6 +238,7 @@ export default class Fang {
   }
 
   _isWallBlocked() {
+    if (this._hitObstacle) { this._hitObstacle = false; return false; }
     const b = this.gameObject.body;
     if (!b.blocked.none) return true;
     return b.velocity.length() < DASH_SPEED * 0.4;

@@ -44,9 +44,18 @@ export default class RoomManager {
 
     // 벽 콜라이더 등록
     const wg = this._room.wallGroup;
+    const og = this._room.obstacleGroup;
     this._wallColliders.push(
       this.scene.physics.add.collider(wg, this.player.gameObject),
       this.scene.physics.add.collider(wg, this.enemyManager.enemyGroup),
+      this.scene.physics.add.collider(og, this.player.gameObject),
+      this.scene.physics.add.collider(og, this.enemyManager.enemyGroup, (obs, enemyGo) => {
+        const boss = this.enemyManager.boss;
+        if (!boss || enemyGo !== boss.gameObject) return;
+        if (boss.state !== 'dash' && boss.state !== 'combo_dash') return;
+        boss._hitObstacle = true;
+        this._room.destroyObstacle(obs);
+      }),
     );
 
     // 물리 월드 경계 = 방 크기로 고정 (적 탈출 방지)

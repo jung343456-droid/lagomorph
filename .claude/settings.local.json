@@ -14,7 +14,8 @@
       "Bash(npm run *)",
       "Bash(Get-ChildItem -Path \"C:\\\\projects\\\\lagomorph\" -Recurse -Include \"*.js\")",
       "Bash(Select-Object -ExpandProperty FullName)",
-      "Bash(Sort-Object)"
+      "Bash(Sort-Object)",
+      "Bash(rtk npm *)"
     ]
   }
 }
