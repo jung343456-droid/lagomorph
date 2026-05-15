@@ -35,16 +35,16 @@ export default class Room {
       const a = this._doorArea(dir);
       const block = this.scene.add.rectangle(a.cx, a.cy, a.w, a.h, DOOR_LOCKED);
       block.setDepth(3);
-      this.scene.physics.add.existing(block, true);
-      this.wallGroup.add(block);
+      this.wallGroup.add(block);  // StaticGroup이 직접 body 생성
       this._doorBlocks[dir] = block;
     });
   }
 
   /** 방 클리어 시 문 잠금 해제 + 시각 힌트 추가 */
   unlockDoors() {
-    Object.entries(this._doorBlocks).forEach(([, block]) => {
-      this.wallGroup.remove(block, true, true);
+    Object.values(this._doorBlocks).forEach(block => {
+      if (block.body) block.body.enable = false;
+      block.setVisible(false);
     });
     this._doorBlocks = {};
     this._drawOpenDoorHints();

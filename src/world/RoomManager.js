@@ -49,6 +49,9 @@ export default class RoomManager {
       this.scene.physics.add.collider(wg, this.enemyManager.enemyGroup),
     );
 
+    // 물리 월드 경계 = 방 크기로 고정 (적 탈출 방지)
+    this.scene.physics.world.setBounds(0, 0, ROOM_W, ROOM_H);
+
     // 카메라 고정 (방 크기 = 캔버스 크기이므로 스크롤 없음)
     this.scene.cameras.main.setBounds(0, 0, ROOM_W, ROOM_H);
     this.scene.cameras.main.setScroll(0, 0);
@@ -66,6 +69,9 @@ export default class RoomManager {
     // 적 스폰 또는 즉시 개방
     if (roomData.cleared) {
       this._room.unlockDoors();
+    } else if (roomData.type === 'boss') {
+      this._room.lockDoors();
+      this.enemyManager.spawnBoss(ROOM_W / 2, ROOM_H / 3);
     } else {
       const enemyCount = 2 + Math.floor(Math.random() * 3); // 2~4
       this._room.lockDoors();

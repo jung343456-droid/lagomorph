@@ -123,7 +123,7 @@ export default class Rat {
     }
     this._prevState = this.state;
     this.state      = 'stun';
-    this.stunTimer  = 0.5;
+    this.stunTimer  = 0.4;
     this._blinkColor();
     return false;
   }

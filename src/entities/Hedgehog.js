@@ -5,7 +5,7 @@
  * 패턴:
  *   idle  → chase(180px 이내 탐지)
  *   chase → 55px/s로 플레이어 추격
- *   spike → 4초마다 발동, 1초간 가시 원형 AoE(반경 52px, 데미지 12 + 넉백)
+ *   spike → 2초마다 발동, 1초간 가시 원형 AoE(반경 65px, 데미지 12 + 넉백)
  *           spike 중 무적 — 공격받으면 플레이어만 넉백(데미지 없음)
  *   stun  → 피격 시 0.5초 경직 + 넉백 (spike 중 발동 불가)
  *
@@ -14,9 +14,9 @@
 const DETECT_R       = 180;           // 플레이어 탐지 반경 (px)
 const CHASE_SPEED    = 55;            // 일반 추격 속도 (px/s)
 const HEDGEHOG_W     = 26;            // 스프라이트 크기 (정사각형, px)
-const SPIKE_CD       = 4.0;           // 가시 공격 주기 (초)
+const SPIKE_CD       = 2.0;           // 가시 공격 주기 (초)
 const SPIKE_DUR      = 1.0;           // 가시 공격 지속 시간 (초)
-const SPIKE_RADIUS   = HEDGEHOG_W * 2; // 가시 AoE 반경 (px) — 캐릭터 크기 2배
+const SPIKE_RADIUS   = HEDGEHOG_W * 2.5; // 가시 AoE 반경 (px) — 캐릭터 크기 2.5배
 const SPIKE_DMG      = 12;            // 가시 AoE 명중 데미지
 const SPIKE_PUSH     = 300;           // 가시 AoE 넉백 강도
 const SPIKE_PUSH_DUR = 0.25;          // 가시 AoE 넉백 지속 시간 (초)
@@ -85,11 +85,23 @@ export default class Hedgehog {
         this._moveTo(dx, dy, dist, CHASE_SPEED);
         break;
 
-      case 'spike':
+      case 'spike': {
         this.gameObject.body.setVelocity(0, 0);
         this._spikeTimer -= dt;
+        const pdx = player.x - this.gameObject.x;
+        const pdy = player.y - this.gameObject.y;
+        const pd  = Math.sqrt(pdx * pdx + pdy * pdy);
+        if (pd <= SPIKE_RADIUS) {
+          const nx   = pd > 0 ? pdx / pd : 0;
+          const ny   = pd > 0 ? pdy / pd : 0;
+          const dead = player.takeDamage(SPIKE_DMG, {
+            dx: nx, dy: ny, force: SPIKE_PUSH, duration: SPIKE_PUSH_DUR,
+          });
+          if (dead) this.scene.events.emit('player-dead');
+        }
         if (this._spikeTimer <= 0) this._stopSpike();
         break;
+      }
 
       case 'stun':
         this.stunTimer -= dt;
@@ -140,7 +152,7 @@ export default class Hedgehog {
     }
     this._prevState = this.state;
     this.state      = 'stun';
-    this.stunTimer  = 0.5;
+    this.stunTimer  = 0.4;
     this._blinkColor();
     return false;
   }
@@ -165,23 +177,6 @@ export default class Hedgehog {
     this._spikeTimer = SPIKE_DUR;
     this._spikeCd    = SPIKE_CD;
     this.gameObject.setFillStyle(SPIKE_COLOR);
-
-    // 범위 내 플레이어 즉시 피격
-    const player = this.scene.enemyManager.player;
-    const dx   = player.x - this.gameObject.x;
-    const dy   = player.y - this.gameObject.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    if (dist <= SPIKE_RADIUS) {
-      const nx   = dist > 0 ? dx / dist : 0;
-      const ny   = dist > 0 ? dy / dist : 0;
-      const dead = player.takeDamage(SPIKE_DMG, {
-        dx: nx, dy: ny,
-        force:    SPIKE_PUSH,
-        duration: SPIKE_PUSH_DUR,
-      });
-      if (dead) this.scene.events.emit('player-dead');
-    }
-
     this._spawnSpikeGfx();
   }
 

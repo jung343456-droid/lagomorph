@@ -28,6 +28,15 @@ export default class GameScene extends Phaser.Scene {
 
     this.scene.launch('UIScene', { gameScene: this });
 
+    // 디버그: 숫자 2 → 보스방 즉시 이동
+    this.input.keyboard.on('keydown-TWO', () => {
+      const dungeon = this.roomManager.dungeonData;
+      if (!dungeon) return;
+      const bossRoom = dungeon.rooms.find(r => r.type === 'boss');
+      if (!bossRoom) return;
+      this.roomManager._enterRoom(bossRoom, null);
+    });
+
     this.events.once('player-dead', () => {
       this.time.delayedCall(400, () => {
         this.add.rectangle(0, 0, GAME_W, GAME_H, 0x000000, 0.75)

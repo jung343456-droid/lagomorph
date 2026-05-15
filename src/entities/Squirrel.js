@@ -15,7 +15,7 @@ const DETECT_R        = 260;      // 플레이어 탐지 반경 (px)
 const PREFER_DIST     = 140;      // 선호 유지 거리: 이 근방에서 횡이동 (px)
 const CLOSE_DIST      = 100;      // 위협 거리: 이 이하면 후퇴 시작 (px)
 const KITE_SPEED      = 110;      // 기본 이동 속도 (px/s)
-const RETREAT_SPEED   = 180;      // 후퇴 속도 (px/s)
+const RETREAT_SPEED   = 140;      // 후퇴 속도 (px/s)
 const THROW_CD        = 2.5;      // 도토리 투척 쿨다운 (초)
 const THROW_CD_RAGE   = 1.2;      // 분노 상태(HP 30% 이하) 투척 쿨다운 (초)
 const ACORN_SPEED     = 230;      // 도토리 투사체 속도 (px/s)
@@ -118,7 +118,7 @@ export default class Squirrel {
     }
     this._prevState = this.state;
     this.state      = 'stun';
-    this.stunTimer  = 0.5;
+    this.stunTimer  = 0.4;
     this._blinkColor();
     return false;
   }

@@ -1,9 +1,12 @@
 import Phaser from 'phaser';
-import { GAME_W } from '../main';
+import { GAME_W, GAME_H } from '../main';
 
 const HP_BAR_W = 180;
 const HP_BAR_H = 14;
 const MARGIN   = 20;
+
+const BOSS_BAR_W = 300;
+const BOSS_BAR_H = 18;
 
 const CHARGE_W  = 200;
 const CHARGE_H  = 10;
@@ -34,6 +37,7 @@ export default class UIScene extends Phaser.Scene {
     this._buildHPBar();
     this._buildCoreCounter();
     this._buildSkillSlots();
+    this._buildBossHPBar();
     this._bindSkillKeys();
 
     // 방 진입 이벤트 수신 (GameScene 이벤트 버스에 연결)
@@ -50,6 +54,7 @@ export default class UIScene extends Phaser.Scene {
     if (attackManager) this._updateChargeGauge(attackManager);
     if (enemyManager)  this._coreText.setText(String(enemyManager.coreCount));
     if (attackManager && enemyManager) this._updateBSlot(attackManager, enemyManager);
+    if (enemyManager)  this._updateBossHPBar(enemyManager.boss);
   }
 
   // ── 충전 게이지 (상단 중앙) ──────────────────────────
@@ -140,9 +145,11 @@ export default class UIScene extends Phaser.Scene {
         ? 0x4ecca3                 // 현재 방: 청록
         : r.type === 'start'
           ? 0x888844               // 시작방: 노란빛
-          : r.cleared
-            ? 0x445566             // 클리어: 어두운 파랑
-            : 0x664444;            // 미클리어: 어두운 빨강
+          : r.type === 'boss'
+            ? (r.cleared ? 0x554444 : 0xff2222) // 보스방: 빨강/클리어 후 어둡게
+            : r.cleared
+              ? 0x445566           // 클리어: 어두운 파랑
+              : 0x664444;          // 미클리어: 어두운 빨강
 
       const cell = this.add.rectangle(cx, cy, MM_CW - 2, MM_CH - 2, color);
       this._mmCells.push(cell);
@@ -161,6 +168,38 @@ export default class UIScene extends Phaser.Scene {
         this._mmCells.push(dot);
       });
     });
+  }
+
+  // ── 보스 HP 바 (하단 중앙) ──────────────────────────
+
+  _buildBossHPBar() {
+    const cx = GAME_W / 2;
+    const y  = GAME_H - 52;
+    this._bossBarContainer = this.add.container(0, 0).setVisible(false);
+
+    const label = this.add.text(cx, y - 16, 'FANG', {
+      fontSize: '13px', color: '#ff4444', fontFamily: 'monospace', fontStyle: 'bold',
+    }).setOrigin(0.5, 0.5);
+
+    const bg   = this.add.rectangle(cx, y, BOSS_BAR_W, BOSS_BAR_H, 0x2a0000).setOrigin(0.5, 0.5);
+    this._bossHpFill = this.add.rectangle(
+      cx - BOSS_BAR_W / 2, y, BOSS_BAR_W, BOSS_BAR_H, 0xff2222,
+    ).setOrigin(0, 0.5);
+    const border = this.add.rectangle(cx, y, BOSS_BAR_W, BOSS_BAR_H)
+      .setStrokeStyle(2, 0xff4444, 0.8).setFillStyle(0x000000, 0);
+
+    this._bossBarContainer.add([label, bg, this._bossHpFill, border]);
+  }
+
+  _updateBossHPBar(boss) {
+    if (!boss || !boss.alive) {
+      this._bossBarContainer.setVisible(false);
+      return;
+    }
+    this._bossBarContainer.setVisible(true);
+    const r = Phaser.Math.Clamp(boss.hp / boss.maxHp, 0, 1);
+    this._bossHpFill.width = BOSS_BAR_W * r;
+    this._bossHpFill.setFillStyle(r > 0.5 ? 0xff2222 : 0xff6600);
   }
 
   // ── 스킬 슬롯 (우하단) ──────────────────────────────

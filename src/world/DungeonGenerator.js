@@ -71,5 +71,21 @@ export function generateDungeon(targetCount) {
     });
   });
 
+  // 시작방에서 가장 먼 방을 보스방으로 지정 (BFS)
+  const bfsDist = new Map([[0, 0]]);
+  const bfsQ    = [0];
+  while (bfsQ.length > 0) {
+    const cur = bfsQ.shift();
+    Object.values(rooms[cur].doors).forEach(nid => {
+      if (nid !== null && !bfsDist.has(nid)) {
+        bfsDist.set(nid, bfsDist.get(cur) + 1);
+        bfsQ.push(nid);
+      }
+    });
+  }
+  let maxD = 0, bossId = 0;
+  bfsDist.forEach((d, id) => { if (d > maxD) { maxD = d; bossId = id; } });
+  rooms[bossId].type = 'boss';
+
   return { rooms, startId: 0, grid, gridCols: GRID_COLS, gridRows: GRID_ROWS };
 }

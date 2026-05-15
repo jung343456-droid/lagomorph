@@ -30,6 +30,7 @@ export default class Player {
     scene.physics.add.existing(this.gameObject);
     this.gameObject.body.setSize(BODY_W, BODY_H, true);
     this.gameObject.body.setCollideWorldBounds(true);
+    this.gameObject.body.setMaxVelocity(350, 350);
     this.gameObject.setDepth(10);
   }
 
@@ -74,6 +75,17 @@ export default class Player {
     });
 
     return this.hp <= 0;
+  }
+
+  /** 보스 포효 등 무피해 기절 (무적 중엔 무시) */
+  stun(duration) {
+    if (this._invincible) return;
+    this._knockbackTimer = duration;
+    this.gameObject.body.setVelocity(0, 0);
+  }
+
+  heal(amount) {
+    this.hp = Math.min(this.maxHp, this.hp + amount);
   }
 
   get x() { return this.gameObject.x; }
