@@ -134,6 +134,13 @@ export default class Fox {
     return false;
   }
 
+  poisonHp(amount) {
+    if (!this.alive) return false;
+    this.hp = Math.max(0, this.hp - amount);
+    if (this.hp <= 0) { this._die(); return true; }
+    return false;
+  }
+
   dispose() {
     if (this.destroyed) return;
     if (this._blinkEvent) { this._blinkEvent.remove(); this._blinkEvent = null; }

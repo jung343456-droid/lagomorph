@@ -7,6 +7,8 @@
  *       넉백 지속 중에는 플레이어 입력 무시
  * 사망: takeDamage() 반환값 true → 호출부에서 player-dead 이벤트 발행
  */
+import { showDamageNumber } from '../utils/DamageNumbers';
+
 const DISPLAY_W = 64; // 스프라이트 표시 너비 (px)
 const DISPLAY_H = 72; // 스프라이트 표시 높이 (px)
 const BODY_W    = 48; // 물리 히트박스 너비 (px)
@@ -23,6 +25,14 @@ export default class Player {
     this._invincible     = false;
     this._knockbackTimer = 0;
     this.facingDir       = { x: 0, y: 1 };
+
+    this.meleeRadiusMult  = 1.0;
+    this.meleeDamageMult  = 1.0;
+    this.hasPoison        = false;
+    this.hasExplosiveTrap = false;
+    this.trapCostBonus    = 0;
+    this.trapSizeMult     = 1;
+    this.inventory        = [];
     this._dir            = 'bottom';
 
     this.gameObject = scene.add.image(x, y, 'soma-bottom');
@@ -54,6 +64,7 @@ export default class Player {
 
     this.hp = Math.max(0, this.hp - amount);
     this._invincible = true;
+    if (amount > 0) showDamageNumber(this.scene, this.x, this.y - DISPLAY_H / 2, amount, '#ff5555');
 
     if (knockback) {
       const { dx, dy, force, duration } = knockback;

@@ -2,9 +2,8 @@ import Phaser from 'phaser';
 import BootScene from './scenes/BootScene';
 import GameScene from './scenes/GameScene';
 import UIScene from './scenes/UIScene';
-
-export const GAME_W = 390;
-export const GAME_H = 844;
+import { GAME_W, GAME_H } from './constants';
+export { GAME_W, GAME_H };
 
 const config = {
   type: Phaser.AUTO,

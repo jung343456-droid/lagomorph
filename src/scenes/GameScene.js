@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { GAME_W, GAME_H } from '../main';
+import { GAME_W, GAME_H } from '../constants';
 import Player from '../entities/Player';
 import InputManager from '../utils/InputManager';
 import AttackManager from '../systems/AttackManager';
@@ -7,6 +7,7 @@ import EnemyManager from '../systems/EnemyManager';
 import { generateDungeon } from '../world/DungeonGenerator';
 import RoomManager from '../world/RoomManager';
 import { ROOM_W, ROOM_H } from '../world/Room';
+import PassiveItem from '../entities/PassiveItem';
 
 export default class GameScene extends Phaser.Scene {
   constructor() {
@@ -22,6 +23,14 @@ export default class GameScene extends Phaser.Scene {
     // 던전 생성 → 첫 방 진입
     this.roomManager = new RoomManager(this, this.player, this.enemyManager);
     this.roomManager.init(generateDungeon());
+
+    // 시작 방에 패시브 아이템 1개 랜덤 배치
+    const itemIds = ['wide_claws', 'sharp_claws', 'poison_claws', 'explosive_trap', 'frugal_instinct', 'big_trap'];
+    this._passiveItem = new PassiveItem(
+      this,
+      ROOM_W / 2 + 80, ROOM_H / 2,
+      itemIds[Math.floor(Math.random() * itemIds.length)],
+    );
 
     // 카메라는 RoomManager 가 setBounds 설정하므로 여기선 follow 만 등록
     this.cameras.main.startFollow(this.player.gameObject, true, 0.08, 0.08);
@@ -60,5 +69,13 @@ export default class GameScene extends Phaser.Scene {
     this.attackManager.update(delta);
     this.enemyManager.update(delta);
     this.roomManager.update();
+
+    if (this._passiveItem?.alive) {
+      const d = Phaser.Math.Distance.Between(
+        this.player.x, this.player.y,
+        this._passiveItem.x, this._passiveItem.y,
+      );
+      if (d < 30) this._passiveItem.collect(this.player);
+    }
   }
 }

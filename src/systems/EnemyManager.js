@@ -8,6 +8,7 @@ import Fang     from '../entities/Fang';
 import Core     from '../entities/Core';
 import RareItem, { PICKUP_R as RARE_PICKUP_R, MAGNET_SPEED as RARE_MAGNET_SPEED, COLLECT_R as RARE_COLLECT_R } from '../entities/RareItem';
 import { ROOM_W, ROOM_H, WALL_T } from '../world/Room';
+import { showDamageNumber } from '../utils/DamageNumbers';
 
 const CORE_PICKUP_R          = 65;  // 코어 자동 흡수 시작 반경 (px)
 const CORE_MAGNET_SPEED      = 400; // 코어 자석 이동 속도 (px/s)
@@ -40,6 +41,7 @@ export default class EnemyManager {
     this.boss       = null; // 현재 보스 참조 (UIScene에서 HP 표시용)
 
     this._hadEnemies = false;
+    this._poisoned   = new Map(); // Map<enemy, { timer, accum }>
 
     this.enemyGroup  = scene.physics.add.group();
     this._enemyProjs = [];  // 수동 이동 투사체 { go, damage, vx, vy }
@@ -102,6 +104,29 @@ export default class EnemyManager {
       }
       return true;
     });
+
+    // 독 데미지 틱 (스턴 무관, 매초 maxHp×0.5% 최소 1)
+    for (const [enemy, entry] of this._poisoned) {
+      if (!enemy.alive) { this._poisoned.delete(enemy); continue; }
+      entry.timer -= dt;
+      if (entry.timer <= 0) {
+        this._poisoned.delete(enemy);
+        enemy._hpFill?.setFillStyle(0x44dd44);
+        continue;
+      }
+      entry.accum += Math.max(1, enemy.maxHp * 0.005) * dt;
+      const toApply = Math.floor(entry.accum);
+      if (toApply > 0) {
+        entry.accum -= toApply;
+        const died = enemy.poisonHp(toApply);
+        showDamageNumber(this.scene, enemy.x, enemy.y - enemy.gameObject.height / 2, toApply, '#cc88ff');
+        if (died) {
+          this._poisoned.delete(enemy);
+          this.dropCores(enemy.x, enemy.y, enemy.coreDrops ?? 3);
+          if (enemy.isBoss) { this.dropRareItem(enemy.x, enemy.y); this.boss = null; }
+        }
+      }
+    }
 
     const prevLen = this.enemies.length;
     this.enemies = this.enemies.filter(e => !e.destroyed);
@@ -236,6 +261,13 @@ export default class EnemyManager {
     this.rareItems = [];
     this._enemyProjs.forEach(p => { if (p.go.active) p.go.destroy(); });
     this._enemyProjs = [];
+    this._poisoned.clear();
+  }
+
+  _applyPoison(enemy) {
+    if (this._poisoned.has(enemy)) return;
+    this._poisoned.set(enemy, { timer: 10, accum: 0 });
+    enemy._hpFill?.setFillStyle(0xaa44ff);
   }
 
   _onAttackFired({ tierData, playerX, playerY, aimDir }) {
@@ -245,6 +277,7 @@ export default class EnemyManager {
         ? Phaser.Math.Distance.Between(playerX, playerY, e.x, e.y) <= tierData.radius
         : this._inOrientedRect(e.x, e.y, playerX, playerY, aimDir, tierData.length, tierData.width / 2);
       if (!hit) return;
+      if (this.player.hasPoison) this._applyPoison(e);
       const ddx = e.x - playerX;
       const ddy = e.y - playerY;
       const len = Math.sqrt(ddx * ddx + ddy * ddy);
@@ -255,7 +288,9 @@ export default class EnemyManager {
         force:    tierData.damage * KNOCKBACK_PER_DMG,
         duration: KNOCKBACK_DUR,
       });
+      showDamageNumber(this.scene, e.x, e.y - e.gameObject.height / 2, tierData.damage);
       if (dead) {
+        this._poisoned.delete(e);
         this.dropCores(e.x, e.y, e.coreDrops ?? 3);
         if (e.isBoss) { this.dropRareItem(e.x, e.y); this.boss = null; }
       }

@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { showDamageNumber } from '../utils/DamageNumbers';
 
 const MAX_CHARGE = 0.8; // 최대 충전 시간 (초): 이 시간 이상 누르면 MAX 티어
 const BASE_DMG   = 10;  // 근거리 기본 데미지 (티어 I 기준)
@@ -19,6 +20,9 @@ const POOP_COLOR    = 0x7B3F20; // 설치물 색상 (갈색)
 
 const FOX_KNOCKBACK_PER_DMG = 12;   // 설치형 공격 넉백 강도 = 데미지 × 이 값
 const FOX_KNOCKBACK_DUR     = 0.22; // 설치형 공격 넉백 지속 시간 (초)
+
+const SPLASH_RADIUS = 40;  // 폭발 트랩 스플래시 반경 (px)
+const SPLASH_DMG    = 15;  // 폭발 트랩 스플래시 데미지
 
 // UIScene._buildSkillSlots 와 동일한 레이아웃 상수
 const SLOT_SIZE = 56, SLOT_GAP = 10, UI_MARGIN = 20; // 스킬 슬롯 크기·간격·화면 여백 (px)
@@ -186,16 +190,18 @@ export default class AttackManager {
   // ── 근거리 공격 (A / Z) ──────────────────────────────
 
   _fireMelee() {
-    const tier = MELEE_TIERS[this._calcTier(this._mChargeTime, MELEE_TIERS)];
+    const tier   = MELEE_TIERS[this._calcTier(this._mChargeTime, MELEE_TIERS)];
+    const radius = tier.radius * this.player.meleeRadiusMult;
+    const damage = Math.round(tier.damage * this.player.meleeDamageMult);
     const { x: px, y: py } = this.player;
 
     this.scene.events.emit('attack-fired', {
-      tierData: { shape: 'circle', radius: tier.radius, damage: tier.damage },
+      tierData: { shape: 'circle', radius, damage },
       playerX: px, playerY: py,
       aimDir:  { ...this._mAimDir },
     });
 
-    this._spawnRing(px, py, tier.color, tier.radius);
+    this._spawnRing(px, py, tier.color, radius);
   }
 
   _stopMelee() {
@@ -206,25 +212,27 @@ export default class AttackManager {
   }
 
   _drawMeleePreview() {
-    const tier  = MELEE_TIERS[this.currentTier];
+    const tier   = MELEE_TIERS[this.currentTier];
+    const radius = tier.radius * this.player.meleeRadiusMult;
     const { x: px, y: py } = this.player;
     const pulse = 0.22 + 0.08 * Math.sin(this._mChargeTime * 12);
     this._previewGfx.clear();
     this._previewGfx.fillStyle(tier.color, pulse);
     this._previewGfx.lineStyle(2, tier.color, pulse + 0.3);
-    this._previewGfx.fillCircle(px, py, tier.radius);
-    this._previewGfx.strokeCircle(px, py, tier.radius);
+    this._previewGfx.fillCircle(px, py, radius);
+    this._previewGfx.strokeCircle(px, py, radius);
   }
 
   // ── 설치형 공격 (B / X) ─────────────────────────────
 
   _startPlace() {
-    const em = this.scene.enemyManager;
-    if (this._bCooldown > 0)           return;
+    const em   = this.scene.enemyManager;
+    const cost = Math.max(1, POOP_COST - this.player.trapCostBonus);
+    if (this._bCooldown > 0)            return;
     if (this._poops.length >= MAX_POOPS) return;
-    if (em.coreCount < POOP_COST)      return;
+    if (em.coreCount < cost)            return;
 
-    em.coreCount -= POOP_COST;
+    em.coreCount -= cost;
     this._placePoop();
     this._bCooldown          = POOP_COOLDOWN;
     this.bCooldownNormalized = 1;
@@ -232,14 +240,15 @@ export default class AttackManager {
 
   _placePoop() {
     const { x: px, y: py } = this.player;
-    const go = this.scene.add.rectangle(px, py, POOP_SIZE, POOP_SIZE, POOP_COLOR);
+    const size = POOP_SIZE * this.player.trapSizeMult;
+    const go = this.scene.add.rectangle(px, py, size, size, POOP_COLOR);
     go.setDepth(5);
     this.scene.physics.add.existing(go);
     go.body.setImmovable(true);
     go.body.setAllowGravity(false);
-    this._poops.push({ go, damage: POOP_DMG });
+    this._poops.push({ go, damage: POOP_DMG, size });
     this._poopGroup.add(go);
-    this._spawnRing(px, py, POOP_COLOR, POOP_SIZE * 2);
+    this._spawnRing(px, py, POOP_COLOR, size * 2);
   }
 
   _onPoopHitEnemy(poopGO, enemyGO) {
@@ -261,9 +270,35 @@ export default class AttackManager {
       force:    poop.damage * FOX_KNOCKBACK_PER_DMG,
       duration: FOX_KNOCKBACK_DUR,
     }, 'poop');
-    if (dead) em.dropCores(enemy.x, enemy.y, enemy.coreDrops ?? 3);
+    showDamageNumber(this.scene, enemy.x, enemy.y - enemyGO.height / 2, poop.damage);
+    if (dead) {
+      em.dropCores(enemy.x, enemy.y, enemy.coreDrops ?? 3);
+      if (enemy.isBoss) { em.dropRareItem(enemy.x, enemy.y); em.boss = null; }
+    }
 
+    const splashX = poopGO.x;
+    const splashY = poopGO.y;
     this._destroyPoop(poop);
+
+    if (this.player.hasExplosiveTrap) {
+      this._spawnRing(splashX, splashY, 0xff6600, SPLASH_RADIUS * 2);
+      em.enemies.forEach(other => {
+        if (!other.alive || other === enemy || other.state === 'stun') return;
+        if (Phaser.Math.Distance.Between(splashX, splashY, other.x, other.y) > SPLASH_RADIUS) return;
+        const odx = other.x - splashX, ody = other.y - splashY;
+        const ol  = Math.sqrt(odx * odx + ody * ody) || 1;
+        const splashDead = other.takeDamage(SPLASH_DMG, {
+          dx: odx / ol, dy: ody / ol,
+          force:    SPLASH_DMG * FOX_KNOCKBACK_PER_DMG,
+          duration: FOX_KNOCKBACK_DUR,
+        }, 'poop');
+        showDamageNumber(this.scene, other.x, other.y - other.gameObject.height / 2, SPLASH_DMG);
+        if (splashDead) {
+          em.dropCores(other.x, other.y, other.coreDrops ?? 3);
+          if (other.isBoss) { em.dropRareItem(other.x, other.y); em.boss = null; }
+        }
+      });
+    }
   }
 
   _destroyPoop(poop) {
@@ -271,7 +306,7 @@ export default class AttackManager {
     if (idx === -1) return;
     this._poops.splice(idx, 1);
     if (!poop.go.active) return;
-    this._spawnRing(poop.go.x, poop.go.y, POOP_COLOR, POOP_SIZE * 3);
+    this._spawnRing(poop.go.x, poop.go.y, POOP_COLOR, (poop.size ?? POOP_SIZE) * 3);
     this._poopGroup.remove(poop.go, true, true);
   }
 
