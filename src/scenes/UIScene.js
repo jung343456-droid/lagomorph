@@ -1,8 +1,8 @@
 import Phaser from 'phaser';
-import { GAME_W, GAME_H } from '../constants';
+import { GAME_W, GAME_H, HUD_H } from '../constants';
 
 // ── 상단 패널 레이아웃 ────────────────────────────────
-const TOP_H      = 88;    // 상단 패널 높이
+const TOP_H      = HUD_H; // 상단 패널 높이 — constants.HUD_H 와 반드시 일치
 const DIVIDER_X  = 212;   // 상태 영역 | 맵 영역 구분선 x
 
 // 충전 게이지 (상단 패널 안, 상태 영역 중앙)
@@ -86,8 +86,8 @@ export default class UIScene extends Phaser.Scene {
   _buildTopPanel() {
     // 전체 배경
     this.add.rectangle(0, 0, GAME_W, TOP_H, 0x080810, 0.82).setOrigin(0, 0);
-    // 하단 테두리
-    this.add.rectangle(0, TOP_H, GAME_W, 1, 0x222244, 1).setOrigin(0, 0);
+    // 하단 테두리 (게임 플레이 영역과의 경계선)
+    this.add.rectangle(0, TOP_H, GAME_W, 2, 0x3366aa, 1).setOrigin(0, 0);
     // 상태 | 맵 구분선
     this.add.rectangle(DIVIDER_X, TOP_H / 2 + 6, 1, TOP_H - 16, 0x334466, 0.9).setOrigin(0.5, 0.5);
   }

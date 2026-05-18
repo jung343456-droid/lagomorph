@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { GAME_W, GAME_H } from '../constants';
+import { GAME_W, GAME_H, HUD_H } from '../constants';
 import Player from '../entities/Player';
 import InputManager from '../utils/InputManager';
 import AttackManager from '../systems/AttackManager';
@@ -32,7 +32,8 @@ export default class GameScene extends Phaser.Scene {
       itemIds[Math.floor(Math.random() * itemIds.length)],
     );
 
-    // 카메라는 RoomManager 가 setBounds 설정하므로 여기선 follow 만 등록
+    // 카메라 뷰포트를 HUD 아래 영역으로 제한 → 게임/HUD 영역 시각적 분리
+    this.cameras.main.setViewport(0, HUD_H, GAME_W, GAME_H - HUD_H);
     this.cameras.main.startFollow(this.player.gameObject, true, 0.08, 0.08);
 
     this.scene.launch('UIScene', { gameScene: this });
