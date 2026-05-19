@@ -95,6 +95,9 @@ export default class RoomManager {
     this.currentRoomData.cleared = true;
     this._room.unlockDoors();
     this.scene.cameras.main.flash(300, 100, 220, 160, false);
+    if (this.currentRoomData.type === 'boss') {
+      this.scene.events.emit('boss-cleared', { x: ROOM_W / 2, y: ROOM_H / 2 });
+    }
   }
 
   _checkDoorTriggers() {

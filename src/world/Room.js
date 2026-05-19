@@ -1,5 +1,7 @@
-export const ROOM_W = 390;  // 방 너비 = 캔버스 너비 (px)
-export const ROOM_H = 844;  // 방 높이 = 캔버스 높이 (px)
+import { GAME_W, GAME_H, HUD_H } from '../constants';
+
+export const ROOM_W = GAME_W;           // 방 너비 = 캔버스 너비
+export const ROOM_H = GAME_H - HUD_H;  // 방 높이 = 게임플레이 뷰포트 높이 (스크롤 없음)
 export const WALL_T = 20;   // 벽 두께 (px)
 export const DOOR_W = 60;   // 문 통로 너비 (px)
 

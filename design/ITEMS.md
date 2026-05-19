@@ -1,7 +1,11 @@
 # LAGOMORPH — 아이템 목록
 
 아이템은 `src/entities/PassiveItem.js`의 `ITEM_DEFS`에 정의된다.
-시작 방에 풀에서 랜덤으로 1개 스폰 (`src/scenes/GameScene.js` `itemIds` 배열).
+
+**스폰 규칙**
+- **시작 방**: 이전 런에서 한 번이라도 획득(`collect`)한 아이템 중 랜덤 1개 스폰. 처음 플레이 시(unlock 없음)에는 스폰 안 함.
+- **보스방 클리어 시**: `ITEM_DEFS` 전체에서 랜덤 1개 드롭. 첫 런부터 획득 가능.
+- unlock 목록은 `localStorage['lagomorph_unlocked']`에 JSON 배열로 저장 (런 간 영속).
 
 ---
 
@@ -45,5 +49,5 @@
 1. `src/entities/PassiveItem.js` — `ITEM_DEFS`에 항목 추가 (id, name, color, apply)
 2. `src/entities/Player.js` — 필요한 스탯 프로퍼티 추가 (기본값 포함)
 3. 효과 적용 코드 — `AttackManager.js` 또는 `EnemyManager.js`에 배율/플래그 반영
-4. `src/scenes/GameScene.js` — `itemIds` 배열에 id 추가
+4. `src/scenes/GameScene.js` — 아이템 추가 시 별도 작업 불필요 (`Object.keys(ITEM_DEFS)`로 자동 포함)
 5. **이 파일(ITEMS.md) 갱신**

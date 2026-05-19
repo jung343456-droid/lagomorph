@@ -82,8 +82,19 @@ export default class PassiveItem {
     if (!this._alive) return;
     this._def.apply(player);
     player.inventory.push({ name: this._def.name, color: this._def.color, desc: this._def.desc });
+    // 영속 해금 목록 갱신 (다음 런 시작 방 풀에 포함됨)
+    const unlocked = PassiveItem.getUnlocked();
+    if (!unlocked.includes(this._id)) {
+      unlocked.push(this._id);
+      try { localStorage.setItem('lagomorph_unlocked', JSON.stringify(unlocked)); } catch {}
+    }
     this._showFloatText();
     this.dispose();
+  }
+
+  /** localStorage에서 한 번이라도 획득한 아이템 ID 배열 반환 */
+  static getUnlocked() {
+    try { return JSON.parse(localStorage.getItem('lagomorph_unlocked') || '[]'); } catch { return []; }
   }
 
   dispose() {

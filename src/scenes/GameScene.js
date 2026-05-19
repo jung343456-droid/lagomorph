@@ -7,7 +7,7 @@ import EnemyManager from '../systems/EnemyManager';
 import { generateDungeon } from '../world/DungeonGenerator';
 import RoomManager from '../world/RoomManager';
 import { ROOM_W, ROOM_H } from '../world/Room';
-import PassiveItem from '../entities/PassiveItem';
+import PassiveItem, { ITEM_DEFS } from '../entities/PassiveItem';
 
 export default class GameScene extends Phaser.Scene {
   constructor() {
@@ -24,13 +24,20 @@ export default class GameScene extends Phaser.Scene {
     this.roomManager = new RoomManager(this, this.player, this.enemyManager);
     this.roomManager.init(generateDungeon());
 
-    // 시작 방에 패시브 아이템 1개 랜덤 배치
-    const itemIds = ['wide_claws', 'sharp_claws', 'poison_claws', 'explosive_trap', 'frugal_instinct', 'big_trap'];
-    this._passiveItem = new PassiveItem(
-      this,
-      ROOM_W / 2 + 80, ROOM_H / 2,
-      itemIds[Math.floor(Math.random() * itemIds.length)],
-    );
+    // 시작 방 — 이전 런에서 한 번이라도 획득한 아이템 중 랜덤 1개
+    this._passiveItems = [];
+    const unlocked = PassiveItem.getUnlocked();
+    if (unlocked.length > 0) {
+      const id = unlocked[Math.floor(Math.random() * unlocked.length)];
+      this._passiveItems.push(new PassiveItem(this, ROOM_W / 2 + 80, ROOM_H / 2, id));
+    }
+
+    // 보스 클리어 시 랜덤 아이템 드롭
+    this.events.on('boss-cleared', ({ x, y }) => {
+      const allIds = Object.keys(ITEM_DEFS);
+      const id = allIds[Math.floor(Math.random() * allIds.length)];
+      this._passiveItems.push(new PassiveItem(this, x, y, id));
+    });
 
     // 카메라 뷰포트를 HUD 아래 영역으로 제한 → 게임/HUD 영역 시각적 분리
     this.cameras.main.setViewport(0, HUD_H, GAME_W, GAME_H - HUD_H);
@@ -71,12 +78,12 @@ export default class GameScene extends Phaser.Scene {
     this.enemyManager.update(delta);
     this.roomManager.update();
 
-    if (this._passiveItem?.alive) {
+    for (const item of this._passiveItems) {
+      if (!item.alive) continue;
       const d = Phaser.Math.Distance.Between(
-        this.player.x, this.player.y,
-        this._passiveItem.x, this._passiveItem.y,
+        this.player.x, this.player.y, item.x, item.y,
       );
-      if (d < 30) this._passiveItem.collect(this.player);
+      if (d < 30) item.collect(this.player);
     }
   }
 }

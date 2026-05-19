@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { HUD_H } from '../constants';
 
 // 조이스틱 위치 — 화면 좌하단 고정
 const JX = 90;
@@ -22,7 +23,8 @@ export default class InputManager {
 
     // 화면 좌표로 고정 위치 계산 (스케일 후 실제 캔버스 기준)
     this._jx = JX;
-    this._jy = scene.scale.height - JY_FROM_BOTTOM;
+    // 뷰포트 높이(= 전체 높이 - HUD_H) 기준으로 계산해야 A/B 슬롯과 동일 높이
+    this._jy = (scene.scale.height - HUD_H) - JY_FROM_BOTTOM;
 
     this._createGfx();
     this._bindPointers();
