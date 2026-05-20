@@ -1,11 +1,24 @@
 /**
  * 플레이어 (VOSS-7 / soma) — 조작 캐릭터
- * HP 100 / 속도 200
+ * 기본 HP 100 / 기본 속도 200
  *
  * 이동: 가상 조이스틱 또는 WASD, 8방향 스프라이트 자동 전환
  * 피격: 무적 시간 동안 깜빡임(alpha 0.35), 이후 재피격 가능
  *       넉백 지속 중에는 플레이어 입력 무시
  * 사망: takeDamage() 반환값 true → 호출부에서 player-dead 이벤트 발행
+ *
+ * 패시브 아이템 스탯 (기본값):
+ *   meleeRadiusMult  1.0   근거리 반경 배율
+ *   meleeDamageMult  1.0   근거리 데미지 배율
+ *   chargeSpeedMult  1.0   근거리 충전 속도 배율
+ *   hasPoison        false  근거리 명중 시 독 부여
+ *   hasFire          false  근거리 명중 시 화상 부여
+ *   hasIce           false  근거리 명중 시 30% 확률 빙결
+ *   hasThunder       false  근거리 명중 시 70px 연쇄 8피해
+ *   healOnKill       0      적 처치 시 HP 회복량
+ *   hasExplosiveTrap false  트랩 폭발 스플래시
+ *   trapCostBonus    0      트랩 코어 소모 감소
+ *   trapSizeMult     1      트랩 크기 배율
  */
 import { showDamageNumber } from '../utils/DamageNumbers';
 
@@ -29,6 +42,11 @@ export default class Player {
     this.meleeRadiusMult  = 1.0;
     this.meleeDamageMult  = 1.0;
     this.hasPoison        = false;
+    this.hasFire          = false;
+    this.hasIce           = false;
+    this.hasThunder       = false;
+    this.healOnKill       = 0;
+    this.chargeSpeedMult  = 1.0;
     this.hasExplosiveTrap = false;
     this.trapCostBonus    = 0;
     this.trapSizeMult     = 1;

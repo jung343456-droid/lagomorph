@@ -20,23 +20,26 @@ export default class GameScene extends Phaser.Scene {
     this.enemyManager  = new EnemyManager(this, this.player);
     this.attackManager = new AttackManager(this, this.player);
 
+    this.currentFloor = 1;
+
     // 던전 생성 → 첫 방 진입
     this.roomManager = new RoomManager(this, this.player, this.enemyManager);
     this.roomManager.init(generateDungeon());
 
     // 시작 방 — 이전 런에서 한 번이라도 획득한 아이템 중 랜덤 1개
     this._passiveItems = [];
-    const unlocked = PassiveItem.getUnlocked();
-    if (unlocked.length > 0) {
-      const id = unlocked[Math.floor(Math.random() * unlocked.length)];
-      this._passiveItems.push(new PassiveItem(this, ROOM_W / 2 + 80, ROOM_H / 2, id));
-    }
+    this._spawnStartRoomItem();
 
-    // 보스 클리어 시 랜덤 아이템 드롭
-    this.events.on('boss-cleared', ({ x, y }) => {
+    // 보스 클리어 시 랜덤 아이템 드롭 + 층 진행
+    this.events.on('boss-cleared', ({ x, y, floor }) => {
       const allIds = Object.keys(ITEM_DEFS);
       const id = allIds[Math.floor(Math.random() * allIds.length)];
       this._passiveItems.push(new PassiveItem(this, x, y, id));
+      if (floor < 3) {
+        this.time.delayedCall(2500, () => this._advanceFloor());
+      } else {
+        this.time.delayedCall(1500, () => this._showZoneClear());
+      }
     });
 
     // 카메라 뷰포트를 HUD 아래 영역으로 제한 → 게임/HUD 영역 시각적 분리
@@ -69,6 +72,66 @@ export default class GameScene extends Phaser.Scene {
           this.scene.restart();
         });
       });
+    });
+  }
+
+  _spawnStartRoomItem() {
+    const unlocked = PassiveItem.getUnlocked();
+    if (unlocked.length > 0) {
+      const id = unlocked[Math.floor(Math.random() * unlocked.length)];
+      this._passiveItems.push(new PassiveItem(this, ROOM_W / 2 + 80, ROOM_H / 2, id));
+    }
+  }
+
+  _advanceFloor() {
+    this.currentFloor++;
+    const cam = this.cameras.main;
+    cam.fadeOut(500, 0, 0, 0);
+    cam.once('camerafadeoutcomplete', () => {
+      this._passiveItems.forEach(i => { if (i.alive) i.dispose(); });
+      this._passiveItems = [];
+      this.enemyManager.clearAll();
+      this.roomManager.setFloor(this.currentFloor);
+      this.roomManager.init(generateDungeon());
+      this._spawnStartRoomItem();
+      this.events.emit('floor-changed', this.currentFloor);
+      cam.fadeIn(500, 0, 0, 0);
+      cam.once('camerafadeincomplete', () => this._showFloorBanner(this.currentFloor));
+    });
+  }
+
+  _showFloorBanner(floor) {
+    const txt = this.add.text(ROOM_W / 2, ROOM_H / 2, `FLOOR ${floor}`, {
+      fontSize: '36px', color: '#4ecca3', fontFamily: 'monospace', fontStyle: 'bold',
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(90).setAlpha(0);
+    this.tweens.add({
+      targets: txt, alpha: 1, duration: 400, ease: 'Quad.Out',
+      onComplete: () => {
+        this.time.delayedCall(1000, () => {
+          this.tweens.add({
+            targets: txt, alpha: 0, duration: 400, ease: 'Quad.In',
+            onComplete: () => { if (txt.active) txt.destroy(); },
+          });
+        });
+      },
+    });
+  }
+
+  _showZoneClear() {
+    this.add.rectangle(0, 0, GAME_W, GAME_H, 0x000000, 0.75)
+      .setScrollFactor(0).setDepth(100).setOrigin(0);
+    this.add.text(GAME_W / 2, GAME_H / 2 - 40, 'ZONE 1 CLEAR', {
+      fontSize: '30px', color: '#4ecca3', fontFamily: 'monospace', fontStyle: 'bold',
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(101);
+    this.add.text(GAME_W / 2, GAME_H / 2 + 10, '구역 1 클리어!', {
+      fontSize: '17px', color: '#aaaaaa', fontFamily: 'monospace',
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(101);
+    this.add.text(GAME_W / 2, GAME_H / 2 + 50, 'TAP TO RESTART', {
+      fontSize: '14px', color: '#666666', fontFamily: 'monospace',
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(101);
+    this.input.once('pointerdown', () => {
+      this.scene.stop('UIScene');
+      this.scene.restart();
     });
   }
 

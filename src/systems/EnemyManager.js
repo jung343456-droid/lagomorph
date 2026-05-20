@@ -5,6 +5,7 @@ import Weasel   from '../entities/Weasel';
 import Hedgehog from '../entities/Hedgehog';
 import Squirrel from '../entities/Squirrel';
 import Fang     from '../entities/Fang';
+import Wolf     from '../entities/Wolf';
 import Core     from '../entities/Core';
 import RareItem, { PICKUP_R as RARE_PICKUP_R, MAGNET_SPEED as RARE_MAGNET_SPEED, COLLECT_R as RARE_COLLECT_R } from '../entities/RareItem';
 import { ROOM_W, ROOM_H, WALL_T } from '../world/Room';
@@ -42,6 +43,8 @@ export default class EnemyManager {
 
     this._hadEnemies = false;
     this._poisoned   = new Map(); // Map<enemy, { timer, accum }>
+    this._burned     = new Map(); // Map<enemy, { timer, accum }>
+    this._frozen     = new Map(); // Map<enemy, { timer }>
 
     this.enemyGroup  = scene.physics.add.group();
     this._enemyProjs = [];  // 수동 이동 투사체 { go, damage, vx, vy }
@@ -91,7 +94,7 @@ export default class EnemyManager {
       const pdx = this.player.x - x;
       const pdy = this.player.y - y;
       const pd  = Math.sqrt(pdx * pdx + pdy * pdy);
-      if (pd < 22) {
+      if (pd < 20) {
         const dead = this.player.takeDamage(proj.damage, {
           dx: pd > 0 ? pdx / pd : 0,
           dy: pd > 0 ? pdy / pd : 0,
@@ -124,8 +127,45 @@ export default class EnemyManager {
           this._poisoned.delete(enemy);
           this.dropCores(enemy.x, enemy.y, enemy.coreDrops ?? 3);
           if (enemy.isBoss) { this.dropRareItem(enemy.x, enemy.y); this.boss = null; }
+          if (this.player.healOnKill > 0) this.player.heal(this.player.healOnKill);
         }
       }
+    }
+
+    // 화상 데미지 틱 (3초간 maxHp×2%/s, 최소 2)
+    for (const [enemy, entry] of this._burned) {
+      if (!enemy.alive) { this._burned.delete(enemy); continue; }
+      entry.timer -= dt;
+      if (entry.timer <= 0) {
+        this._burned.delete(enemy);
+        enemy._hpFill?.setFillStyle(0x44dd44);
+        continue;
+      }
+      entry.accum += Math.max(2, enemy.maxHp * 0.02) * dt;
+      const toApply = Math.floor(entry.accum);
+      if (toApply > 0) {
+        entry.accum -= toApply;
+        const died = enemy.poisonHp(toApply);
+        showDamageNumber(this.scene, enemy.x, enemy.y - enemy.gameObject.height / 2, toApply, '#ff6622');
+        if (died) {
+          this._burned.delete(enemy);
+          this.dropCores(enemy.x, enemy.y, enemy.coreDrops ?? 3);
+          if (enemy.isBoss) { this.dropRareItem(enemy.x, enemy.y); this.boss = null; }
+          if (this.player.healOnKill > 0) this.player.heal(this.player.healOnKill);
+        }
+      }
+    }
+
+    // 빙결 이동 제한 (2초간 속도 강제 0)
+    for (const [enemy, entry] of this._frozen) {
+      if (!enemy.alive) { this._frozen.delete(enemy); continue; }
+      entry.timer -= dt;
+      if (entry.timer <= 0) {
+        this._frozen.delete(enemy);
+        enemy._hpFill?.setFillStyle(0x44dd44);
+        continue;
+      }
+      enemy.gameObject.body?.setVelocity(0, 0);
     }
 
     const prevLen = this.enemies.length;
@@ -206,6 +246,26 @@ export default class EnemyManager {
     return enemy;
   }
 
+  /** 층 1~2 보스방: 늑대 + 수행원 스폰 */
+  spawnElite(x, y, floorNum) {
+    this._clearAll();
+    this._hadEnemies = true;
+    const wolf = new Wolf(this.scene, x, y);
+    wolf.gameObject.body.setMaxVelocity(350, 350);
+    wolf.gameObject.body.setCollideWorldBounds(true);
+    this.enemies.push(wolf);
+    this.enemyGroup.add(wolf.gameObject);
+    // 수행원 (층1=3마리, 층2=4마리)
+    const minionCount = 2 + floorNum;
+    const pad = WALL_T + 55;
+    for (let i = 0; i < minionCount; i++) {
+      const angle = (i / minionCount) * Math.PI * 2;
+      const ex = Math.max(pad, Math.min(ROOM_W - pad, x + Math.cos(angle) * 110));
+      const ey = Math.max(pad, Math.min(ROOM_H - pad, y + Math.sin(angle) * 110));
+      this.spawnEnemy(this._pickType(), ex, ey);
+    }
+  }
+
   /** 보스방 진입 시 호출 */
   spawnBoss(x, y) {
     this._clearAll();
@@ -229,6 +289,9 @@ export default class EnemyManager {
   addEnemyProjectile(go, damage, vx, vy) {
     this._enemyProjs.push({ go, damage, vx, vy });
   }
+
+  /** 층 전환 시 모든 적·투사체·드롭 즉시 정리 */
+  clearAll() { this._clearAll(); }
 
   destroy() {
     this.scene.events.off('attack-fired', this._onAttackFired, this);
@@ -262,6 +325,8 @@ export default class EnemyManager {
     this._enemyProjs.forEach(p => { if (p.go.active) p.go.destroy(); });
     this._enemyProjs = [];
     this._poisoned.clear();
+    this._burned.clear();
+    this._frozen.clear();
   }
 
   _applyPoison(enemy) {
@@ -270,7 +335,20 @@ export default class EnemyManager {
     enemy._hpFill?.setFillStyle(0xaa44ff);
   }
 
+  _applyBurn(enemy) {
+    if (this._burned.has(enemy)) return;
+    this._burned.set(enemy, { timer: 3, accum: 0 });
+    enemy._hpFill?.setFillStyle(0xff4422);
+  }
+
+  _applyFreeze(enemy) {
+    if (this._frozen.has(enemy)) return;
+    this._frozen.set(enemy, { timer: 2 });
+    enemy._hpFill?.setFillStyle(0x88ccff);
+  }
+
   _onAttackFired({ tierData, playerX, playerY, aimDir }) {
+    const directHit = [];
     this.enemies.forEach(e => {
       if (!e.alive || e.state === 'stun') return;
       const hit = tierData.shape === 'circle'
@@ -278,6 +356,9 @@ export default class EnemyManager {
         : this._inOrientedRect(e.x, e.y, playerX, playerY, aimDir, tierData.length, tierData.width / 2);
       if (!hit) return;
       if (this.player.hasPoison) this._applyPoison(e);
+      if (this.player.hasFire)   this._applyBurn(e);
+      if (this.player.hasIce && Math.random() < 0.3) this._applyFreeze(e);
+      if (this.player.hasThunder) directHit.push(e);
       const ddx = e.x - playerX;
       const ddy = e.y - playerY;
       const len = Math.sqrt(ddx * ddx + ddy * ddy);
@@ -291,9 +372,82 @@ export default class EnemyManager {
       showDamageNumber(this.scene, e.x, e.y - e.gameObject.height / 2, tierData.damage);
       if (dead) {
         this._poisoned.delete(e);
+        this._burned.delete(e);
+        this._frozen.delete(e);
         this.dropCores(e.x, e.y, e.coreDrops ?? 3);
         if (e.isBoss) { this.dropRareItem(e.x, e.y); this.boss = null; }
+        if (this.player.healOnKill > 0) this.player.heal(this.player.healOnKill);
       }
+    });
+
+    if (directHit.length > 0) this._applyThunderChain(directHit);
+  }
+
+  _applyThunderChain(directHit) {
+    const CHAIN_R    = 150;
+    const CHAIN_DMGS = [8, 6, 4];
+
+    const chained  = new Set(directHit);
+    let   frontier = directHit.filter(e => e.alive);
+
+    for (let hop = 0; hop < CHAIN_DMGS.length; hop++) {
+      if (frontier.length === 0) break;
+      const dmg = CHAIN_DMGS[hop];
+      const nextFrontier = [];
+
+      frontier.forEach(src => {
+        if (!src.alive) return;
+        let nearest = null, minD = CHAIN_R;
+        this.enemies.forEach(other => {
+          if (chained.has(other) || !other.alive) return;
+          const d = Phaser.Math.Distance.Between(src.x, src.y, other.x, other.y);
+          if (d < minD) { minD = d; nearest = other; }
+        });
+        if (!nearest) return;
+
+        this._drawLightningLine(src.x, src.y, nearest.x, nearest.y);
+        const died = nearest.poisonHp(dmg);
+        showDamageNumber(this.scene, nearest.x, nearest.y - nearest.gameObject.height / 2, dmg, '#ddff22');
+        if (died) {
+          this.dropCores(nearest.x, nearest.y, nearest.coreDrops ?? 3);
+          if (nearest.isBoss) { this.dropRareItem(nearest.x, nearest.y); this.boss = null; }
+          if (this.player.healOnKill > 0) this.player.heal(this.player.healOnKill);
+        }
+        chained.add(nearest);
+        nextFrontier.push(nearest);
+      });
+
+      frontier = nextFrontier;
+    }
+  }
+
+  _drawLightningLine(x1, y1, x2, y2) {
+    const gfx  = this.scene.add.graphics().setDepth(15);
+    const segs = 5;
+    const pts  = [{ x: x1, y: y1 }];
+    for (let i = 1; i < segs; i++) {
+      const t = i / segs;
+      pts.push({
+        x: x1 + (x2 - x1) * t + (Math.random() - 0.5) * 18,
+        y: y1 + (y2 - y1) * t + (Math.random() - 0.5) * 18,
+      });
+    }
+    pts.push({ x: x2, y: y2 });
+
+    gfx.lineStyle(4, 0xddff22, 0.55);
+    gfx.beginPath();
+    pts.forEach((p, i) => (i === 0 ? gfx.moveTo(p.x, p.y) : gfx.lineTo(p.x, p.y)));
+    gfx.strokePath();
+
+    gfx.lineStyle(1.5, 0xffffff, 0.95);
+    gfx.beginPath();
+    pts.forEach((p, i) => (i === 0 ? gfx.moveTo(p.x, p.y) : gfx.lineTo(p.x, p.y)));
+    gfx.strokePath();
+
+    this.scene.tweens.add({
+      targets: gfx, alpha: 0,
+      duration: 300, ease: 'Quad.In',
+      onComplete: () => gfx.destroy(),
     });
   }
 

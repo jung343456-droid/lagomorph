@@ -10,44 +10,56 @@
  *   roar         → 반경 200px 내 플레이어 0.5초 기절 (데미지 없음)
  * 2페이즈 (HP 50% 이하):
  *   분노 플래시, 이동속도 +20%, 돌진 5회 콤보
- *   패턴 간격 30% 단축
+ *   패턴 간격 30% 단축, 스프라이트 적색 틴트
  * 처치: 코어 50개 + 레어 아이템 드롭
  */
 import { ROOM_W, ROOM_H, WALL_T } from '../world/Room';
 
-const FANG_W            = 64;
-const FANG_H            = 64;
-const FANG_COLOR        = 0x8b0000;   // 1페이즈 색상 (암적색)
-const FANG_RAGE_COLOR   = 0xcc2200;   // 2페이즈 색상 (분노 적색)
-const HIT_COLOR         = 0xffffff;
+const FANG_W            = 50;
+const FANG_H            = 50;
+const FANG_DW           = 88;
+const FANG_DH           = 88;
 
-const BASE_CHASE_SPEED  = 150;        // 기본 추격 속도 (px/s)
-const DASH_SPEED        = 400;        // 돌진 속도 (px/s)
-const DASH_DURATION     = 0.35;       // 돌진 1회 지속 시간 (초)
-const WALL_STUN_DUR     = 2.0;        // 벽 충돌 스턴 지속 시간 (초)
-const HIT_STUN_DUR      = 0.35;       // 피격 스턴 지속 시간 (초)
+const BASE_CHASE_SPEED  = 150;
+const DASH_SPEED        = 400;
+const DASH_DURATION     = 0.35;
+const WALL_STUN_DUR     = 2.0;
+const HIT_STUN_DUR      = 0.35;
 
-const STOMP_WINDUP      = 0.8;        // 발 구름 예고 시간 (초)
-const STOMP_RADIUS      = 150;        // 발 구름 AoE 반경 (px)
-const STOMP_DMG         = 20;         // 발 구름 데미지
-const STOMP_PUSH        = 380;        // 발 구름 넉백 강도
-const STOMP_PUSH_DUR    = 0.3;        // 발 구름 넉백 지속 시간 (초)
+const STOMP_WINDUP      = 0.8;
+const STOMP_RADIUS      = 150;
+const STOMP_DMG         = 20;
+const STOMP_PUSH        = 380;
+const STOMP_PUSH_DUR    = 0.3;
 
-const ROAR_RADIUS       = 200;        // 포효 기절 반경 (px)
-const ROAR_STUN_DUR     = 0.5;        // 포효 플레이어 기절 지속 시간 (초)
-const ROAR_DUR          = 0.8;        // 포효 모션 지속 시간 (초)
+const ROAR_RADIUS       = 200;
+const ROAR_STUN_DUR     = 0.5;
+const ROAR_DUR          = 0.8;
 
-const ROOM_STOMP_WINDUP = 1.2;        // 방 전체 충격파 예고 시간 (초)
-const ROOM_STOMP_DMG    = 15;         // 방 전체 충격파 데미지
-const ROOM_STOMP_PUSH   = 300;        // 방 전체 충격파 넉백 강도
-const ROOM_STOMP_PUSH_DUR = 0.25;     // 방 전체 충격파 넉백 지속 시간 (초)
-const ROOM_SAFE_MARGIN  = WALL_T + 18; // 가장자리 안전 구역 폭 (px)
+const ROOM_STOMP_WINDUP   = 1.2;
+const ROOM_STOMP_DMG      = 15;
+const ROOM_STOMP_PUSH     = 300;
+const ROOM_STOMP_PUSH_DUR = 0.25;
+const ROOM_SAFE_MARGIN    = WALL_T + 18;
 
-const PATTERN_CD_MIN    = 3.0;        // 패턴 최소 간격 (초)
-const PATTERN_CD_MAX    = 5.0;        // 패턴 최대 간격 (초)
-const PHASE2_SPEED_MULT = 1.2;        // 2페이즈 이동속도 배율
-const COMBO_COUNT       = 5;          // 2페이즈 돌진 연속 횟수
-const COMBO_DELAY       = 0.4;        // 콤보 돌진 간격 (초)
+const PATTERN_CD_MIN    = 3.0;
+const PATTERN_CD_MAX    = 5.0;
+const PHASE2_SPEED_MULT = 1.2;
+const COMBO_COUNT       = 5;
+const PHASE2_TINT       = 0xff6666;  // 2페이즈 스프라이트 틴트
+
+function calcDir(vx, vy) {
+  if (Math.abs(vx) < 1 && Math.abs(vy) < 1) return null;
+  const a = Math.atan2(vy, vx) * 180 / Math.PI;
+  if (a >  -22.5 && a <=   22.5) return 'e';
+  if (a >   22.5 && a <=   67.5) return 'se';
+  if (a >   67.5 && a <=  112.5) return 's';
+  if (a >  112.5 && a <=  157.5) return 'sw';
+  if (a >  157.5 || a <= -157.5) return 'w';
+  if (a > -157.5 && a <= -112.5) return 'nw';
+  if (a > -112.5 && a <=  -67.5) return 'n';
+  return 'ne';
+}
 
 // 상태: idle | dash | combo_dash | wallstun | stomp_windup | roar | room_stomp_windup | stun
 export default class Fang {
@@ -57,7 +69,7 @@ export default class Fang {
     this.hp     = 500;
     this.maxHp  = 500;
     this.speed  = BASE_CHASE_SPEED;
-    this.damage = 25; // 접촉 데미지
+    this.damage = 25;
 
     this.state      = 'idle';
     this._prevState = 'idle';
@@ -95,8 +107,12 @@ export default class Fang {
 
     this._hitObstacle = false;
 
-    this.gameObject = scene.add.rectangle(x, y, FANG_W, FANG_H, FANG_COLOR);
+    this._lastDir = 's';
+    this._curKey  = 'fang-s';
+
+    this.gameObject = scene.add.image(x, y, 'fang-s').setDisplaySize(FANG_DW, FANG_DH);
     scene.physics.add.existing(this.gameObject);
+    this.gameObject.body.setSize(FANG_W, FANG_H);
     this.gameObject.body.setCollideWorldBounds(true);
     this.gameObject.body.setMaxVelocity(450, 450);
     this.gameObject.setDepth(9);
@@ -153,10 +169,7 @@ export default class Fang {
       case 'wallstun':
         this.gameObject.body.setVelocity(0, 0);
         this._wallStunTimer -= dt;
-        if (this._wallStunTimer <= 0) {
-          this.gameObject.setFillStyle(this._phase === 2 ? FANG_RAGE_COLOR : FANG_COLOR);
-          this._endPattern();
-        }
+        if (this._wallStunTimer <= 0) this._endPattern();
         break;
 
       case 'stomp_windup':
@@ -188,12 +201,14 @@ export default class Fang {
           this.gameObject.body.setVelocity(0, 0);
         }
         if (this.stunTimer <= 0) {
-          this.gameObject.setFillStyle(this._phase === 2 ? FANG_RAGE_COLOR : FANG_COLOR);
+          if (this._phase === 2) this.gameObject.setTint(PHASE2_TINT);
+          else this.gameObject.clearTint();
           this.state = this._prevState;
         }
         break;
     }
 
+    this._updateSprite();
     this._syncHpBar();
   }
 
@@ -227,7 +242,7 @@ export default class Fang {
   dispose() {
     if (this.destroyed) return;
     if (this._blinkEvent) { this._blinkEvent.remove(); this._blinkEvent = null; }
-    if (this._stompGfx?.active)    this._stompGfx.destroy();
+    if (this._stompGfx?.active)     this._stompGfx.destroy();
     if (this._roomStompGfx?.active) this._roomStompGfx.destroy();
     if (this._hpBg?.active)   this._hpBg.destroy();
     if (this._hpFill?.active) this._hpFill.destroy();
@@ -310,7 +325,7 @@ export default class Fang {
     this.state = 'wallstun';
     this._wallStunTimer = WALL_STUN_DUR;
     this.gameObject.body.setVelocity(0, 0);
-    this.gameObject.setFillStyle(0x444444);
+    this.gameObject.setTint(0x666666);
     this.scene.cameras.main.shake(300, 0.015);
   }
 
@@ -367,10 +382,11 @@ export default class Fang {
   _doRoar(dist, player) {
     this.state = 'roar';
     this._roarTimer = ROAR_DUR;
-    this.gameObject.setFillStyle(0xffaa00);
+    this.gameObject.setTint(0xffaa00);
     this.scene.time.delayedCall(250, () => {
       if (!this.alive) return;
-      this.gameObject.setFillStyle(this._phase === 2 ? FANG_RAGE_COLOR : FANG_COLOR);
+      if (this._phase === 2) this.gameObject.setTint(PHASE2_TINT);
+      else this.gameObject.clearTint();
     });
 
     for (let i = 0; i < 3; i++) {
@@ -447,47 +463,68 @@ export default class Fang {
     this.speed   = BASE_CHASE_SPEED * PHASE2_SPEED_MULT;
     this.state   = 'idle';
     this.gameObject.body.setVelocity(0, 0);
-    if (this._stompGfx?.active)    { this._stompGfx.destroy();    this._stompGfx    = null; }
+    if (this._stompGfx?.active)     { this._stompGfx.destroy();     this._stompGfx     = null; }
     if (this._roomStompGfx?.active) { this._roomStompGfx.destroy(); this._roomStompGfx = null; }
     this._patternCd = 1.5;
 
-    this.gameObject.setFillStyle(0xff0000);
+    this.gameObject.setTexture('fang-rage').setDisplaySize(FANG_DW, FANG_DH);
+    this._curKey = 'fang-rage';
     this.scene.cameras.main.flash(450, 255, 0, 0, false);
-    this.scene.time.delayedCall(450, () => {
-      if (!this.alive) return;
-      this.gameObject.setFillStyle(FANG_RAGE_COLOR);
-    });
   }
 
-  // ── HP 바 (머리 위 소형) ─────────────────────────────
+  // ── 스프라이트 ────────────────────────────────────────
+
+  _updateSprite() {
+    if (this.state === 'stun' || this.state === 'wallstun') return;
+    let key;
+    if (this.state === 'dash' || this.state === 'combo_dash') {
+      key = 'fang-dash';
+    } else if (this.state === 'stomp_windup') {
+      key = 'fang-stomp';
+    } else {
+      const dir = calcDir(this.gameObject.body.velocity.x, this.gameObject.body.velocity.y);
+      if (dir) this._lastDir = dir;
+      key = `fang-${this._lastDir}`;
+    }
+    if (this._curKey !== key) {
+      this._curKey = key;
+      this.gameObject.setTexture(key).setDisplaySize(FANG_DW, FANG_DH);
+    }
+    if (this._phase === 2) this.gameObject.setTint(PHASE2_TINT);
+  }
+
+  // ── HP 바 ─────────────────────────────────────────────
 
   _buildHpBar() {
     const { x, y } = this.gameObject;
-    const barY = y - FANG_H / 2 - 10;
-    this._hpBg   = this.scene.add.rectangle(x, barY, FANG_W, 6, 0x333333).setDepth(11);
-    this._hpFill = this.scene.add.rectangle(x - FANG_W / 2, barY, FANG_W, 6, 0xff4444)
+    const barY = y - FANG_DH / 2 - 10;
+    this._hpBg   = this.scene.add.rectangle(x, barY, FANG_DW, 6, 0x333333).setDepth(11);
+    this._hpFill = this.scene.add.rectangle(x - FANG_DW / 2, barY, FANG_DW, 6, 0xff4444)
       .setOrigin(0, 0.5).setDepth(11);
   }
 
   _syncHpBar() {
     const { x, y } = this.gameObject;
-    const barY = y - FANG_H / 2 - 10;
+    const barY = y - FANG_DH / 2 - 10;
     this._hpBg.setPosition(x, barY);
-    this._hpFill.setPosition(x - FANG_W / 2, barY);
-    this._hpFill.width = FANG_W * Math.max(0, this.hp / this.maxHp);
+    this._hpFill.setPosition(x - FANG_DW / 2, barY);
+    this._hpFill.width = FANG_DW * Math.max(0, this.hp / this.maxHp);
   }
 
   _blinkHit() {
     if (this._blinkEvent) this._blinkEvent.remove();
     let flip = 0;
-    const base = this._phase === 2 ? FANG_RAGE_COLOR : FANG_COLOR;
-    this.gameObject.setFillStyle(HIT_COLOR);
+    this.gameObject.setTintFill(0xffffff);
     this._blinkEvent = this.scene.time.addEvent({
       delay: 55, repeat: 3,
       callback: () => {
         if (this.destroyed) return;
         flip++;
-        this.gameObject.setFillStyle(flip % 2 === 0 ? HIT_COLOR : base);
+        if (flip % 2 === 0) this.gameObject.setTintFill(0xffffff);
+        else {
+          if (this._phase === 2) this.gameObject.setTint(PHASE2_TINT);
+          else this.gameObject.clearTint();
+        }
       },
     });
   }
@@ -496,7 +533,7 @@ export default class Fang {
     this.alive = false;
     this.gameObject.body.setEnable(false);
     if (this._blinkEvent) { this._blinkEvent.remove(); this._blinkEvent = null; }
-    if (this._stompGfx?.active)    this._stompGfx.destroy();
+    if (this._stompGfx?.active)     this._stompGfx.destroy();
     if (this._roomStompGfx?.active) this._roomStompGfx.destroy();
     if (this._hpBg?.active)   this._hpBg.destroy();
     if (this._hpFill?.active) this._hpFill.destroy();
@@ -504,9 +541,11 @@ export default class Fang {
     this.scene.cameras.main.flash(600, 255, 255, 255, false);
     this.scene.cameras.main.shake(500, 0.03);
 
+    const sx = this.gameObject.scaleX * 3.0;
+    const sy = this.gameObject.scaleY * 3.0;
     this.scene.tweens.add({
-      targets:  this.gameObject,
-      alpha:    0, scaleX: 3, scaleY: 3,
+      targets: this.gameObject,
+      alpha: 0, scaleX: sx, scaleY: sy,
       duration: 700, ease: 'Quad.Out',
       onComplete: () => {
         if (this.gameObject?.active) this.gameObject.destroy();

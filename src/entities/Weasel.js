@@ -9,20 +9,33 @@
  *   cooldown → 0.8초 대기 (HP 20% 이하: 0.4초) → approach 반복
  *   stun     → 피격 시 0.4초 경직 + 넉백
  *
- * 시각: 대시 중 색상이 밝은 노랑(0xffdd88)으로 변함
+ * 시각: 대시 중 weasel-dash 스프라이트 표시
+ * speedMult: Wolf 오라(180px 이내) 적용 시 접근·후퇴 속도 ×1.2 (대시 속도는 고정)
  */
-const DETECT_R       = 220;      // 플레이어 탐지 반경 (px)
-const APPROACH_DIST  = 70;       // 대시 전환 거리: 이 이하면 대시 시작 (px)
-const APPROACH_SPEED = 160;      // 접근 이동 속도 (px/s)
-const DASH_SPEED     = 280;      // 대시 속도 (px/s)
-const DASH_DUR       = 0.4;      // 대시 지속 시간 (초)
-const COOL_DUR       = 0.8;      // 대시 후 쿨다운 (초)
-const COOL_DUR_RAGE  = 0.4;      // 분노 상태(HP 20% 이하) 쿨다운 (초)
-const WEASEL_W       = 16;       // 스프라이트 너비 (px)
-const WEASEL_H       = 26;       // 스프라이트 높이 (px)
-const WEASEL_COLOR   = 0xccaa55; // 기본 색상 (황갈색)
-const DASH_COLOR     = 0xffdd88; // 대시 중 색상 (밝은 노랑)
-const HIT_COLOR      = 0xffffff; // 피격 깜빡임 색상 (흰색)
+const DETECT_R       = 220;
+const APPROACH_DIST  = 70;
+const APPROACH_SPEED = 160;
+const DASH_SPEED     = 280;
+const DASH_DUR       = 0.4;
+const COOL_DUR       = 0.8;
+const COOL_DUR_RAGE  = 0.4;
+const WEASEL_W       = 16;   // 물리 body 크기
+const WEASEL_H       = 24;
+const WEASEL_DW      = 28;   // 표시 크기 (canvas 18:28 비율 ≈ 유지)
+const WEASEL_DH      = 44;
+
+function calcDir(vx, vy) {
+  if (Math.abs(vx) < 1 && Math.abs(vy) < 1) return null;
+  const a = Math.atan2(vy, vx) * 180 / Math.PI;
+  if (a >  -22.5 && a <=   22.5) return 'e';
+  if (a >   22.5 && a <=   67.5) return 'se';
+  if (a >   67.5 && a <=  112.5) return 's';
+  if (a >  112.5 && a <=  157.5) return 'sw';
+  if (a >  157.5 || a <= -157.5) return 'w';
+  if (a > -157.5 && a <= -112.5) return 'nw';
+  if (a > -112.5 && a <=  -67.5) return 'n';
+  return 'ne';
+}
 
 // 상태: idle | approach | dash | cooldown | stun
 export default class Weasel {
@@ -42,6 +55,7 @@ export default class Weasel {
     this.alive     = true;
     this.destroyed = false;
     this.coreDrops = 2;
+    this.speedMult = 1.0;
 
     this._dashTimer     = 0;
     this._cooldownTimer = 0;
@@ -53,8 +67,12 @@ export default class Weasel {
     this._knockbackVx = 0;
     this._knockbackVy = 0;
 
-    this.gameObject = scene.add.rectangle(x, y, WEASEL_W, WEASEL_H, WEASEL_COLOR);
+    this._lastDir = 's';
+    this._curKey  = 'weasel-idle';
+
+    this.gameObject = scene.add.image(x, y, 'weasel-idle').setDisplaySize(WEASEL_DW, WEASEL_DH);
     scene.physics.add.existing(this.gameObject);
+    this.gameObject.body.setSize(WEASEL_W, WEASEL_H);
     this.gameObject.body.setCollideWorldBounds(true);
     this.gameObject.setDepth(9);
 
@@ -86,9 +104,8 @@ export default class Weasel {
           this._dashVy = (dy / len) * DASH_SPEED;
           this._dashTimer = DASH_DUR;
           this.state = 'dash';
-          this.gameObject.setFillStyle(DASH_COLOR);
         } else {
-          this._moveTo(dx, dy, dist, APPROACH_SPEED);
+          this._moveTo(dx, dy, dist, APPROACH_SPEED * this.speedMult);
         }
         break;
 
@@ -99,7 +116,6 @@ export default class Weasel {
           this._cooldownTimer = this.hp / this.maxHp <= 0.2 ? COOL_DUR_RAGE : COOL_DUR;
           this.state = 'cooldown';
           this.gameObject.body.setVelocity(0, 0);
-          this.gameObject.setFillStyle(WEASEL_COLOR);
         }
         break;
 
@@ -119,12 +135,13 @@ export default class Weasel {
           this.gameObject.body.setVelocity(0, 0);
         }
         if (this.stunTimer <= 0) {
-          this.gameObject.setFillStyle(WEASEL_COLOR);
+          this.gameObject.clearTint();
           this.state = this._prevState;
         }
         break;
     }
 
+    this._updateSprite();
     this._syncHpBar();
   }
 
@@ -142,7 +159,7 @@ export default class Weasel {
     this._prevState = this.state;
     this.state      = 'stun';
     this.stunTimer  = 0.4;
-    this._blinkColor();
+    this._blinkHit();
     return false;
   }
 
@@ -173,30 +190,49 @@ export default class Weasel {
     this.gameObject.body.setVelocity((dx / dist) * speed, (dy / dist) * speed);
   }
 
+  _updateSprite() {
+    if (this.state === 'stun') return;
+    let key;
+    if (this.state === 'dash') {
+      key = 'weasel-dash';
+    } else if (this.state === 'idle' || this.state === 'cooldown') {
+      key = 'weasel-idle';
+    } else {
+      const dir = calcDir(this.gameObject.body.velocity.x, this.gameObject.body.velocity.y);
+      if (dir) this._lastDir = dir;
+      key = `weasel-${this._lastDir}`;
+    }
+    if (this._curKey !== key) {
+      this._curKey = key;
+      this.gameObject.setTexture(key).setDisplaySize(WEASEL_DW, WEASEL_DH);
+    }
+  }
+
   _buildHpBar() {
     const { x, y } = this.gameObject;
-    this._hpBg   = this.scene.add.rectangle(x, y - 22, WEASEL_W, 3, 0x333333).setDepth(11);
-    this._hpFill = this.scene.add.rectangle(x - WEASEL_W / 2, y - 22, WEASEL_W, 3, 0x44dd44)
+    this._hpBg   = this.scene.add.rectangle(x, y - 27, WEASEL_DW, 3, 0x333333).setDepth(11);
+    this._hpFill = this.scene.add.rectangle(x - WEASEL_DW / 2, y - 27, WEASEL_DW, 3, 0x44dd44)
       .setOrigin(0, 0.5).setDepth(11);
   }
 
   _syncHpBar() {
     const { x, y } = this.gameObject;
-    this._hpBg.setPosition(x, y - 22);
-    this._hpFill.setPosition(x - WEASEL_W / 2, y - 22);
-    this._hpFill.width = WEASEL_W * Math.max(0, this.hp / this.maxHp);
+    this._hpBg.setPosition(x, y - 27);
+    this._hpFill.setPosition(x - WEASEL_DW / 2, y - 27);
+    this._hpFill.width = WEASEL_DW * Math.max(0, this.hp / this.maxHp);
   }
 
-  _blinkColor() {
+  _blinkHit() {
     if (this._blinkEvent) this._blinkEvent.remove();
     let flip = 0;
-    this.gameObject.setFillStyle(HIT_COLOR);
+    this.gameObject.setTintFill(0xffffff);
     this._blinkEvent = this.scene.time.addEvent({
       delay: 80, repeat: 4,
       callback: () => {
         if (this.destroyed) return;
         flip++;
-        this.gameObject.setFillStyle(flip % 2 === 0 ? HIT_COLOR : WEASEL_COLOR);
+        if (flip % 2 === 0) this.gameObject.setTintFill(0xffffff);
+        else this.gameObject.clearTint();
       },
     });
   }
@@ -207,13 +243,12 @@ export default class Weasel {
     if (this._blinkEvent) { this._blinkEvent.remove(); this._blinkEvent = null; }
     this._hpBg.destroy();
     this._hpFill.destroy();
+    const sx = this.gameObject.scaleX * 1.8;
+    const sy = this.gameObject.scaleY * 1.8;
     this.scene.tweens.add({
-      targets:  this.gameObject,
-      alpha:    0,
-      scaleX:   1.8,
-      scaleY:   1.8,
-      duration: 260,
-      ease:     'Quad.Out',
+      targets: this.gameObject,
+      alpha: 0, scaleX: sx, scaleY: sy,
+      duration: 260, ease: 'Quad.Out',
       onComplete: () => { this.gameObject.destroy(); this.destroyed = true; },
     });
   }

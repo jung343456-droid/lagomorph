@@ -13,9 +13,12 @@ export default class RoomManager {
     this._room            = null;
     this._wallColliders   = [];
     this._transitioning   = false;
+    this.floorNum         = 1;  // 현재 층 번호 (1~3)
 
     scene.events.on('all-enemies-dead', this._onRoomCleared, this);
   }
+
+  setFloor(n) { this.floorNum = n; }
 
   /** DungeonGenerator 결과를 받아 첫 방 진입 */
   init(dungeonData) {
@@ -80,9 +83,17 @@ export default class RoomManager {
       this._room.unlockDoors();
     } else if (roomData.type === 'boss') {
       this._room.lockDoors();
-      this.enemyManager.spawnBoss(ROOM_W / 2, ROOM_H / 3);
+      if (this.floorNum >= 3) {
+        // 층 3: FANG 보스
+        this.enemyManager.spawnBoss(ROOM_W / 2, ROOM_H / 3);
+      } else {
+        // 층 1~2: 늑대 + 수행원
+        this.enemyManager.spawnElite(ROOM_W / 2, ROOM_H / 3, this.floorNum);
+      }
     } else {
-      const enemyCount = 2 + Math.floor(Math.random() * 3); // 2~4
+      // 일반 전투방: 층 1=2~3, 층 2=3~4, 층 3=4~5
+      const base = 1 + this.floorNum;
+      const enemyCount = base + Math.floor(Math.random() * 2);
       this._room.lockDoors();
       this.enemyManager.spawnForRoom(enemyCount);
     }
@@ -96,7 +107,7 @@ export default class RoomManager {
     this._room.unlockDoors();
     this.scene.cameras.main.flash(300, 100, 220, 160, false);
     if (this.currentRoomData.type === 'boss') {
-      this.scene.events.emit('boss-cleared', { x: ROOM_W / 2, y: ROOM_H / 2 });
+      this.scene.events.emit('boss-cleared', { x: ROOM_W / 2, y: ROOM_H / 2, floor: this.floorNum });
     }
   }
 

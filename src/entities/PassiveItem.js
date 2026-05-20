@@ -1,6 +1,15 @@
 /**
- * 패시브 아이템 픽업
- * 수집 시 플레이어 스탯에 영구 배율 적용 (런 내 유지)
+ * 패시브 아이템 픽업 — 총 13종
+ * 수집 시 플레이어 스탯에 영구 적용 (런 내 유지), 획득 이력 localStorage 저장
+ *
+ * 근거리 강화: wide_claws(반경), sharp_claws(데미지), quick_claws(충전속도)
+ * 근거리 상태이상: poison_claws(독), fire_claws(화상), ice_claws(빙결), thunder_claws(연쇄)
+ * 이동/생존: swift_feet(이동속도), tough_hide(최대HP), hunter_instinct(킬회복)
+ * 트랩 강화: explosive_trap(스플래시), frugal_instinct(코어소모↓), big_trap(크기)
+ *
+ * 스폰 규칙:
+ *   시작 방 — 해금된 아이템 중 랜덤 1개 (첫 런은 미스폰)
+ *   보스 클리어 — ITEM_DEFS 전체 랜덤 1개 드롭
  */
 const ITEM_SIZE = 18;
 
@@ -22,6 +31,48 @@ export const ITEM_DEFS = {
     desc:  '명중 시 10초 독 (0.5%/s, 최소 1)',
     color: 0xaa44ff,
     apply: (player) => { player.hasPoison = true; },
+  },
+  fire_claws: {
+    name:  '화염 발톱',
+    desc:  '명중 시 3초 화상 (2%/s, 최소 2)',
+    color: 0xff2200,
+    apply: (player) => { player.hasFire = true; },
+  },
+  ice_claws: {
+    name:  '얼음 발톱',
+    desc:  '명중 시 30% 확률로 2초 빙결 (이동 불가)',
+    color: 0x88ddff,
+    apply: (player) => { player.hasIce = true; },
+  },
+  swift_feet: {
+    name:  '질주 발',
+    desc:  '이동속도 ×1.30',
+    color: 0x00ee66,
+    apply: (player) => { player.speed *= 1.3; player.baseSpeed *= 1.3; },
+  },
+  tough_hide: {
+    name:  '강인한 가죽',
+    desc:  '최대 HP +50, 즉시 회복',
+    color: 0xff4455,
+    apply: (player) => { player.maxHp += 50; player.heal(50); },
+  },
+  quick_claws: {
+    name:  '민첩한 발톱',
+    desc:  '근거리 충전 속도 ×1.5',
+    color: 0xffee00,
+    apply: (player) => { player.chargeSpeedMult *= 1.5; },
+  },
+  thunder_claws: {
+    name:  '감전 발톱',
+    desc:  '명중 시 반경 70px 내 적에게 연쇄 8 피해',
+    color: 0xddff22,
+    apply: (player) => { player.hasThunder = true; },
+  },
+  hunter_instinct: {
+    name:  '사냥꾼의 본능',
+    desc:  '적 처치 시 HP 5 회복',
+    color: 0xff6688,
+    apply: (player) => { player.healOnKill += 5; },
   },
   explosive_trap: {
     name:  '폭발 트랩',

@@ -6,8 +6,6 @@ export const WALL_T = 20;   // 벽 두께 (px)
 export const DOOR_W = 60;   // 문 통로 너비 (px)
 
 const WALL_COLOR     = 0x3a3a5e; // 벽 색상 (진한 남색)
-const FLOOR_COLOR    = 0x12121e; // 바닥 기본 타일 색상
-const FLOOR_ALT      = 0x14141f; // 바닥 체커보드 대비 타일 색상
 const OBSTACLE_COLOR = 0x2a2a50; // 장애물 색상
 const DOOR_LOCKED    = 0x111133; // 잠긴 문 블록 색상
 const DOOR_OPEN_HINT = 0x1e1e3a; // 열린 문 어두운 배경 색상
@@ -55,6 +53,12 @@ export default class Room {
 
   destroyObstacle(go) {
     if (!go?.active) return;
+    if (this.data.obstacleLayout) {
+      const idx = this.data.obstacleLayout.findIndex(
+        o => Math.abs(o.x - go.x) < 1 && Math.abs(o.y - go.y) < 1,
+      );
+      if (idx !== -1) this.data.obstacleLayout.splice(idx, 1);
+    }
     this.obstacleGroup.remove(go, true, true);
     const idx = this._gfx.indexOf(go);
     if (idx !== -1) this._gfx.splice(idx, 1);
@@ -69,17 +73,21 @@ export default class Room {
   // ── private ─────────────────────────────────────────
 
   _buildFloor() {
-    // 체커보드 타일로 바닥 채우기
-    const tileSize = 40;
-    for (let row = 0; row * tileSize < ROOM_H; row++) {
-      for (let col = 0; col * tileSize < ROOM_W; col++) {
-        const c = (row + col) % 2 === 0 ? FLOOR_COLOR : FLOOR_ALT;
-        const rect = this.scene.add.rectangle(
-          col * tileSize + tileSize / 2,
-          row * tileSize + tileSize / 2,
-          tileSize, tileSize, c,
-        ).setDepth(0);
-        this._gfx.push(rect);
+    const T = 40;
+    // 가중치: tile_floor 45%, tile_floor_b 40%, tile_crack 10%, tile_moss 5%
+    const POOL = [
+      'tile_floor','tile_floor','tile_floor','tile_floor','tile_floor',
+      'tile_floor','tile_floor','tile_floor','tile_floor',
+      'tile_floor_b','tile_floor_b','tile_floor_b','tile_floor_b',
+      'tile_floor_b','tile_floor_b','tile_floor_b','tile_floor_b',
+      'tile_crack','tile_crack',
+      'tile_moss',
+    ];
+    for (let row = 0; row * T < ROOM_H; row++) {
+      for (let col = 0; col * T < ROOM_W; col++) {
+        const key = POOL[Math.floor(Math.random() * POOL.length)];
+        const img = this.scene.add.image(col * T + T / 2, row * T + T / 2, key).setDepth(0);
+        this._gfx.push(img);
       }
     }
   }
@@ -121,23 +129,28 @@ export default class Room {
   }
 
   _buildObstacles() {
-    const count   = 1 + Math.floor(Math.random() * 3);
-    const minX    = WALL_T + 50;
-    const minY    = WALL_T + 50;
-    const maxX    = ROOM_W - WALL_T - 50;
-    const maxY    = ROOM_H - WALL_T - 50;
+    if (!this.data.obstacleLayout) {
+      const count = 1 + Math.floor(Math.random() * 3);
+      const minX  = WALL_T + 50;
+      const minY  = WALL_T + 50;
+      const maxX  = ROOM_W - WALL_T - 50;
+      const maxY  = ROOM_H - WALL_T - 50;
+      this.data.obstacleLayout = [];
+      for (let i = 0; i < count; i++) {
+        const w = 36 + Math.floor(Math.random() * 44);
+        const h = 36 + Math.floor(Math.random() * 44);
+        const x = minX + Math.random() * (maxX - minX - w) + w / 2;
+        const y = minY + Math.random() * (maxY - minY - h) + h / 2;
+        this.data.obstacleLayout.push({ x, y, w, h });
+      }
+    }
 
-    for (let i = 0; i < count; i++) {
-      const w = 36 + Math.floor(Math.random() * 44);
-      const h = 36 + Math.floor(Math.random() * 44);
-      const x = minX + Math.random() * (maxX - minX - w) + w / 2;
-      const y = minY + Math.random() * (maxY - minY - h) + h / 2;
-
+    this.data.obstacleLayout.forEach(({ x, y, w, h }) => {
       const obs = this.scene.add.rectangle(x, y, w, h, OBSTACLE_COLOR);
       obs.setDepth(2);
       this.obstacleGroup.add(obs);
       this._gfx.push(obs);
-    }
+    });
   }
 
   _drawOpenDoorHints() {

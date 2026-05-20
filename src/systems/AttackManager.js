@@ -94,8 +94,9 @@ export default class AttackManager {
       }
       this._mChargeTime    += dt;
       this.isCharging       = true;
-      this.chargeNormalized = Math.min(this._mChargeTime / MAX_CHARGE, 1);
-      this.currentTier      = this._calcTier(this._mChargeTime, MELEE_TIERS);
+      const et = this._mChargeTime * this.player.chargeSpeedMult;
+      this.chargeNormalized = Math.min(et / MAX_CHARGE, 1);
+      this.currentTier      = this._calcTier(et, MELEE_TIERS);
       this.tierColor        = MELEE_TIERS[this.currentTier].color;
       this.tierLabel        = MELEE_TIERS[this.currentTier].label;
       this._drawMeleePreview();
@@ -190,7 +191,7 @@ export default class AttackManager {
   // ── 근거리 공격 (A / Z) ──────────────────────────────
 
   _fireMelee() {
-    const tier   = MELEE_TIERS[this._calcTier(this._mChargeTime, MELEE_TIERS)];
+    const tier   = MELEE_TIERS[this._calcTier(this._mChargeTime * this.player.chargeSpeedMult, MELEE_TIERS)];
     const radius = tier.radius * this.player.meleeRadiusMult;
     const damage = Math.round(tier.damage * this.player.meleeDamageMult);
     const { x: px, y: py } = this.player;

@@ -16,6 +16,13 @@
 | `wide_claws` | 넓은 발톱 | 주황 `0xff8800` | 근거리 공격 반경 ×1.33 | `player.meleeRadiusMult += 0.33` |
 | `sharp_claws` | 예리한 발톱 | 청록 `0x00ccff` | 근거리 공격 데미지 ×1.20 | `player.meleeDamageMult += 0.20` |
 | `poison_claws` | 독성 발톱 | 보라 `0xaa44ff` | 근거리 공격 명중 시 10초간 독 (maxHp×0.5%/s, 최소 1/s) | `player.hasPoison = true` |
+| `fire_claws` | 화염 발톱 | 빨강 `0xff2200` | 근거리 공격 명중 시 3초 화상 (maxHp×2%/s, 최소 2/s) | `player.hasFire = true` |
+| `ice_claws` | 얼음 발톱 | 하늘 `0x88ddff` | 근거리 공격 명중 시 30% 확률로 2초 빙결 (이동 불가) | `player.hasIce = true` |
+| `swift_feet` | 질주 발 | 초록 `0x00ee66` | 이동속도 ×1.30 | `player.speed *= 1.3; player.baseSpeed *= 1.3` |
+| `tough_hide` | 강인한 가죽 | 빨강 `0xff4455` | 최대 HP +50, 즉시 50 회복 | `player.maxHp += 50; player.heal(50)` |
+| `quick_claws` | 민첩한 발톱 | 노랑 `0xffee00` | 근거리 충전 속도 ×1.5 | `player.chargeSpeedMult *= 1.5` |
+| `thunder_claws` | 감전 발톱 | 황녹 `0xddff22` | 명중 시 반경 70px 내 다른 적에게 연쇄 8 피해 | `player.hasThunder = true` |
+| `hunter_instinct` | 사냥꾼의 본능 | 분홍 `0xff6688` | 적 처치 시 HP 5 회복 | `player.healOnKill += 5` |
 | `explosive_trap` | 폭발 트랩 | 적주황 `0xff4400` | 설치물 명중 시 반경 40px 스플래시 데미지 15 | `player.hasExplosiveTrap = true` |
 | `frugal_instinct` | 절약 본능 | 노랑 `0xffdd00` | 설치물 코어 소모 3→2 | `player.trapCostBonus += 1` |
 | `big_trap` | 큰 볼일 | 갈색 `0x885500` | 설치물 크기 ×2 (22→44px) | `player.trapSizeMult *= 2` |
@@ -29,18 +36,35 @@
 | `meleeRadiusMult` | `1.0` | 근거리 공격 반경 배율 |
 | `meleeDamageMult` | `1.0` | 근거리 공격 데미지 배율 |
 | `hasPoison` | `false` | 명중 시 독 부여 여부 |
+| `hasFire` | `false` | 명중 시 화상 부여 여부 |
+| `hasIce` | `false` | 명중 시 30% 확률로 빙결 부여 여부 |
+| `hasThunder` | `false` | 명중 시 인접 적 연쇄 피해 여부 |
+| `healOnKill` | `0` | 적 처치 시 회복 HP량 |
+| `chargeSpeedMult` | `1.0` | 근거리 충전 속도 배율 (AttackManager의 유효 충전 시간 = `_mChargeTime * chargeSpeedMult`) |
 | `hasExplosiveTrap` | `false` | 트랩 폭발 스플래시 여부 |
 | `trapCostBonus` | `0` | 트랩 코어 소모 감소량 (실제 소모 = max(1, 3 - bonus)) |
 | `trapSizeMult` | `1` | 트랩 크기 배율 |
 
 ---
 
-## 독 시스템 (`src/systems/EnemyManager.js`)
+## 상태이상 시스템 (`src/systems/EnemyManager.js`)
 
-- 중독 상태: `_poisoned` Map — `{ timer: 10, accum: 0 }`
-- 중첩 없음: 이미 중독 중이면 재적용 불가 (10초 만료 후 재적용 가능)
-- 시각: 중독 중 HP바 보라색(`0xaa44ff`) → 만료 시 초록(`0x44dd44`) 복원
-- 사망 시: HP바 파괴되므로 별도 복원 불필요
+### 독 (poison)
+- `_poisoned` Map — `{ timer: 10, accum: 0 }`
+- 중첩 없음: 만료 후 재적용 가능
+- 시각: HP바 보라색(`0xaa44ff`) → 만료 시 초록 복원
+
+### 화상 (burn)
+- `_burned` Map — `{ timer: 3, accum: 0 }`
+- 중첩 없음: 만료 후 재적용 가능
+- 데미지: maxHp×2%/s, 최소 2/s
+- 시각: HP바 주황-빨강(`0xff4422`) → 만료 시 초록 복원, 데미지 숫자 `#ff6622`
+
+### 빙결 (freeze)
+- `_frozen` Map — `{ timer: 2 }`
+- 중첩 없음: 발동 확률 30% (hit당), 만료 후 재발동 가능
+- 효과: 매 프레임 velocity 강제 0 (이동 완전 불가)
+- 시각: HP바 하늘색(`0x88ccff`) → 만료 시 초록 복원
 
 ---
 

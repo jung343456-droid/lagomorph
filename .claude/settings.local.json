@@ -15,7 +15,17 @@
       "Bash(Get-ChildItem -Path \"C:\\\\projects\\\\lagomorph\" -Recurse -Include \"*.js\")",
       "Bash(Select-Object -ExpandProperty FullName)",
       "Bash(Sort-Object)",
-      "Bash(rtk npm *)"
+      "Bash(rtk npm *)",
+      "Bash(rtk ls *)",
+      "Bash(rtk playwright *)",
+      "Bash(npm list *)",
+      "Bash(rtk find *)",
+      "Read(//mnt/c/projects/lagomorph/**)",
+      "PowerShell(New-Item *)",
+      "PowerShell(npm run *)",
+      "PowerShell(Copy-Item *)",
+      "PowerShell(Test-Path *)",
+      "Bash(rtk read *)"
     ]
   }
 }

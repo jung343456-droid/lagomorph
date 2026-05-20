@@ -9,22 +9,37 @@
  *           spike 중 무적 — 공격받으면 플레이어만 넉백(데미지 없음)
  *   stun  → 피격 시 0.4초 경직 + 넉백 (spike 중 발동 불가)
  *
- * 시각: spike 중 색상이 밝은 노랑-초록(0xddff44)으로 변하고 AoE 원이 페이드아웃
+ * 시각: spike 중 hedgehog-spike 스프라이트 + AoE 원 페이드아웃
+ * speedMult: Wolf 오라(180px 이내) 적용 시 추격 속도 ×1.2
  */
-const DETECT_R       = 180;           // 플레이어 탐지 반경 (px)
-const CHASE_SPEED    = 55;            // 일반 추격 속도 (px/s)
-const HEDGEHOG_W     = 26;            // 스프라이트 크기 (정사각형, px)
-const SPIKE_CD       = 2.0;           // 가시 공격 주기 (초)
-const SPIKE_DUR      = 1.0;           // 가시 공격 지속 시간 (초)
-const SPIKE_RADIUS   = HEDGEHOG_W * 2.5; // 가시 AoE 반경 (px) — 캐릭터 크기 2.5배
-const SPIKE_DMG      = 12;            // 가시 AoE 명중 데미지
-const SPIKE_PUSH     = 300;           // 가시 AoE 넉백 강도
-const SPIKE_PUSH_DUR = 0.25;          // 가시 AoE 넉백 지속 시간 (초)
-const THORN_FORCE    = 250;           // 공격 반사 넉백 강도 (가시 공격 중 피격 시 플레이어에게 반사)
-const THORN_DUR      = 0.2;           // 공격 반사 넉백 지속 시간 (초)
-const HEDGEHOG_COLOR = 0x556633;      // 기본 색상 (올리브 녹색)
-const SPIKE_COLOR    = 0xddff44;      // 가시 공격 중 색상 (밝은 노랑-초록)
-const HIT_COLOR      = 0xffffff;      // 피격 깜빡임 색상 (흰색)
+const DETECT_R       = 180;
+const CHASE_SPEED    = 55;
+const HEDGEHOG_W     = 24;   // 물리 body 크기 (canvas 26:24 비율 반영)
+const HEDGEHOG_H     = 22;
+const HEDGEHOG_DW    = 44;   // 표시 크기 (canvas 26:24 ≈ 1.08, 약간 넓게)
+const HEDGEHOG_DH    = 40;
+const SPIKE_CD       = 2.0;
+const SPIKE_DUR      = 1.0;
+const SPIKE_RADIUS   = 65;
+const SPIKE_DMG      = 12;
+const SPIKE_PUSH     = 300;
+const SPIKE_PUSH_DUR = 0.25;
+const THORN_FORCE    = 250;
+const THORN_DUR      = 0.2;
+const SPIKE_COLOR    = 0xddff44;
+
+function calcDir(vx, vy) {
+  if (Math.abs(vx) < 1 && Math.abs(vy) < 1) return null;
+  const a = Math.atan2(vy, vx) * 180 / Math.PI;
+  if (a >  -22.5 && a <=   22.5) return 'e';
+  if (a >   22.5 && a <=   67.5) return 'se';
+  if (a >   67.5 && a <=  112.5) return 's';
+  if (a >  112.5 && a <=  157.5) return 'sw';
+  if (a >  157.5 || a <= -157.5) return 'w';
+  if (a > -157.5 && a <= -112.5) return 'nw';
+  if (a > -112.5 && a <=  -67.5) return 'n';
+  return 'ne';
+}
 
 // 상태: idle | chase | spike | stun
 export default class Hedgehog {
@@ -44,6 +59,7 @@ export default class Hedgehog {
     this.alive     = true;
     this.destroyed = false;
     this.coreDrops = 4;
+    this.speedMult = 1.0;
 
     this._spikeCd    = SPIKE_CD;
     this._spikeTimer = 0;
@@ -53,8 +69,12 @@ export default class Hedgehog {
     this._knockbackVx = 0;
     this._knockbackVy = 0;
 
-    this.gameObject = scene.add.rectangle(x, y, HEDGEHOG_W, HEDGEHOG_W, HEDGEHOG_COLOR);
+    this._lastDir = 's';
+    this._curKey  = 'hedgehog-idle';
+
+    this.gameObject = scene.add.image(x, y, 'hedgehog-idle').setDisplaySize(HEDGEHOG_DW, HEDGEHOG_DH);
     scene.physics.add.existing(this.gameObject);
+    this.gameObject.body.setSize(HEDGEHOG_W, HEDGEHOG_H);
     this.gameObject.body.setCollideWorldBounds(true);
     this.gameObject.setDepth(9);
 
@@ -82,7 +102,7 @@ export default class Hedgehog {
         if (dist >= DETECT_R) { this.state = 'idle'; break; }
         this._spikeCd -= dt;
         if (this._spikeCd <= 0) { this._startSpike(); break; }
-        this._moveTo(dx, dy, dist, CHASE_SPEED);
+        this._moveTo(dx, dy, dist, CHASE_SPEED * this.speedMult);
         break;
 
       case 'spike': {
@@ -113,12 +133,13 @@ export default class Hedgehog {
           this.gameObject.body.setVelocity(0, 0);
         }
         if (this.stunTimer <= 0) {
-          this.gameObject.setFillStyle(HEDGEHOG_COLOR);
+          this.gameObject.clearTint();
           this.state = this._prevState;
         }
         break;
     }
 
+    this._updateSprite();
     this._syncHpBar();
   }
 
@@ -153,7 +174,7 @@ export default class Hedgehog {
     this._prevState = this.state;
     this.state      = 'stun';
     this.stunTimer  = 0.4;
-    this._blinkColor();
+    this._blinkHit();
     return false;
   }
 
@@ -183,13 +204,11 @@ export default class Hedgehog {
     this.state       = 'spike';
     this._spikeTimer = SPIKE_DUR;
     this._spikeCd    = SPIKE_CD;
-    this.gameObject.setFillStyle(SPIKE_COLOR);
     this._spawnSpikeGfx();
   }
 
   _stopSpike() {
     this.state = 'chase';
-    this.gameObject.setFillStyle(HEDGEHOG_COLOR);
   }
 
   _spawnSpikeGfx() {
@@ -217,30 +236,47 @@ export default class Hedgehog {
     this.gameObject.body.setVelocity((dx / dist) * speed, (dy / dist) * speed);
   }
 
+  _updateSprite() {
+    if (this.state === 'stun') return;
+    let key;
+    if (this.state === 'spike') {
+      key = 'hedgehog-spike';
+    } else {
+      const dir = calcDir(this.gameObject.body.velocity.x, this.gameObject.body.velocity.y);
+      if (dir) this._lastDir = dir;
+      key = this.state === 'idle' ? 'hedgehog-idle' : `hedgehog-${this._lastDir}`;
+    }
+    if (this._curKey !== key) {
+      this._curKey = key;
+      this.gameObject.setTexture(key).setDisplaySize(HEDGEHOG_DW, HEDGEHOG_DH);
+    }
+  }
+
   _buildHpBar() {
     const { x, y } = this.gameObject;
-    this._hpBg   = this.scene.add.rectangle(x, y - 22, HEDGEHOG_W, 3, 0x333333).setDepth(11);
-    this._hpFill = this.scene.add.rectangle(x - HEDGEHOG_W / 2, y - 22, HEDGEHOG_W, 3, 0x44dd44)
+    this._hpBg   = this.scene.add.rectangle(x, y - 25, HEDGEHOG_DW, 3, 0x333333).setDepth(11);
+    this._hpFill = this.scene.add.rectangle(x - HEDGEHOG_DW / 2, y - 25, HEDGEHOG_DW, 3, 0x44dd44)
       .setOrigin(0, 0.5).setDepth(11);
   }
 
   _syncHpBar() {
     const { x, y } = this.gameObject;
-    this._hpBg.setPosition(x, y - 22);
-    this._hpFill.setPosition(x - HEDGEHOG_W / 2, y - 22);
-    this._hpFill.width = HEDGEHOG_W * Math.max(0, this.hp / this.maxHp);
+    this._hpBg.setPosition(x, y - 25);
+    this._hpFill.setPosition(x - HEDGEHOG_DW / 2, y - 25);
+    this._hpFill.width = HEDGEHOG_DW * Math.max(0, this.hp / this.maxHp);
   }
 
-  _blinkColor() {
+  _blinkHit() {
     if (this._blinkEvent) this._blinkEvent.remove();
     let flip = 0;
-    this.gameObject.setFillStyle(HIT_COLOR);
+    this.gameObject.setTintFill(0xffffff);
     this._blinkEvent = this.scene.time.addEvent({
       delay: 80, repeat: 4,
       callback: () => {
         if (this.destroyed) return;
         flip++;
-        this.gameObject.setFillStyle(flip % 2 === 0 ? HIT_COLOR : HEDGEHOG_COLOR);
+        if (flip % 2 === 0) this.gameObject.setTintFill(0xffffff);
+        else this.gameObject.clearTint();
       },
     });
   }
@@ -251,13 +287,12 @@ export default class Hedgehog {
     if (this._blinkEvent) { this._blinkEvent.remove(); this._blinkEvent = null; }
     this._hpBg.destroy();
     this._hpFill.destroy();
+    const sx = this.gameObject.scaleX * 1.8;
+    const sy = this.gameObject.scaleY * 1.8;
     this.scene.tweens.add({
-      targets:  this.gameObject,
-      alpha:    0,
-      scaleX:   1.8,
-      scaleY:   1.8,
-      duration: 260,
-      ease:     'Quad.Out',
+      targets: this.gameObject,
+      alpha: 0, scaleX: sx, scaleY: sy,
+      duration: 260, ease: 'Quad.Out',
       onComplete: () => { this.gameObject.destroy(); this.destroyed = true; },
     });
   }

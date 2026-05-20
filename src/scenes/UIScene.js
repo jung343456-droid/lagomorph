@@ -69,6 +69,11 @@ export default class UIScene extends Phaser.Scene {
       ({ roomData, dungeonData }) => this._refreshMinimap(dungeonData, roomData.id),
       this,
     );
+    this.scene.get('GameScene').events.on(
+      'floor-changed',
+      (floor) => { this._floorText.setText(`F${floor}`); },
+      this,
+    );
   }
 
   update() {
@@ -90,6 +95,10 @@ export default class UIScene extends Phaser.Scene {
     this.add.rectangle(0, TOP_H, GAME_W, 2, 0x3366aa, 1).setOrigin(0, 0);
     // 상태 | 맵 구분선
     this.add.rectangle(DIVIDER_X, TOP_H / 2 + 6, 1, TOP_H - 16, 0x334466, 0.9).setOrigin(0.5, 0.5);
+    // 층 표시기 (미니맵 하단 중앙)
+    this._floorText = this.add.text(272, TOP_H - 8, 'F1', {
+      fontSize: '10px', color: '#4ecca3', fontFamily: 'monospace',
+    }).setOrigin(0.5, 1);
   }
 
   // ── 충전 게이지 (상태 영역 상단) ─────────────────────
