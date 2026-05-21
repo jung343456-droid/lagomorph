@@ -87,6 +87,10 @@ export default class Room {
       for (let col = 0; col * T < ROOM_W; col++) {
         const key = POOL[Math.floor(Math.random() * POOL.length)];
         const img = this.scene.add.image(col * T + T / 2, row * T + T / 2, key).setDepth(0);
+        // 같은 텍스처라도 회전·플립으로 8가지 변형 → 격자감 분산
+        img.setAngle(Math.floor(Math.random() * 4) * 90);
+        if (Math.random() < 0.5) img.setFlipX(true);
+        if (Math.random() < 0.5) img.setFlipY(true);
         this._gfx.push(img);
       }
     }
@@ -148,6 +152,9 @@ export default class Room {
     this.data.obstacleLayout.forEach(({ x, y, w, h }) => {
       const obs = this.scene.add.tileSprite(x, y, w, h, 'tile_obstacle');
       obs.setDepth(2);
+      // tileSprite를 staticGroup에 그냥 add하면 텍스처 프레임(24×24) 크기로 body 생성됨.
+      // 명시적으로 정적 body를 만들어 displayWidth/Height에 맞춤.
+      this.scene.physics.add.existing(obs, true);
       this.obstacleGroup.add(obs);
       this._gfx.push(obs);
     });

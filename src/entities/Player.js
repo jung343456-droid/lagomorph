@@ -1,6 +1,6 @@
 /**
  * 플레이어 (VOSS-7 / soma) — 조작 캐릭터
- * 기본 HP 100 / 기본 속도 200
+ * 기본 HP 200 / 기본 속도 200
  *
  * 이동: 가상 조이스틱 또는 WASD, 8방향 스프라이트 자동 전환
  * 피격: 무적 시간 동안 깜빡임(alpha 0.35), 이후 재피격 가능
@@ -22,18 +22,18 @@
  */
 import { showDamageNumber } from '../utils/DamageNumbers';
 
-const DISPLAY_W = 64; // 스프라이트 표시 너비 (px)
-const DISPLAY_H = 72; // 스프라이트 표시 높이 (px)
-const BODY_W    = 48; // 물리 히트박스 너비 (px)
-const BODY_H    = 46; // 물리 히트박스 높이 (px)
+const DISPLAY_W = 55; // 스프라이트 표시 너비 (px) — 히트박스와 동일
+const DISPLAY_H = 62; // 스프라이트 표시 높이 (px) — 원본 8:9 비율 유지
+const BODY_W    = 55; // 물리 히트박스 너비 (px)
+const BODY_H    = 53; // 물리 히트박스 높이 (px)
 
 export default class Player {
   constructor(scene, x, y) {
     this.scene  = scene;
     this.baseSpeed = 200;
     this.speed     = 200;
-    this.hp        = 100;
-    this.maxHp  = 100;
+    this.hp        = 200;
+    this.maxHp  = 200;
 
     this._invincible     = false;
     this._knockbackTimer = 0;

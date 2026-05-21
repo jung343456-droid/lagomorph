@@ -90,63 +90,75 @@ fs.mkdirSync(OUT, { recursive: true });
 
 const T = 40;
 
-// border helper — top+left 1px in #1c1c2c
-function floorBorder(px) {
-  for (let x = 0; x < T; x++) set(px, T, x, 0, 0x1c, 0x1c, 0x2c);
-  for (let y = 0; y < T; y++) set(px, T, 0, y, 0x1c, 0x1c, 0x2c);
+// 시드 기반 의사난수 — 타일마다 일관된 grain 패턴
+function mulberry32(seed) {
+  return function() {
+    let t = seed += 0x6D2B79F5;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
 }
 
-// tile_floor — dark stone #12121e + grain
+// 균일하게 분포된 noise — base 위에 미세한 명/암 픽셀
+function speckle(px, w, h, seed, baseR, baseG, baseB, count, deltaDark, deltaLight) {
+  const rng = mulberry32(seed);
+  for (let i = 0; i < count; i++) {
+    const x = Math.floor(rng() * w);
+    const y = Math.floor(rng() * h);
+    const dark = rng() < 0.5;
+    const d = dark ? -deltaDark : deltaLight;
+    set(px, w, x, y,
+      Math.max(0, Math.min(255, baseR + d)),
+      Math.max(0, Math.min(255, baseG + d)),
+      Math.max(0, Math.min(255, baseB + d)));
+  }
+}
+
+// tile_floor — 기본 석재 #12121e + grain (경계선 없음 → 인접 타일과 자연스럽게 이어짐)
 {
   const px = new Uint8Array(T * T * 3);
   fill(px, T, T, 0, 0, T, T, 0x12, 0x12, 0x1e);
-  // diagonal grain pattern
-  for (let i = 0; i < T; i += 6) for (let j = 0; j < T; j += 6) {
-    set(px, T, (i + 1) % T, (j + 2) % T, 0x18, 0x18, 0x26);
-    set(px, T, (i + 3) % T, (j + 5) % T, 0x18, 0x18, 0x26);
-  }
-  floorBorder(px);
+  speckle(px, T, T, 1, 0x12, 0x12, 0x1e, 80, 2, 6);
   fs.writeFileSync(path.join(OUT, 'tile_floor.png'), encodePNG(T, T, px));
   console.log('tile_floor.png');
 }
 
-// tile_floor_b — lighter variant #15152a + worn highlights
+// tile_floor_b — 미세하게 밝은 변형 #14142a (대비 완화)
 {
   const px = new Uint8Array(T * T * 3);
-  fill(px, T, T, 0, 0, T, T, 0x15, 0x15, 0x2a);
-  for (const [x, y] of [[8,3],[12,7],[20,5],[28,2],[35,10],[5,15],[17,20],[30,18],[7,28],[23,32],[38,25],[14,35]])
-    set(px, T, x, y, 0x1e, 0x1e, 0x36);
-  floorBorder(px);
+  fill(px, T, T, 0, 0, T, T, 0x14, 0x14, 0x24);
+  speckle(px, T, T, 2, 0x14, 0x14, 0x24, 90, 2, 8);
   fs.writeFileSync(path.join(OUT, 'tile_floor_b.png'), encodePNG(T, T, px));
   console.log('tile_floor_b.png');
 }
 
-// tile_crack — Y-shaped crack
+// tile_crack — Y자 균열 (base는 동일, 경계선 없음)
 {
   const px = new Uint8Array(T * T * 3);
   fill(px, T, T, 0, 0, T, T, 0x12, 0x12, 0x1e);
-  // soft edge first, then main crack on top
+  speckle(px, T, T, 3, 0x12, 0x12, 0x1e, 60, 2, 4);
+  // 소프트 엣지 → 메인 균열 순으로 덮어쓰기
   line(px, T, 10, 11, 20, 23, 0x1e, 0x1e, 0x2e);
   line(px, T, 20, 23, 17, 33, 0x1e, 0x1e, 0x2e);
   line(px, T, 20, 23, 30, 21, 0x1e, 0x1e, 0x2e);
   line(px, T,  9, 11, 19, 23, 0x25, 0x25, 0x35);
   line(px, T, 19, 23, 16, 33, 0x25, 0x25, 0x35);
   line(px, T, 19, 23, 29, 21, 0x25, 0x25, 0x35);
-  floorBorder(px);
   fs.writeFileSync(path.join(OUT, 'tile_crack.png'), encodePNG(T, T, px));
   console.log('tile_crack.png');
 }
 
-// tile_moss — 6 moss patches
+// tile_moss — 6개 이끼 패치 (base는 동일, 경계선 없음)
 {
   const px = new Uint8Array(T * T * 3);
   fill(px, T, T, 0, 0, T, T, 0x12, 0x12, 0x1e);
+  speckle(px, T, T, 4, 0x12, 0x12, 0x1e, 60, 2, 4);
   for (const [mx, my, mw, mh] of [[5,5,4,2],[31,7,4,3],[10,29,5,3],[27,27,5,2],[21,17,3,2],[3,20,3,3]]) {
     fill(px, T, T, mx, my, mw, mh, 0x1a, 0x30, 0x1a);
     fill(px, T, T, mx + 1, my, mw - 1, Math.ceil(mh / 2), 0x1e, 0x3a, 0x1e);
     set(px, T, mx + 1, my, 0x24, 0x4a, 0x26);
   }
-  floorBorder(px);
   fs.writeFileSync(path.join(OUT, 'tile_moss.png'), encodePNG(T, T, px));
   console.log('tile_moss.png');
 }

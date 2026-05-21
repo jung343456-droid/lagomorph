@@ -38,7 +38,7 @@ export default class EnemyManager {
     this.enemies    = [];
     this.cores      = [];
     this.rareItems  = [];
-    this.coreCount  = 50;
+    this.coreCount  = 30;
     this.boss       = null; // 현재 보스 참조 (UIScene에서 HP 표시용)
 
     this._hadEnemies = false;
