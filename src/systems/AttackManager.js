@@ -26,6 +26,7 @@ const SPLASH_DMG    = 15;  // 폭발 트랩 스플래시 데미지
 
 // UIScene._buildSkillSlots 와 동일한 레이아웃 상수
 const SLOT_SIZE = 56, SLOT_GAP = 10, UI_MARGIN = 20; // 스킬 슬롯 크기·간격·화면 여백 (px)
+const A_CX = 390 - UI_MARGIN - SLOT_SIZE / 2;                          // A슬롯 중심 x 좌표 (= 342)
 const B_CX = 390 - UI_MARGIN - SLOT_SIZE / 2 - (SLOT_SIZE + SLOT_GAP); // B슬롯 중심 x 좌표 (= 276)
 
 export default class AttackManager {
@@ -125,18 +126,16 @@ export default class AttackManager {
   // ── 포인터 바인딩 ────────────────────────────────────
 
   _bindPointers() {
-    const halfW = this.scene.scale.width / 2;
-
     this._onDown = (p) => {
       if (this._inBSlot(p)) {
         this._startPlace();
-      } else {
-        if (p.x <= halfW || this._mCharging) return;
-        this._mPointerId  = p.id;
-        this._mCharging   = true;
-        this._mChargeTime = 0;
-        this._updateAimDir(p, this._mAimDir);
+        return;
       }
+      if (!this._inASlot(p) || this._mCharging) return;
+      this._mPointerId  = p.id;
+      this._mCharging   = true;
+      this._mChargeTime = 0;
+      this._updateAimDir(p, this._mAimDir);
     };
 
     this._onMove = (p) => {
@@ -183,8 +182,13 @@ export default class AttackManager {
     if (len > 1) { dir.x = dx / len; dir.y = dy / len; }
   }
 
+  _inASlot(p) {
+    const aCY = this.scene.scale.height - 130;
+    return Math.abs(p.x - A_CX) <= SLOT_SIZE / 2 && Math.abs(p.y - aCY) <= SLOT_SIZE / 2;
+  }
+
   _inBSlot(p) {
-    const bCY = this.scene.scale.height - 130; // 조이스틱과 같은 높이
+    const bCY = this.scene.scale.height - 130;
     return Math.abs(p.x - B_CX) <= SLOT_SIZE / 2 && Math.abs(p.y - bCY) <= SLOT_SIZE / 2;
   }
 
@@ -261,6 +265,9 @@ export default class AttackManager {
     const enemy  = em.enemies.find(e => e.gameObject === enemyGO);
     if (!enemy || !enemy.alive) return;
 
+    // 고슴도치 가시 상태: 무적 — 데미지 숫자 표시 안 함 (takeDamage 가 내부에서 넉백 반사 처리)
+    const isSpike = enemy.state === 'spike';
+
     const ddx = enemyGO.x - poopGO.x;
     const ddy = enemyGO.y - poopGO.y;
     const len = Math.sqrt(ddx * ddx + ddy * ddy);
@@ -271,7 +278,7 @@ export default class AttackManager {
       force:    poop.damage * FOX_KNOCKBACK_PER_DMG,
       duration: FOX_KNOCKBACK_DUR,
     }, 'poop');
-    showDamageNumber(this.scene, enemy.x, enemy.y - enemyGO.height / 2, poop.damage);
+    if (!isSpike) showDamageNumber(this.scene, enemy.x, enemy.y - enemyGO.height / 2, poop.damage);
     if (dead) {
       em.dropCores(enemy.x, enemy.y, enemy.coreDrops ?? 3);
       if (enemy.isBoss) { em.dropRareItem(enemy.x, enemy.y); em.boss = null; }

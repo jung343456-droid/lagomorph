@@ -13,16 +13,16 @@ export default class RareItem {
     this.healAmount = RARE_HEAL;
 
     this.gameObject = scene.add.rectangle(x, y, RARE_SIZE, RARE_SIZE, RARE_COLOR).setDepth(7);
-    scene.tweens.add({
+    this._scaleTween = scene.tweens.add({
       targets:  this.gameObject,
       scaleX:   1.4, scaleY: 1.4,
       duration: 500, yoyo: true, repeat: -1, ease: 'Sine.InOut',
     });
 
-    // 발광 효과
+    // 발광 효과 — 트윈 타겟이 plain object 이므로 dispose 시 명시적으로 제거 필요
     const gfx = scene.add.graphics().setDepth(6);
     const state = { a: 0.4 };
-    scene.tweens.add({
+    this._glowTween = scene.tweens.add({
       targets: state, a: 0.0, duration: 600, yoyo: true, repeat: -1,
       onUpdate: () => {
         if (!this.alive) return;
@@ -40,18 +40,22 @@ export default class RareItem {
   startMagnet() { this.magnetized = true; }
 
   collect() {
+    if (!this.alive) return;
     this.alive = false;
     scene_cleanup(this);
   }
 
   dispose() {
+    if (!this.alive) return;
     this.alive = false;
     scene_cleanup(this);
   }
 }
 
 function scene_cleanup(item) {
-  if (item._glowGfx?.active) item._glowGfx.destroy();
+  if (item._glowTween)  { item._glowTween.remove();  item._glowTween  = null; }
+  if (item._scaleTween) { item._scaleTween.remove(); item._scaleTween = null; }
+  if (item._glowGfx?.active)   item._glowGfx.destroy();
   if (item.gameObject?.active) item.gameObject.destroy();
 }
 

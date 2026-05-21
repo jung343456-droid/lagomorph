@@ -23,8 +23,10 @@ export default class InputManager {
 
     // 화면 좌표로 고정 위치 계산 (스케일 후 실제 캔버스 기준)
     this._jx = JX;
-    // 뷰포트 높이(= 전체 높이 - HUD_H) 기준으로 계산해야 A/B 슬롯과 동일 높이
-    this._jy = (scene.scale.height - HUD_H) - JY_FROM_BOTTOM;
+    // 터치 판정용: 캔버스 절대 y (포인터 좌표와 동일 좌표계)
+    this._jy = scene.scale.height - JY_FROM_BOTTOM;
+    // 그래픽 그리기용: GameScene 카메라가 HUD_H 만큼 viewport offset 을 가지므로 보정
+    this._visualY = this._jy - HUD_H;
 
     this._createGfx();
     this._bindPointers();
@@ -50,7 +52,7 @@ export default class InputManager {
   // ── private ──────────────────────────────────────────
 
   _createGfx() {
-    const { _jx: x, _jy: y } = this;
+    const { _jx: x, _visualY: y } = this;
 
     // 베이스: 딤 채우기 + 테두리로 범위 표시
     this._baseGfx = this.scene.add
@@ -106,17 +108,17 @@ export default class InputManager {
     if (dist < DEAD_ZONE) {
       this._dir.x = 0;
       this._dir.y = 0;
-      this._thumbGfx.setPosition(this._jx, this._jy);
+      this._thumbGfx.setPosition(this._jx, this._visualY);
       return;
     }
 
     const clamped = Math.min(dist, TRAVEL_R);
     const angle   = Math.atan2(dy, dx);
 
-    // 핸들 위치 — TRAVEL_R 반경 내에 클램프
+    // 핸들 위치 — TRAVEL_R 반경 내에 클램프 (그래픽은 viewport-offset 보정된 y 사용)
     this._thumbGfx.setPosition(
-      this._jx + Math.cos(angle) * clamped,
-      this._jy + Math.sin(angle) * clamped,
+      this._jx     + Math.cos(angle) * clamped,
+      this._visualY + Math.sin(angle) * clamped,
     );
 
     // 아날로그: 거리에 비례한 크기 (0 ~ 1), 각도 기반 방향
@@ -130,7 +132,7 @@ export default class InputManager {
     this._pointerId = null;
     this._dir.x     = 0;
     this._dir.y     = 0;
-    this._thumbGfx.setPosition(this._jx, this._jy);
+    this._thumbGfx.setPosition(this._jx, this._visualY);
   }
 
   _bindKeyboard() {

@@ -104,16 +104,16 @@ export default class PassiveItem {
     this.gameObject = scene.add.rectangle(x, y, ITEM_SIZE, ITEM_SIZE, this._def.color)
       .setDepth(7);
 
-    scene.tweens.add({
+    this._scaleTween = scene.tweens.add({
       targets:  this.gameObject,
       scaleX:   1.35, scaleY: 1.35,
       duration: 600, yoyo: true, repeat: -1, ease: 'Sine.InOut',
     });
 
-    // 발광 링
+    // 발광 링 — 트윈 타겟이 plain object 이므로 dispose 시 명시적으로 제거 필요
     const gfx   = scene.add.graphics().setDepth(6);
     const state = { a: 0.45 };
-    scene.tweens.add({
+    this._glowTween = scene.tweens.add({
       targets: state, a: 0.05, duration: 700, yoyo: true, repeat: -1,
       onUpdate: () => {
         if (!this._alive) return;
@@ -151,6 +151,8 @@ export default class PassiveItem {
   dispose() {
     if (!this._alive) return;
     this._alive = false;
+    if (this._glowTween)  { this._glowTween.remove();  this._glowTween  = null; }
+    if (this._scaleTween) { this._scaleTween.remove(); this._scaleTween = null; }
     if (this._glowGfx?.active)   this._glowGfx.destroy();
     if (this.gameObject?.active) this.gameObject.destroy();
   }

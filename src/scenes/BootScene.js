@@ -39,6 +39,9 @@ export default class BootScene extends Phaser.Scene {
     ['top', 'top-right', 'right', 'bottom-right', 'bottom', 'bottom-left', 'left', 'top-left']
       .forEach(d => this.load.image(`soma-${d}`, `assets/characters/soma-${d}.png`));
 
+    ['tile_floor', 'tile_floor_b', 'tile_crack', 'tile_moss', 'tile_wall', 'tile_obstacle']
+      .forEach(key => this.load.image(key, `assets/tiles/${key}.png`));
+
     // 적 방향 스프라이트 (8방향) + 액션 스프라이트
     const DIRS = ['n','ne','e','se','s','sw','w','nw'];
     [
@@ -74,39 +77,6 @@ export default class BootScene extends Phaser.Scene {
     g.fillStyle(0x0d0d0d);
     g.fillCircle(22, 11, 2);
     g.generateTexture('player_tex', 32, 32);
-
-    const T = 40; // 바닥 타일 크기
-
-    // tile_floor — 기본 석재 바닥
-    g.clear();
-    g.fillStyle(0x12121e); g.fillRect(0, 0, T, T);
-    g.lineStyle(1, 0x1c1c2c, 1); g.strokeRect(0.5, 0.5, T - 1, T - 1);
-    g.generateTexture('tile_floor', T, T);
-
-    // tile_floor_b — 약간 밝은 변형
-    g.clear();
-    g.fillStyle(0x15152a); g.fillRect(0, 0, T, T);
-    g.lineStyle(1, 0x1c1c2c, 1); g.strokeRect(0.5, 0.5, T - 1, T - 1);
-    g.generateTexture('tile_floor_b', T, T);
-
-    // tile_crack — 균열 바닥 (희귀)
-    g.clear();
-    g.fillStyle(0x12121e); g.fillRect(0, 0, T, T);
-    g.lineStyle(1, 0x1c1c2c, 1); g.strokeRect(0.5, 0.5, T - 1, T - 1);
-    g.lineStyle(1, 0x27273a, 1);
-    g.beginPath(); g.moveTo(9, 11); g.lineTo(19, 23); g.lineTo(16, 33); g.strokePath();
-    g.beginPath(); g.moveTo(19, 23); g.lineTo(29, 21); g.strokePath();
-    g.generateTexture('tile_crack', T, T);
-
-    // tile_moss — 이끼 바닥 (희귀)
-    g.clear();
-    g.fillStyle(0x12121e); g.fillRect(0, 0, T, T);
-    g.lineStyle(1, 0x1c1c2c, 1); g.strokeRect(0.5, 0.5, T - 1, T - 1);
-    g.fillStyle(0x1a301a);
-    [[5,5,4,2],[31,7,4,3],[10,29,5,3],[27,27,5,2],[21,17,3,2],[3,20,3,3]].forEach(
-      ([x, y, w, h]) => g.fillRect(x, y, w, h),
-    );
-    g.generateTexture('tile_moss', T, T);
 
     g.destroy();
   }

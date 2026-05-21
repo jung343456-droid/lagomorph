@@ -1,6 +1,9 @@
 import Room, { ROOM_W, ROOM_H, WALL_T, DOOR_W, DOOR_HX, DOOR_VY } from './Room';
 
-const TRIGGER_MARGIN = 20; // 문 전환 트리거 여백: 방 가장자리에서 이 거리 이내 진입 시 방 전환 (px)
+const TRIGGER_MARGIN  = 20;  // 문 전환 트리거 여백: 방 가장자리에서 이 거리 이내 진입 시 방 전환 (px)
+const TRIGGER_VEL_MIN = 30;  // 문 트리거 발화에 필요한 최소 속도 (px/s) — 의도된 진입만 허용
+const ENTER_GRACE_MS  = 450; // 방 진입 직후 문 트리거 차단 시간 (ms) — 연쇄 전환 방지
+const CLEAR_GRACE_MS  = 700; // 방 클리어 직후 문 트리거 차단 시간 (ms) — 적 처치 위치가 문 근처일 때 즉시 전환 방지
 
 export default class RoomManager {
   constructor(scene, player, enemyManager) {
@@ -13,6 +16,8 @@ export default class RoomManager {
     this._room            = null;
     this._wallColliders   = [];
     this._transitioning   = false;
+    this._enteredAt       = 0;
+    this._clearedAt       = 0;
     this.floorNum         = 1;  // 현재 층 번호 (1~3)
 
     scene.events.on('all-enemies-dead', this._onRoomCleared, this);
@@ -29,6 +34,9 @@ export default class RoomManager {
   update() {
     if (this._transitioning || !this._room) return;
     if (!this.currentRoomData.cleared) return;
+    const now = this.scene.time.now;
+    if (now - this._enteredAt < ENTER_GRACE_MS) return;
+    if (this._clearedAt > 0 && now - this._clearedAt < CLEAR_GRACE_MS) return;
     this._checkDoorTriggers();
   }
 
@@ -73,6 +81,10 @@ export default class RoomManager {
     this.player.gameObject.setPosition(entry.x, entry.y);
     this.player.gameObject.body.reset(entry.x, entry.y);
 
+    // 진입 직후 문 트리거 차단을 위한 타임스탬프 갱신
+    this._enteredAt = this.scene.time.now;
+    this._clearedAt = 0;
+
     // 클리어 방 재진입 시 이동속도 1.5배
     this.player.speed = roomData.cleared
       ? this.player.baseSpeed * 1.5
@@ -104,28 +116,41 @@ export default class RoomManager {
   _onRoomCleared() {
     if (!this.currentRoomData || this.currentRoomData.cleared) return;
     this.currentRoomData.cleared = true;
-    this._room.unlockDoors();
     this.scene.cameras.main.flash(300, 100, 220, 160, false);
     if (this.currentRoomData.type === 'boss') {
+      // 보스방: 문 잠금 유지 — 층 전환(2.5s) / 구역 클리어(1.5s) 처리 중 플레이어 이탈 방지
       this.scene.events.emit('boss-cleared', { x: ROOM_W / 2, y: ROOM_H / 2, floor: this.floorNum });
+      return;
     }
+    this._room.unlockDoors();
+    this._clearedAt = this.scene.time.now;
   }
 
   _checkDoorTriggers() {
     const px = this.player.x;
     const py = this.player.y;
+    const vx = this.player.gameObject.body.velocity.x;
+    const vy = this.player.gameObject.body.velocity.y;
     const { doors } = this.currentRoomData;
 
-    if (doors.up    !== null && py < TRIGGER_MARGIN && px > DOOR_HX && px < DOOR_HX + DOOR_W)
+    if (doors.up    !== null && py < TRIGGER_MARGIN
+        && px > DOOR_HX && px < DOOR_HX + DOOR_W
+        && vy < -TRIGGER_VEL_MIN)
       return this._startTransition('up', doors.up);
 
-    if (doors.down  !== null && py > ROOM_H - TRIGGER_MARGIN && px > DOOR_HX && px < DOOR_HX + DOOR_W)
+    if (doors.down  !== null && py > ROOM_H - TRIGGER_MARGIN
+        && px > DOOR_HX && px < DOOR_HX + DOOR_W
+        && vy >  TRIGGER_VEL_MIN)
       return this._startTransition('down', doors.down);
 
-    if (doors.left  !== null && px < TRIGGER_MARGIN && py > DOOR_VY && py < DOOR_VY + DOOR_W)
+    if (doors.left  !== null && px < TRIGGER_MARGIN
+        && py > DOOR_VY && py < DOOR_VY + DOOR_W
+        && vx < -TRIGGER_VEL_MIN)
       return this._startTransition('left', doors.left);
 
-    if (doors.right !== null && px > ROOM_W - TRIGGER_MARGIN && py > DOOR_VY && py < DOOR_VY + DOOR_W)
+    if (doors.right !== null && px > ROOM_W - TRIGGER_MARGIN
+        && py > DOOR_VY && py < DOOR_VY + DOOR_W
+        && vx >  TRIGGER_VEL_MIN)
       return this._startTransition('right', doors.right);
   }
 

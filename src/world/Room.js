@@ -96,11 +96,11 @@ export default class Room {
     const { doors } = this.data;
     const add = (x1, y1, x2, y2) => {
       const w = x2 - x1, h = y2 - y1;
-      const rect = this.scene.add.rectangle(x1 + w / 2, y1 + h / 2, w, h, WALL_COLOR);
-      rect.setDepth(2);
-      this.scene.physics.add.existing(rect, true);
-      this.wallGroup.add(rect);
-      this._gfx.push(rect);
+      const sprite = this.scene.add.tileSprite(x1 + w / 2, y1 + h / 2, w, h, 'tile_wall');
+      sprite.setDepth(2);
+      this.scene.physics.add.existing(sprite, true);
+      this.wallGroup.add(sprite);
+      this._gfx.push(sprite);
     };
 
     // 상단
@@ -146,7 +146,7 @@ export default class Room {
     }
 
     this.data.obstacleLayout.forEach(({ x, y, w, h }) => {
-      const obs = this.scene.add.rectangle(x, y, w, h, OBSTACLE_COLOR);
+      const obs = this.scene.add.tileSprite(x, y, w, h, 'tile_obstacle');
       obs.setDepth(2);
       this.obstacleGroup.add(obs);
       this._gfx.push(obs);

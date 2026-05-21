@@ -355,10 +355,17 @@ export default class EnemyManager {
         ? Phaser.Math.Distance.Between(playerX, playerY, e.x, e.y) <= tierData.radius
         : this._inOrientedRect(e.x, e.y, playerX, playerY, aimDir, tierData.length, tierData.width / 2);
       if (!hit) return;
-      if (this.player.hasPoison) this._applyPoison(e);
-      if (this.player.hasFire)   this._applyBurn(e);
-      if (this.player.hasIce && Math.random() < 0.3) this._applyFreeze(e);
-      if (this.player.hasThunder) directHit.push(e);
+
+      // 고슴도치 가시 상태: 무적 — 데미지/상태이상/연쇄 모두 무시, 넉백 반사만 처리
+      const isSpike = e.state === 'spike';
+
+      if (!isSpike) {
+        if (this.player.hasPoison)  this._applyPoison(e);
+        if (this.player.hasFire)    this._applyBurn(e);
+        if (this.player.hasIce && Math.random() < 0.3) this._applyFreeze(e);
+        if (this.player.hasThunder) directHit.push(e);
+      }
+
       const ddx = e.x - playerX;
       const ddy = e.y - playerY;
       const len = Math.sqrt(ddx * ddx + ddy * ddy);
@@ -369,7 +376,7 @@ export default class EnemyManager {
         force:    tierData.damage * KNOCKBACK_PER_DMG,
         duration: KNOCKBACK_DUR,
       });
-      showDamageNumber(this.scene, e.x, e.y - e.gameObject.height / 2, tierData.damage);
+      if (!isSpike) showDamageNumber(this.scene, e.x, e.y - e.gameObject.height / 2, tierData.damage);
       if (dead) {
         this._poisoned.delete(e);
         this._burned.delete(e);

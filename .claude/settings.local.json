@@ -25,7 +25,8 @@
       "PowerShell(npm run *)",
       "PowerShell(Copy-Item *)",
       "PowerShell(Test-Path *)",
-      "Bash(rtk read *)"
+      "Bash(rtk read *)",
+      "Bash(node *)"
     ]
   }
 }

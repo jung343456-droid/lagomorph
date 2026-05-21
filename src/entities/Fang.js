@@ -13,7 +13,6 @@
  *   패턴 간격 30% 단축, 스프라이트 적색 틴트
  * 처치: 코어 50개 + 레어 아이템 드롭
  */
-import { ROOM_W, ROOM_H, WALL_T } from '../world/Room';
 
 const FANG_W            = 50;
 const FANG_H            = 50;
@@ -36,12 +35,6 @@ const ROAR_RADIUS       = 200;
 const ROAR_STUN_DUR     = 0.5;
 const ROAR_DUR          = 0.8;
 
-const ROOM_STOMP_WINDUP   = 1.2;
-const ROOM_STOMP_DMG      = 15;
-const ROOM_STOMP_PUSH     = 300;
-const ROOM_STOMP_PUSH_DUR = 0.25;
-const ROOM_SAFE_MARGIN    = WALL_T + 18;
-
 const PATTERN_CD_MIN    = 3.0;
 const PATTERN_CD_MAX    = 5.0;
 const PHASE2_SPEED_MULT = 1.2;
@@ -61,7 +54,7 @@ function calcDir(vx, vy) {
   return 'ne';
 }
 
-// 상태: idle | dash | combo_dash | wallstun | stomp_windup | roar | room_stomp_windup | stun
+// 상태: idle | dash | combo_dash | wallstun | stomp_windup | roar | stun
 export default class Fang {
   constructor(scene, x, y) {
     this.scene = scene;
@@ -96,9 +89,6 @@ export default class Fang {
     this._stompGfx      = null;
 
     this._roarTimer     = 0;
-
-    this._roomStompTimer = 0;
-    this._roomStompGfx   = null;
 
     this._knockbackTimer    = 0;
     this._knockbackDuration = 0;
@@ -185,12 +175,6 @@ export default class Fang {
         if (this._roarTimer <= 0) this._endPattern();
         break;
 
-      case 'room_stomp_windup':
-        this.gameObject.body.setVelocity(0, 0);
-        this._roomStompTimer -= dt;
-        if (this._roomStompTimer <= 0) this._triggerRoomStomp(player);
-        break;
-
       case 'stun':
         this.stunTimer -= dt;
         if (this._knockbackTimer > 0) {
@@ -242,8 +226,7 @@ export default class Fang {
   dispose() {
     if (this.destroyed) return;
     if (this._blinkEvent) { this._blinkEvent.remove(); this._blinkEvent = null; }
-    if (this._stompGfx?.active)     this._stompGfx.destroy();
-    if (this._roomStompGfx?.active) this._roomStompGfx.destroy();
+    if (this._stompGfx?.active) this._stompGfx.destroy();
     if (this._hpBg?.active)   this._hpBg.destroy();
     if (this._hpFill?.active) this._hpFill.destroy();
     this.alive = false;
@@ -304,12 +287,6 @@ export default class Fang {
 
       case 'roar':
         this._doRoar(dist, player);
-        break;
-
-      case 'room_stomp':
-        this._roomStompTimer = ROOM_STOMP_WINDUP;
-        this._spawnRoomStompGfx();
-        this.state = 'room_stomp_windup';
         break;
     }
   }
@@ -409,53 +386,6 @@ export default class Fang {
     if (dist <= ROAR_RADIUS) player.stun(ROAR_STUN_DUR);
   }
 
-  // ── 패턴: 방 전체 충격파 (2페이즈) ─────────────────────
-
-  _spawnRoomStompGfx() {
-    this._roomStompGfx = this.scene.add.graphics().setDepth(8);
-    const state = { a: 0 };
-    this.scene.tweens.add({
-      targets: state, a: 0.28, duration: ROOM_STOMP_WINDUP * 1000, ease: 'Linear',
-      onUpdate: () => {
-        if (!this._roomStompGfx?.active) return;
-        this._roomStompGfx.clear();
-        this._roomStompGfx.fillStyle(0xff2200, state.a);
-        this._roomStompGfx.fillRect(WALL_T, WALL_T, ROOM_W - WALL_T * 2, ROOM_H - WALL_T * 2);
-      },
-    });
-  }
-
-  _triggerRoomStomp(player) {
-    if (this._roomStompGfx?.active) { this._roomStompGfx.destroy(); this._roomStompGfx = null; }
-    this.scene.cameras.main.shake(400, 0.025);
-
-    const gfx   = this.scene.add.graphics().setDepth(8);
-    const state = { a: 0.6 };
-    this.scene.tweens.add({
-      targets: state, a: 0, duration: 400, ease: 'Quad.Out',
-      onUpdate: () => {
-        gfx.clear();
-        gfx.fillStyle(0xff2200, state.a);
-        gfx.fillRect(WALL_T, WALL_T, ROOM_W - WALL_T * 2, ROOM_H - WALL_T * 2);
-      },
-      onComplete: () => gfx.destroy(),
-    });
-
-    const px = player.x, py = player.y;
-    const safe = px < ROOM_SAFE_MARGIN || px > ROOM_W - ROOM_SAFE_MARGIN ||
-                 py < ROOM_SAFE_MARGIN || py > ROOM_H - ROOM_SAFE_MARGIN;
-    if (!safe) {
-      const dx = px - this.gameObject.x, dy = py - this.gameObject.y;
-      const d  = Math.sqrt(dx * dx + dy * dy) || 1;
-      const dead = player.takeDamage(ROOM_STOMP_DMG, {
-        dx: dx / d, dy: dy / d, force: ROOM_STOMP_PUSH, duration: ROOM_STOMP_PUSH_DUR,
-      });
-      if (dead) this.scene.events.emit('player-dead');
-    }
-
-    this._endPattern();
-  }
-
   // ── 2페이즈 진입 ─────────────────────────────────────
 
   _enterPhase2() {
@@ -463,8 +393,7 @@ export default class Fang {
     this.speed   = BASE_CHASE_SPEED * PHASE2_SPEED_MULT;
     this.state   = 'idle';
     this.gameObject.body.setVelocity(0, 0);
-    if (this._stompGfx?.active)     { this._stompGfx.destroy();     this._stompGfx     = null; }
-    if (this._roomStompGfx?.active) { this._roomStompGfx.destroy(); this._roomStompGfx = null; }
+    if (this._stompGfx?.active) { this._stompGfx.destroy(); this._stompGfx = null; }
     this._patternCd = 1.5;
 
     this.gameObject.setTexture('fang-rage').setDisplaySize(FANG_DW, FANG_DH);
@@ -533,8 +462,7 @@ export default class Fang {
     this.alive = false;
     this.gameObject.body.setEnable(false);
     if (this._blinkEvent) { this._blinkEvent.remove(); this._blinkEvent = null; }
-    if (this._stompGfx?.active)     this._stompGfx.destroy();
-    if (this._roomStompGfx?.active) this._roomStompGfx.destroy();
+    if (this._stompGfx?.active) this._stompGfx.destroy();
     if (this._hpBg?.active)   this._hpBg.destroy();
     if (this._hpFill?.active) this._hpFill.destroy();
 
