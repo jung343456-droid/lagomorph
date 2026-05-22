@@ -2,15 +2,18 @@
  * FANG — 구역 1 보스
  * HP 500 / 크기 64×64px
  *
- * 이동속도: 1페이즈 150px/s / 2페이즈 180px/s (+20%)
- * 1페이즈 (HP 100~50%):
- *   dash         → 플레이어 방향 400px/s 돌진, 벽 충돌 시 2초 스턴
+ * 인지 범위: 방 어디서든 즉시 추적·공격 (DETECT_R 없음)
+ * 이동속도: 1페이즈 180px/s / 2페이즈 220px/s (≈+22%, 플레이어 200 기준)
+ * 1페이즈 (HP 100~50%) — 패턴 풀: dash×2 + dash_combo + stomp + roar (돌진계 60%):
+ *   dash         → 플레이어 방향 440px/s · 0.45초 돌진, 벽 충돌 시 1.5초 스턴
  *                  장애물 충돌 시 장애물 파괴 후 돌진 지속
- *   stomp        → 0.8초 예고 후 반경 150px AoE (데미지 20 + 넉백)
+ *   dash_combo   → 3연속 돌진 (각 dash 사이 재조준)
+ *   stomp        → 0.6초 예고 후 반경 150px AoE (데미지 20 + 넉백)
  *   roar         → 반경 200px 내 플레이어 0.5초 기절 (데미지 없음)
- * 2페이즈 (HP 50% 이하):
- *   분노 플래시, 이동속도 +20%, 돌진 5회 콤보
+ * 2페이즈 (HP 50% 이하) — 패턴 풀: dash_combo×2 + dash + stomp + roar (콤보 40%):
+ *   분노 플래시, 이동속도 +22%, dash_combo 5연속
  *   패턴 간격 30% 단축, 스프라이트 적색 틴트
+ * 패턴 쿨다운: 1페 1.5~2.5s / 2페 1.05~1.75s
  * 처치: 코어 50개 + 레어 아이템 드롭
  */
 
@@ -19,13 +22,13 @@ const FANG_H            = 50;
 const FANG_DW           = 88;
 const FANG_DH           = 88;
 
-const BASE_CHASE_SPEED  = 150;
-const DASH_SPEED        = 400;
-const DASH_DURATION     = 0.35;
-const WALL_STUN_DUR     = 2.0;
+const BASE_CHASE_SPEED  = 180;
+const DASH_SPEED        = 440;
+const DASH_DURATION     = 0.45;
+const WALL_STUN_DUR     = 1.5;
 const HIT_STUN_DUR      = 0.35;
 
-const STOMP_WINDUP      = 0.8;
+const STOMP_WINDUP      = 0.6;
 const STOMP_RADIUS      = 150;
 const STOMP_DMG         = 20;
 const STOMP_PUSH        = 380;
@@ -35,11 +38,12 @@ const ROAR_RADIUS       = 200;
 const ROAR_STUN_DUR     = 0.5;
 const ROAR_DUR          = 0.8;
 
-const PATTERN_CD_MIN    = 3.0;
-const PATTERN_CD_MAX    = 5.0;
-const PHASE2_SPEED_MULT = 1.2;
-const COMBO_COUNT       = 5;
-const PHASE2_TINT       = 0xff6666;  // 2페이즈 스프라이트 틴트
+const PATTERN_CD_MIN    = 1.5;
+const PATTERN_CD_MAX    = 2.5;
+const PHASE2_SPEED_MULT = 1.22;       // 180 × 1.22 ≈ 220
+const COMBO_COUNT_P1    = 3;          // 1페 콤보 돌진 횟수
+const COMBO_COUNT_P2    = 5;          // 2페 콤보 돌진 횟수
+const PHASE2_TINT       = 0xff6666;   // 2페이즈 스프라이트 틴트
 
 function calcDir(vx, vy) {
   if (Math.abs(vx) < 1 && Math.abs(vy) < 1) return null;
@@ -75,7 +79,7 @@ export default class Fang {
     this.isBoss    = true;
 
     this._phase         = 1;
-    this._patternCd     = 2.0;
+    this._patternCd     = 1.0;
     this._player        = null;
 
     this._dashDir       = { x: 0, y: 1 };
@@ -261,9 +265,11 @@ export default class Fang {
 
   _startNextPattern(dx, dy, dist, player) {
     const len  = dist || 1;
+    // 돌진 비중 강화 — 1페: dash×2 + combo + stomp + roar (돌진계 60%)
+    //              2페: dash_combo×2 + dash + stomp + roar (콤보 40%)
     const pool = this._phase === 2
-      ? ['dash_combo', 'stomp', 'roar']
-      : ['dash', 'stomp', 'roar'];
+      ? ['dash_combo', 'dash_combo', 'dash', 'stomp', 'roar']
+      : ['dash', 'dash', 'dash_combo', 'stomp', 'roar'];
     const pick = pool[Math.floor(Math.random() * pool.length)];
 
     switch (pick) {
@@ -273,11 +279,13 @@ export default class Fang {
         this.state = 'dash';
         break;
 
-      case 'dash_combo':
-        this._comboRemaining = COMBO_COUNT - 1;
+      case 'dash_combo': {
+        const count = this._phase === 2 ? COMBO_COUNT_P2 : COMBO_COUNT_P1;
+        this._comboRemaining = count - 1;
         this._aimDashAt(player);
         this.state = 'combo_dash';
         break;
+      }
 
       case 'stomp':
         this._stompTimer = STOMP_WINDUP;
@@ -394,7 +402,7 @@ export default class Fang {
     this.state   = 'idle';
     this.gameObject.body.setVelocity(0, 0);
     if (this._stompGfx?.active) { this._stompGfx.destroy(); this._stompGfx = null; }
-    this._patternCd = 1.5;
+    this._patternCd = 0.8;
 
     this.gameObject.setTexture('fang-rage').setDisplaySize(FANG_DW, FANG_DH);
     this._curKey = 'fang-rage';

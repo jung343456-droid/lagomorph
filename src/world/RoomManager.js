@@ -23,7 +23,10 @@ export default class RoomManager {
     scene.events.on('all-enemies-dead', this._onRoomCleared, this);
   }
 
-  setFloor(n) { this.floorNum = n; }
+  setFloor(n) {
+    this.floorNum = n;
+    this.enemyManager.setFloor(n);
+  }
 
   /** DungeonGenerator 결과를 받아 첫 방 진입 */
   init(dungeonData) {
@@ -41,6 +44,18 @@ export default class RoomManager {
   }
 
   // ── private ─────────────────────────────────────────
+
+  /** 일반 전투방 적 수: 층1=2~3, 층2=3~4, 층3=3~4, 층4=4~5, 층5=4~5 */
+  _normalRoomCount() {
+    const baseByFloor = { 1: 2, 2: 3, 3: 3, 4: 4, 5: 4 };
+    const base = baseByFloor[this.floorNum] ?? 3;
+    return base + Math.floor(Math.random() * 2);
+  }
+
+  /** 출구방(보스 없는 층의 가장 먼 방) 적 수: 일반 +2 */
+  _exitRoomCount() {
+    return this._normalRoomCount() + 2;
+  }
 
   _enterRoom(roomData, fromDir) {
     // 기존 물리 콜라이더 제거 → 기존 방 파괴
@@ -95,19 +110,20 @@ export default class RoomManager {
       this._room.unlockDoors();
     } else if (roomData.type === 'boss') {
       this._room.lockDoors();
-      if (this.floorNum >= 3) {
-        // 층 3: FANG 보스
+      if (this.floorNum === 5) {
+        // 층 5: FANG 최종 보스
         this.enemyManager.spawnBoss(ROOM_W / 2, ROOM_H / 3);
+      } else if (this.floorNum === 3) {
+        // 층 3: Wolf 2마리 중간 보스
+        this.enemyManager.spawnMidBoss(ROOM_W / 2, ROOM_H / 3);
       } else {
-        // 층 1~2: 늑대 + 수행원
-        this.enemyManager.spawnElite(ROOM_W / 2, ROOM_H / 3, this.floorNum);
+        // 층 1·2·4: 보스 없음 — 일반 적 +2~3마리 (출구방)
+        this.enemyManager.spawnForRoom(this._exitRoomCount());
       }
     } else {
-      // 일반 전투방: 층 1=2~3, 층 2=3~4, 층 3=4~5
-      const base = 1 + this.floorNum;
-      const enemyCount = base + Math.floor(Math.random() * 2);
+      // 일반 전투방
       this._room.lockDoors();
-      this.enemyManager.spawnForRoom(enemyCount);
+      this.enemyManager.spawnForRoom(this._normalRoomCount());
     }
 
     this.scene.events.emit('room-entered', { roomData, dungeonData: this.dungeonData });
@@ -118,12 +134,22 @@ export default class RoomManager {
     this.currentRoomData.cleared = true;
     this.scene.cameras.main.flash(300, 100, 220, 160, false);
     if (this.currentRoomData.type === 'boss') {
-      // 보스방: 문 잠금 유지 — 층 전환(2.5s) / 구역 클리어(1.5s) 처리 중 플레이어 이탈 방지
-      this.scene.events.emit('boss-cleared', { x: ROOM_W / 2, y: ROOM_H / 2, floor: this.floorNum });
+      // 보스방: 문은 잠금 유지 — 플레이어는 계단을 통해서만 다음 층으로 진행
+      this.scene.events.emit('boss-cleared', {
+        x: ROOM_W / 2, y: ROOM_H / 2, floor: this.floorNum, roomId: this.currentRoomData.id,
+      });
       return;
     }
     this._room.unlockDoors();
     this._clearedAt = this.scene.time.now;
+
+    // 보스가 없는 던전(현재 빌드에선 발생하지 않지만 향후 대비): 클리어된 방에 계단 신호
+    const hasBoss = this.dungeonData.rooms.some(r => r.type === 'boss');
+    if (!hasBoss) {
+      this.scene.events.emit('floor-exit-ready', {
+        x: ROOM_W / 2, y: ROOM_H / 2, floor: this.floorNum, roomId: this.currentRoomData.id,
+      });
+    }
   }
 
   _checkDoorTriggers() {

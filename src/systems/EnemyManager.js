@@ -21,14 +21,38 @@ const PLAYER_AVG_HALF        = 23;  // 플레이어 히트박스 평균 반경 (
 
 const ENEMY_CLASSES = { fox: Fox, rat: Rat, weasel: Weasel, hedgehog: Hedgehog, squirrel: Squirrel };
 
-const SPAWN_TABLE = [
-  { type: 'fox',      weight: 3 },
-  { type: 'rat',      weight: 2 },
-  { type: 'weasel',   weight: 2 },
-  { type: 'hedgehog', weight: 1 },
-  { type: 'squirrel', weight: 1 },
-];
-const SPAWN_TOTAL = SPAWN_TABLE.reduce((s, e) => s + e.weight, 0);
+// 층별 스폰 풀 — 층이 내려갈수록 적 종류가 점진적으로 추가됨.
+const FLOOR_SPAWN_TABLES = {
+  1: [
+    { type: 'rat',      weight: 3 },
+    { type: 'weasel',   weight: 2 },
+  ],
+  2: [
+    { type: 'rat',      weight: 3 },
+    { type: 'weasel',   weight: 2 },
+    { type: 'fox',      weight: 2 },
+  ],
+  3: [
+    { type: 'rat',      weight: 2 },
+    { type: 'weasel',   weight: 2 },
+    { type: 'fox',      weight: 2 },
+    { type: 'squirrel', weight: 2 },
+  ],
+  4: [
+    { type: 'rat',      weight: 2 },
+    { type: 'weasel',   weight: 2 },
+    { type: 'fox',      weight: 2 },
+    { type: 'squirrel', weight: 2 },
+    { type: 'hedgehog', weight: 1 },
+  ],
+  5: [
+    { type: 'rat',      weight: 1 },
+    { type: 'weasel',   weight: 2 },
+    { type: 'fox',      weight: 2 },
+    { type: 'squirrel', weight: 2 },
+    { type: 'hedgehog', weight: 2 },
+  ],
+};
 
 export default class EnemyManager {
   constructor(scene, player) {
@@ -40,6 +64,7 @@ export default class EnemyManager {
     this.rareItems  = [];
     this.coreCount  = 30;
     this.boss       = null; // 현재 보스 참조 (UIScene에서 HP 표시용)
+    this.floorNum   = 1;    // 현재 층 — _pickType()이 참조하는 스폰 풀 키
 
     this._hadEnemies = false;
     this._poisoned   = new Map(); // Map<enemy, { timer, accum }>
@@ -246,25 +271,21 @@ export default class EnemyManager {
     return enemy;
   }
 
-  /** 층 1~2 보스방: 늑대 + 수행원 스폰 */
-  spawnElite(x, y, floorNum) {
+  /** 층 3 중간보스방: Wolf 2마리만 (수행원은 Wolf 자체 howl로 등장) */
+  spawnMidBoss(x, y) {
     this._clearAll();
     this._hadEnemies = true;
-    const wolf = new Wolf(this.scene, x, y);
-    wolf.gameObject.body.setMaxVelocity(350, 350);
-    wolf.gameObject.body.setCollideWorldBounds(true);
-    this.enemies.push(wolf);
-    this.enemyGroup.add(wolf.gameObject);
-    // 수행원 (층1=3마리, 층2=4마리)
-    const minionCount = 2 + floorNum;
-    const pad = WALL_T + 55;
-    for (let i = 0; i < minionCount; i++) {
-      const angle = (i / minionCount) * Math.PI * 2;
-      const ex = Math.max(pad, Math.min(ROOM_W - pad, x + Math.cos(angle) * 110));
-      const ey = Math.max(pad, Math.min(ROOM_H - pad, y + Math.sin(angle) * 110));
-      this.spawnEnemy(this._pickType(), ex, ey);
-    }
+    [-70, 70].forEach(off => {
+      const wolf = new Wolf(this.scene, x + off, y);
+      wolf.gameObject.body.setMaxVelocity(350, 350);
+      wolf.gameObject.body.setCollideWorldBounds(true);
+      this.enemies.push(wolf);
+      this.enemyGroup.add(wolf.gameObject);
+    });
   }
+
+  /** 현재 층 갱신 — _pickType()이 참조하는 풀이 바뀜 */
+  setFloor(n) { this.floorNum = n; }
 
   /** 보스방 진입 시 호출 */
   spawnBoss(x, y) {
@@ -300,12 +321,14 @@ export default class EnemyManager {
   // ── private ─────────────────────────────────────────
 
   _pickType() {
-    let r = Math.random() * SPAWN_TOTAL;
-    for (const entry of SPAWN_TABLE) {
+    const table = FLOOR_SPAWN_TABLES[this.floorNum] ?? FLOOR_SPAWN_TABLES[5];
+    const total = table.reduce((s, e) => s + e.weight, 0);
+    let r = Math.random() * total;
+    for (const entry of table) {
       r -= entry.weight;
       if (r <= 0) return entry.type;
     }
-    return SPAWN_TABLE[SPAWN_TABLE.length - 1].type;
+    return table[table.length - 1].type;
   }
 
   _collectAllCores() {

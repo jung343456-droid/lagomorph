@@ -24,21 +24,46 @@ export default class GameScene extends Phaser.Scene {
 
     // 던전 생성 → 첫 방 진입
     this.roomManager = new RoomManager(this, this.player, this.enemyManager);
+    this.roomManager.setFloor(this.currentFloor);
     this.roomManager.init(generateDungeon());
 
     // 시작 방 — 이전 런에서 한 번이라도 획득한 아이템 중 랜덤 1개
     this._passiveItems = [];
     this._spawnStartRoomItem();
 
-    // 보스 클리어 시 랜덤 아이템 드롭 + 층 진행
-    this.events.on('boss-cleared', ({ x, y, floor }) => {
+    // 계단 상태 (아래층 진입 트리거)
+    this._stairs           = null;
+    this._stairsRoomId     = null;
+    this._stairsPos        = null;
+    this._stairsTriggered  = false;
+
+    // 보스 클리어: 랜덤 아이템 드롭 + 계단 표시(층1~4) / 구역 클리어(층5)
+    this.events.on('boss-cleared', ({ x, y, floor, roomId }) => {
       const allIds = Object.keys(ITEM_DEFS);
       const id = allIds[Math.floor(Math.random() * allIds.length)];
       this._passiveItems.push(new PassiveItem(this, x, y, id));
-      if (floor < 3) {
-        this.time.delayedCall(2500, () => this._advanceFloor());
+      if (floor < 5) {
+        // 중간보스(층 3 Wolf 2마리) 처치 보상: 30 회복 아이템 추가 드롭
+        if (floor === 3) this.enemyManager.dropRareItem(x - 40, y);
+        this.time.delayedCall(800, () => this._markStairs(roomId, x, y + 90));
       } else {
         this.time.delayedCall(1500, () => this._showZoneClear());
+      }
+    });
+
+    // 보스가 없는 층: 일반 방 클리어 시 그 방에 계단 표시
+    this.events.on('floor-exit-ready', ({ x, y, floor, roomId }) => {
+      if (floor < 3) this.time.delayedCall(500, () => this._markStairs(roomId, x, y));
+    });
+
+    // 방 입장 시 계단 가시성 동기화 (다른 방으로 이동하면 계단 숨김, 돌아오면 재생성)
+    this.events.on('room-entered', ({ roomData }) => {
+      if (this._stairsRoomId === null) return;
+      const inStairsRoom = roomData.id === this._stairsRoomId;
+      if (inStairsRoom && !this._stairs) {
+        this._spawnStairs(this._stairsPos.x, this._stairsPos.y);
+      } else if (!inStairsRoom && this._stairs) {
+        this._disposeStairs();
       }
     });
 
@@ -84,6 +109,10 @@ export default class GameScene extends Phaser.Scene {
   }
 
   _advanceFloor() {
+    this._disposeStairs();
+    this._stairsRoomId    = null;
+    this._stairsPos       = null;
+    this._stairsTriggered = false;
     this.currentFloor++;
     const cam = this.cameras.main;
     cam.fadeOut(500, 0, 0, 0);
@@ -93,11 +122,41 @@ export default class GameScene extends Phaser.Scene {
       this.enemyManager.clearAll();
       this.roomManager.setFloor(this.currentFloor);
       this.roomManager.init(generateDungeon());
-      this._spawnStartRoomItem();
       this.events.emit('floor-changed', this.currentFloor);
       cam.fadeIn(500, 0, 0, 0);
       cam.once('camerafadeincomplete', () => this._showFloorBanner(this.currentFloor));
     });
+  }
+
+  /** 특정 방의 (x,y)에 계단 위치를 등록 — 현재 방이면 즉시 표시 */
+  _markStairs(roomId, x, y) {
+    this._stairsRoomId = roomId;
+    this._stairsPos    = { x, y };
+    if (this.roomManager.currentRoomData?.id === roomId) {
+      this._spawnStairs(x, y);
+    }
+  }
+
+  _spawnStairs(x, y) {
+    if (this._stairs) return;
+    const rect = this.add.rectangle(x, y, 44, 44, 0x1a1a3a)
+      .setStrokeStyle(2, 0x4ecca3).setDepth(8);
+    const text = this.add.text(x, y, '▼', {
+      fontSize: '26px', color: '#4ecca3', fontFamily: 'monospace', fontStyle: 'bold',
+    }).setOrigin(0.5).setDepth(9);
+    const pulse = this.tweens.add({
+      targets: [rect, text], scaleX: 1.15, scaleY: 1.15,
+      duration: 600, yoyo: true, repeat: -1, ease: 'Sine.InOut',
+    });
+    this._stairs = { rect, text, pulse };
+  }
+
+  _disposeStairs() {
+    if (!this._stairs) return;
+    this._stairs.pulse?.remove();
+    if (this._stairs.rect.active) this._stairs.rect.destroy();
+    if (this._stairs.text.active) this._stairs.text.destroy();
+    this._stairs = null;
   }
 
   _showFloorBanner(floor) {
@@ -147,6 +206,16 @@ export default class GameScene extends Phaser.Scene {
         this.player.x, this.player.y, item.x, item.y,
       );
       if (d < 30) item.collect(this.player);
+    }
+
+    if (this._stairs && !this._stairsTriggered) {
+      const d = Phaser.Math.Distance.Between(
+        this.player.x, this.player.y, this._stairs.rect.x, this._stairs.rect.y,
+      );
+      if (d < 28) {
+        this._stairsTriggered = true;
+        this._advanceFloor();
+      }
     }
   }
 }

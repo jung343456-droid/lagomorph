@@ -8,7 +8,7 @@
  *   chase → 플레이어 추격 (160px/s)
  *           8초 뒤 첫 포효, 이후 20초마다 반복
  *   howl  → 1.5초 포효: 완전 정지 + 경직 취약
- *           종료 시 랜덤 적 2마리 소환
+ *           종료 시 족제비(weasel) 2마리 소환
  *   stun  → 피격 경직 0.5초 + 넉백
  *
  * 오라 (생존 중 상시):
@@ -29,7 +29,7 @@ const HOWL_DUR      = 1.5;
 const AURA_R        = 180;
 const AURA_MULT     = 1.2;
 const SUMMON_COUNT  = 2;
-const SUMMON_TYPES  = ['fox', 'rat', 'weasel'];
+const SUMMON_TYPE   = 'weasel'; // howl 소환 적 타입 — 항상 족제비
 
 function calcDir(vx, vy) {
   if (Math.abs(vx) < 1 && Math.abs(vy) < 1) return null;
@@ -205,8 +205,7 @@ export default class Wolf {
       const r     = 70 + Math.random() * 80;
       const sx    = Math.max(pad, Math.min(ROOM_W - pad, x + Math.cos(angle) * r));
       const sy    = Math.max(pad, Math.min(ROOM_H - pad, y + Math.sin(angle) * r));
-      const type  = SUMMON_TYPES[Math.floor(Math.random() * SUMMON_TYPES.length)];
-      em.spawnEnemy(type, sx, sy);
+      em.spawnEnemy(SUMMON_TYPE, sx, sy);
     }
   }
 
