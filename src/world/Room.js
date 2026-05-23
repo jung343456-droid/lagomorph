@@ -27,6 +27,7 @@ export default class Room {
     this._buildFloor();
     this._buildWalls();
     this._buildObstacles();
+    if (data.type === 'shop') this._buildShopAmbience();
   }
 
   /** 전투방 진입 시 모든 연결 문을 물리 블록으로 막음 */
@@ -133,6 +134,11 @@ export default class Room {
   }
 
   _buildObstacles() {
+    // 상점방: 장애물 없음 (NPC·구매 동선 방해 방지)
+    if (this.data.type === 'shop') {
+      this.data.obstacleLayout = [];
+      return;
+    }
     if (!this.data.obstacleLayout) {
       const count = 1 + Math.floor(Math.random() * 3);
       const minX  = WALL_T + 50;
@@ -176,6 +182,27 @@ export default class Room {
       }).setOrigin(0.5).setDepth(5);
       this._gfx.push(t);
     });
+  }
+
+  /** 상점방 한정: 따뜻한 톤 오버레이 + 중앙 등불 글로우 */
+  _buildShopAmbience() {
+    // 황금빛 톤 오버레이 (바닥 위에 살짝 입힘)
+    const overlay = this.scene.add.rectangle(
+      ROOM_W / 2, ROOM_H / 2, ROOM_W, ROOM_H, 0x3a2818, 0.22,
+    ).setDepth(0.5);
+    this._gfx.push(overlay);
+
+    // NPC 상단의 등불 글로우 (이중 원으로 따뜻함 표현)
+    const glowX = ROOM_W / 2;
+    const glowY = ROOM_H * 0.32;
+    const glow  = this.scene.add.graphics().setDepth(0.7);
+    glow.fillStyle(0xffcc66, 0.10);
+    glow.fillCircle(glowX, glowY, 180);
+    glow.fillStyle(0xffcc66, 0.18);
+    glow.fillCircle(glowX, glowY, 110);
+    glow.fillStyle(0xffe9aa, 0.22);
+    glow.fillCircle(glowX, glowY, 55);
+    this._gfx.push(glow);
   }
 
   /** 문 블록의 물리 영역 (center-x, center-y, width, height) */

@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { GAME_W, GAME_H, HUD_H } from '../constants';
+import PassiveItem, { ITEM_DEFS } from '../entities/PassiveItem';
 
 // ── 상단 패널 레이아웃 ────────────────────────────────
 const TOP_H      = HUD_H; // 상단 패널 높이 — constants.HUD_H 와 반드시 일치
@@ -53,6 +54,10 @@ export default class UIScene extends Phaser.Scene {
     this._bagOpen        = false;
     this._bagItemEls     = [];
     this._bagStaticEls   = [];
+    this._shopOpen       = false;
+    this._shopCardEls    = [];
+    this._shopStaticEls  = [];
+    this._shopSlots      = null;
 
     this._buildTopPanel();
     this._buildChargeGauge();
@@ -62,6 +67,7 @@ export default class UIScene extends Phaser.Scene {
     this._buildSkillSlots();
     this._buildBossHPBar();
     this._buildBagOverlay();
+    this._buildShopOverlay();
     this._bindKeys();
 
     this.scene.get('GameScene').events.on(
@@ -77,7 +83,7 @@ export default class UIScene extends Phaser.Scene {
   }
 
   update() {
-    if (this._bagOpen) return;
+    if (this._bagOpen || this._shopOpen) return;
     const { player, attackManager, enemyManager } = this.gameScene ?? {};
     if (player)        this._updateHP(player.hp, player.maxHp);
     if (attackManager) this._updateChargeGauge(attackManager);
@@ -181,6 +187,7 @@ export default class UIScene extends Phaser.Scene {
       const cy = oy + r.row * MM_CH + MM_CH / 2;
       const color = r.id === currentId ? 0x4ecca3
         : r.type === 'start'  ? 0x888844
+        : r.type === 'shop'   ? 0xddcc22
         : r.type === 'boss'   ? (r.cleared ? 0x554444 : 0xff2222)
         : r.cleared           ? 0x445566
         :                       0x664444;
@@ -332,6 +339,212 @@ export default class UIScene extends Phaser.Scene {
     });
   }
 
+  // ── 상점 오버레이 ────────────────────────────────────
+
+  _buildShopOverlay() {
+    const panelW = 320, panelH = 460;
+    const panelX = GAME_W / 2, panelY = GAME_H / 2;
+
+    // 어두운 배경 (클릭 차단)
+    const backdrop = this.add.rectangle(0, 0, GAME_W, GAME_H, 0x000000, 0.75)
+      .setOrigin(0, 0).setDepth(100).setInteractive();
+
+    // 패널
+    const panel = this.add.rectangle(panelX, panelY, panelW, panelH, 0x18120c)
+      .setStrokeStyle(2, 0xddaa44, 0.9).setDepth(101);
+
+    // 상단 타이틀 + GRIM 라벨
+    const title = this.add.text(panelX - panelW / 2 + 20, panelY - panelH / 2 + 22, 'GRIM 상점', {
+      fontSize: '16px', color: '#ffcc66', fontFamily: 'monospace', fontStyle: 'bold',
+    }).setOrigin(0, 0.5).setDepth(102);
+
+    // 보유 코어 라벨
+    this._shopCoreText = this.add.text(panelX + panelW / 2 - 38, panelY - panelH / 2 + 22, '◆ 0', {
+      fontSize: '14px', color: '#00e5ff', fontFamily: 'monospace', fontStyle: 'bold',
+    }).setOrigin(1, 0.5).setDepth(102);
+
+    // 닫기 버튼
+    const closeBtn = this.add.text(panelX + panelW / 2 - 16, panelY - panelH / 2 + 22, '✕', {
+      fontSize: '16px', color: '#aa8866', fontFamily: 'monospace',
+    }).setOrigin(0.5).setDepth(102).setInteractive({ cursor: 'pointer' });
+    closeBtn.on('pointerdown', () => this.closeShop());
+    closeBtn.on('pointerover', () => closeBtn.setColor('#ffffff'));
+    closeBtn.on('pointerout',  () => closeBtn.setColor('#aa8866'));
+
+    // 타이틀 하단 구분선
+    const titleLine = this.add.rectangle(panelX, panelY - panelH / 2 + 42, panelW - 24, 1, 0x553322)
+      .setDepth(102);
+
+    // 하단 힌트
+    const hint = this.add.text(panelX, panelY + panelH / 2 - 14, 'ESC 또는 ✕ 로 닫기', {
+      fontSize: '10px', color: '#553322', fontFamily: 'monospace',
+    }).setOrigin(0.5).setDepth(102);
+
+    this._shopStaticEls = [backdrop, panel, title, this._shopCoreText, closeBtn, titleLine, hint];
+    this._shopStaticEls.forEach(el => el.setVisible(false));
+
+    this._shopPanelX = panelX;
+    this._shopPanelY = panelY;
+    this._shopPanelW = panelW;
+    this._shopPanelH = panelH;
+  }
+
+  openShop(slots) {
+    if (this._shopOpen || !slots) return;
+    this._shopOpen   = true;
+    this._shopSlots  = slots;
+    this._shopStaticEls.forEach(el => el.setVisible(true));
+    this._refreshShopCards();
+    this.scene.get('GameScene').scene.pause();
+  }
+
+  closeShop() {
+    if (!this._shopOpen) return;
+    this._shopOpen = false;
+    this._shopStaticEls.forEach(el => el.setVisible(false));
+    this._shopCardEls.forEach(el => { if (el.active) el.destroy(); });
+    this._shopCardEls = [];
+    this._shopSlots   = null;
+    this.scene.get('GameScene').scene.resume();
+  }
+
+  _refreshShopCards() {
+    this._shopCardEls.forEach(el => { if (el.active) el.destroy(); });
+    this._shopCardEls = [];
+    if (!this._shopSlots) return;
+
+    const em     = this.gameScene.enemyManager;
+    const player = this.gameScene.player;
+    this._shopCoreText.setText('◆ ' + em.coreCount);
+
+    const cardW   = this._shopPanelW - 28;
+    const cardH   = 110;
+    const cardX   = this._shopPanelX;
+    const startY  = this._shopPanelY - this._shopPanelH / 2 + 60;
+
+    this._shopSlots.forEach((slot, i) => {
+      const cy        = startY + i * (cardH + 8) + cardH / 2;
+      const sold      = slot.sold;
+      const canAfford = em.coreCount >= slot.cost;
+
+      const bgColor = sold ? 0x0a0805 : 0x261c10;
+      const stroke  = sold ? 0x332211 : 0x885533;
+      const bg = this.add.rectangle(cardX, cy, cardW, cardH, bgColor)
+        .setStrokeStyle(1.5, stroke, sold ? 0.5 : 0.9)
+        .setDepth(102);
+
+      // 아이콘 (좌측)
+      const iconColor = this._shopIconColor(slot);
+      const icon = this.add.rectangle(cardX - cardW / 2 + 26, cy, 28, 28, iconColor)
+        .setDepth(103).setAlpha(sold ? 0.25 : 1);
+
+      // 이름
+      const nameColor = sold ? '#444' : '#ffe9bb';
+      const name = this.add.text(cardX - cardW / 2 + 52, cy - 24, this._shopName(slot), {
+        fontSize: '14px', color: nameColor, fontFamily: 'monospace', fontStyle: 'bold',
+      }).setOrigin(0, 0.5).setDepth(103);
+
+      // 설명
+      const descColor = sold ? '#333' : '#aa9977';
+      const desc = this.add.text(cardX - cardW / 2 + 52, cy - 4, this._shopDesc(slot, player), {
+        fontSize: '11px', color: descColor, fontFamily: 'monospace',
+        wordWrap: { width: cardW - 80 },
+      }).setOrigin(0, 0.5).setDepth(103);
+
+      // 가격
+      let costColor = '#ffcc44';
+      if (sold)            costColor = '#444';
+      else if (!canAfford) costColor = '#cc4444';
+      const costStr = sold ? 'SOLD' : `◆ ${slot.cost}`;
+      const cost = this.add.text(cardX + cardW / 2 - 16, cy + 32, costStr, {
+        fontSize: sold ? '13px' : '15px', color: costColor,
+        fontFamily: 'monospace', fontStyle: 'bold',
+      }).setOrigin(1, 0.5).setDepth(103);
+
+      this._shopCardEls.push(bg, icon, name, desc, cost);
+
+      if (!sold) {
+        bg.setInteractive({ cursor: 'pointer' });
+        bg.on('pointerdown', () => this._attemptPurchase(i, bg, cost));
+        bg.on('pointerover', () => bg.setFillStyle(0x362818));
+        bg.on('pointerout',  () => bg.setFillStyle(0x261c10));
+      }
+    });
+  }
+
+  _attemptPurchase(idx, bgRef, costRef) {
+    const slot = this._shopSlots?.[idx];
+    if (!slot || slot.sold) return;
+    const em     = this.gameScene.enemyManager;
+    const player = this.gameScene.player;
+
+    if (em.coreCount < slot.cost) {
+      // 코어 부족 — 가격 빨강 깜빡 + 짧은 흔들림
+      this.tweens.add({
+        targets: costRef, scaleX: 1.25, scaleY: 1.25,
+        duration: 90, yoyo: true, ease: 'Quad.Out',
+      });
+      costRef.setColor('#ff4444');
+      this.time.delayedCall(380, () => { if (costRef.active) costRef.setColor('#cc4444'); });
+      return;
+    }
+
+    em.spendCores(slot.cost);
+    this._applyShopSlot(slot, player);
+    slot.sold = true;
+    this._refreshShopCards();
+  }
+
+  _applyShopSlot(slot, player) {
+    if (slot.kind === 'heal')      { player.heal(slot.amount); return; }
+    if (slot.kind === 'heal_pct')  { player.heal(Math.floor(player.maxHp * slot.ratio)); return; }
+    if (slot.kind === 'heal_full') { player.heal(player.maxHp); return; }
+    if (slot.kind === 'item') {
+      // 인벤토리 미보유 패시브 우선, 모두 보유 시 전체에서 랜덤
+      const ownedNames = new Set((player.inventory ?? []).map(it => it.name));
+      const allIds     = Object.keys(ITEM_DEFS);
+      const available  = allIds.filter(id => !ownedNames.has(ITEM_DEFS[id].name));
+      const pool       = available.length ? available : allIds;
+      const id         = pool[Math.floor(Math.random() * pool.length)];
+      const def        = ITEM_DEFS[id];
+      def.apply(player);
+      player.inventory.push({ name: def.name, color: def.color, desc: def.desc });
+      // 다음 런 시작방 풀에도 포함되도록 영속 해금 갱신
+      const unlocked = PassiveItem.getUnlocked();
+      if (!unlocked.includes(id)) {
+        unlocked.push(id);
+        try { localStorage.setItem('lagomorph_unlocked', JSON.stringify(unlocked)); } catch {}
+      }
+      slot.name = def.name;          // 구매 후 카드에 실제 이름 표시
+      slot._iconColor = def.color;   // SOLD 카드 아이콘 색상에도 반영
+    }
+  }
+
+  _shopName(slot) {
+    if (slot.kind === 'item') return slot.name ?? '? 랜덤 패시브';
+    return slot.name;
+  }
+
+  _shopDesc(slot, player) {
+    if (slot.kind === 'item')      return '미보유 패시브 아이템 1개';
+    if (slot.kind === 'heal')      return `HP +${slot.amount}`;
+    if (slot.kind === 'heal_pct')  return `HP +${Math.floor(player.maxHp * slot.ratio)} (50%)`;
+    if (slot.kind === 'heal_full') return 'HP 완전 회복';
+    return '';
+  }
+
+  _shopIconColor(slot) {
+    if (slot.kind === 'item')      return slot._iconColor ?? 0xddaa44;
+    if (slot.kind === 'heal_full') return 0xff6688;
+    if (slot.kind === 'heal_pct')  return 0xff9966;
+    // 정액 회복: 낮은 단계 청록 → 높은 단계 황녹 점진 변화
+    const t = Phaser.Math.Clamp((slot.amount ?? 0) / 64, 0, 1);
+    const r = Math.floor(120 + t * 130);
+    const g = Math.floor(210 - t * 20);
+    const b = Math.floor(160 - t * 110);
+    return (r << 16) | (g << 8) | b;
+  }
+
   // ── 보스 HP 바 ───────────────────────────────────────
 
   _buildBossHPBar() {
@@ -400,7 +613,10 @@ export default class UIScene extends Phaser.Scene {
     zKey.on('down', () => this._flashSlot(0));
     xKey.on('down', () => this._flashSlot(1));
     iKey.on('down', () => { if (this._bagOpen) this._closeBag(); else this._openBag(); });
-    this.input.keyboard.on('keydown-ESC', () => { if (this._bagOpen) this._closeBag(); });
+    this.input.keyboard.on('keydown-ESC', () => {
+      if (this._bagOpen)       this._closeBag();
+      else if (this._shopOpen) this.closeShop();
+    });
   }
 
   _flashSlot(index) {

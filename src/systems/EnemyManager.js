@@ -317,6 +317,13 @@ export default class EnemyManager {
   /** 층 전환 시 모든 적·투사체·드롭 즉시 정리 */
   clearAll() { this._clearAll(); }
 
+  /** 코어 차감 — 부족 시 false 반환 (상점·트랩 공용) */
+  spendCores(n) {
+    if (this.coreCount < n) return false;
+    this.coreCount -= n;
+    return true;
+  }
+
   destroy() {
     this.scene.events.off('attack-fired', this._onAttackFired, this);
   }

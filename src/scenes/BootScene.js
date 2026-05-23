@@ -78,6 +78,36 @@ export default class BootScene extends Phaser.Scene {
     g.fillCircle(22, 11, 2);
     g.generateTexture('player_tex', 32, 32);
 
+    // grim: 40x50 잿빛털 토끼 상인 (한쪽 귀 흉터 + 어깨 가방)
+    g.clear();
+    const FUR  = 0x8a8a86;
+    const DARK = 0x4a4a48;
+    // 귀 (좌·우)
+    g.fillStyle(FUR);
+    g.fillRoundedRect(13, 2,  4, 16, 2);
+    g.fillRoundedRect(23, 2,  4, 16, 2);
+    // 우측 귀 흉터
+    g.fillStyle(DARK);
+    g.fillRect(23, 8, 4, 2);
+    // 머리
+    g.fillStyle(FUR);
+    g.fillCircle(20, 20, 10);
+    // 몸통
+    g.fillRoundedRect(8, 24, 24, 22, 4);
+    // 눈
+    g.fillStyle(0x222222);
+    g.fillCircle(17, 19, 1.5);
+    g.fillCircle(23, 19, 1.5);
+    // 코
+    g.fillStyle(0xcc7766);
+    g.fillCircle(20, 23, 1);
+    // 어깨 가방 (좌측)
+    g.fillStyle(0x6b4226);
+    g.fillRoundedRect(1, 28, 9, 12, 2);
+    g.fillStyle(0x4a2e1a);
+    g.fillRect(1, 28, 9, 2);
+    g.generateTexture('grim', 40, 50);
+
     g.destroy();
   }
 }

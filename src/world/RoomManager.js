@@ -108,6 +108,10 @@ export default class RoomManager {
     // 적 스폰 또는 즉시 개방
     if (roomData.cleared) {
       this._room.unlockDoors();
+    } else if (roomData.type === 'shop') {
+      // 상점방: 적 없음, 진입 즉시 클리어, 문 잠금 없음
+      roomData.cleared = true;
+      this._room.unlockDoors();
     } else if (roomData.type === 'boss') {
       this._room.lockDoors();
       if (this.floorNum === 5) {

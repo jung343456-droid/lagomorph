@@ -231,6 +231,11 @@ export default class AttackManager {
   // ── 설치형 공격 (B / X) ─────────────────────────────
 
   _startPlace() {
+    // 상점방: 상인 근접 시 트랩 설치 대신 상점 창 오픈 요청
+    if (this.scene._shopkeeper?.isNear) {
+      this.scene.events.emit('shop-open-requested');
+      return;
+    }
     const em   = this.scene.enemyManager;
     const cost = Math.max(1, POOP_COST - this.player.trapCostBonus);
     if (this._bCooldown > 0)            return;

@@ -8,6 +8,7 @@ import { generateDungeon } from '../world/DungeonGenerator';
 import RoomManager from '../world/RoomManager';
 import { ROOM_W, ROOM_H } from '../world/Room';
 import PassiveItem, { ITEM_DEFS } from '../entities/PassiveItem';
+import Shopkeeper from '../entities/Shopkeeper';
 
 export default class GameScene extends Phaser.Scene {
   constructor() {
@@ -25,7 +26,10 @@ export default class GameScene extends Phaser.Scene {
     // 던전 생성 → 첫 방 진입
     this.roomManager = new RoomManager(this, this.player, this.enemyManager);
     this.roomManager.setFloor(this.currentFloor);
-    this.roomManager.init(generateDungeon());
+    this.roomManager.init(generateDungeon(this.currentFloor));
+
+    // 상점방 NPC (현재 방이 'shop' 일 때만 살아 있음)
+    this._shopkeeper = null;
 
     // 시작 방 — 이전 런에서 한 번이라도 획득한 아이템 중 랜덤 1개
     this._passiveItems = [];
@@ -58,13 +62,29 @@ export default class GameScene extends Phaser.Scene {
 
     // 방 입장 시 계단 가시성 동기화 (다른 방으로 이동하면 계단 숨김, 돌아오면 재생성)
     this.events.on('room-entered', ({ roomData }) => {
-      if (this._stairsRoomId === null) return;
-      const inStairsRoom = roomData.id === this._stairsRoomId;
-      if (inStairsRoom && !this._stairs) {
-        this._spawnStairs(this._stairsPos.x, this._stairsPos.y);
-      } else if (!inStairsRoom && this._stairs) {
-        this._disposeStairs();
+      if (this._stairsRoomId !== null) {
+        const inStairsRoom = roomData.id === this._stairsRoomId;
+        if (inStairsRoom && !this._stairs) {
+          this._spawnStairs(this._stairsPos.x, this._stairsPos.y);
+        } else if (!inStairsRoom && this._stairs) {
+          this._disposeStairs();
+        }
       }
+
+      // 상점방 NPC 라이프사이클 — 방 바뀔 때마다 기존 NPC 정리 후 필요 시 재생성
+      if (this._shopkeeper) { this._shopkeeper.dispose(); this._shopkeeper = null; }
+      if (roomData.type === 'shop') {
+        this._shopkeeper = new Shopkeeper(
+          this, ROOM_W / 2, ROOM_H * 0.32, roomData.shopSlots,
+        );
+      }
+    });
+
+    // 상점 열기 요청 (AttackManager 가 NPC 근접 시 B 버튼 → 발행)
+    this.events.on('shop-open-requested', () => {
+      if (!this._shopkeeper) return;
+      const ui = this.scene.get('UIScene');
+      ui.openShop?.(this._shopkeeper.shopSlots);
     });
 
     // 카메라 뷰포트를 HUD 아래 영역으로 제한 → 게임/HUD 영역 시각적 분리
@@ -119,9 +139,10 @@ export default class GameScene extends Phaser.Scene {
     cam.once('camerafadeoutcomplete', () => {
       this._passiveItems.forEach(i => { if (i.alive) i.dispose(); });
       this._passiveItems = [];
+      if (this._shopkeeper) { this._shopkeeper.dispose(); this._shopkeeper = null; }
       this.enemyManager.clearAll();
       this.roomManager.setFloor(this.currentFloor);
-      this.roomManager.init(generateDungeon());
+      this.roomManager.init(generateDungeon(this.currentFloor));
       this.events.emit('floor-changed', this.currentFloor);
       cam.fadeIn(500, 0, 0, 0);
       cam.once('camerafadeincomplete', () => this._showFloorBanner(this.currentFloor));
@@ -199,6 +220,7 @@ export default class GameScene extends Phaser.Scene {
     this.attackManager.update(delta);
     this.enemyManager.update(delta);
     this.roomManager.update();
+    if (this._shopkeeper) this._shopkeeper.update(this.player);
 
     for (const item of this._passiveItems) {
       if (!item.alive) continue;

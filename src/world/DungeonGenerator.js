@@ -8,11 +8,75 @@ const DIRS = [
   { dc:  1, dr:  0, dir: 'right', opp: 'left'  },
 ];
 
+// ── 상점 슬롯 풀 ──────────────────────────────────────
+// 정액 회복 (1코어 = 8 HP 비례), 50% 회복, 전체 회복, 패시브 아이템
+const HEAL_TIERS = [
+  { id: 'heal_1', name: '토끼풀 한 줌',    cost: 1, amount: 8  },
+  { id: 'heal_2', name: '민들레잎',        cost: 2, amount: 16 },
+  { id: 'heal_3', name: '무 조각',         cost: 3, amount: 24 },
+  { id: 'heal_4', name: '잘 익은 당근',    cost: 4, amount: 32 },
+  { id: 'heal_5', name: '사과 조각',       cost: 5, amount: 40 },
+  { id: 'heal_6', name: '빨간 사과',       cost: 6, amount: 48 },
+  { id: 'heal_7', name: '야생 베리 한 줌', cost: 7, amount: 56 },
+  { id: 'heal_8', name: '채소 샐러드',     cost: 8, amount: 64 },
+];
+
+// 가중치: 패시브 30, 정액 회복 8단계 합 55(균등), heal_half 10, heal_full 5
+const SHOP_POOL = [
+  { kind: 'item',                                                                weight: 30 },
+  ...HEAL_TIERS.map((_, i) => ({ kind: 'heal', tierIdx: i, weight: 55 / 8 })),
+  { kind: 'heal_pct',  id: 'heal_half', name: '푸짐한 한 끼', ratio: 0.5, cost: 10, weight: 10 },
+  { kind: 'heal_full', id: 'heal_full', name: '정원의 만찬',               cost: 15, weight: 5  },
+];
+
+function _pickShopEntry() {
+  const total = SHOP_POOL.reduce((s, e) => s + e.weight, 0);
+  let r = Math.random() * total;
+  for (const entry of SHOP_POOL) {
+    r -= entry.weight;
+    if (r <= 0) return entry;
+  }
+  return SHOP_POOL[SHOP_POOL.length - 1];
+}
+
+function _entryToSlot(entry) {
+  if (entry.kind === 'item') {
+    // 실제 아이템 id는 구매 시 결정 (당시 인벤토리 반영)
+    return { kind: 'item', cost: 20, sold: false };
+  }
+  if (entry.kind === 'heal') {
+    const t = HEAL_TIERS[entry.tierIdx];
+    return { kind: 'heal', id: t.id, name: t.name, amount: t.amount, cost: t.cost, sold: false };
+  }
+  if (entry.kind === 'heal_pct') {
+    return { kind: 'heal_pct', id: entry.id, name: entry.name, ratio: entry.ratio, cost: entry.cost, sold: false };
+  }
+  return { kind: 'heal_full', id: entry.id, name: entry.name, cost: entry.cost, sold: false };
+}
+
+/** 3개 슬롯 무작위 추첨 — 같은 id 중복 금지 (item 슬롯은 1장만 허용) */
+function _generateShopSlots() {
+  const slots = [];
+  const usedKey = new Set();
+  let attempts = 0;
+  while (slots.length < 3 && attempts < 30) {
+    attempts++;
+    const entry = _pickShopEntry();
+    const slot  = _entryToSlot(entry);
+    const key   = slot.kind === 'item' ? 'item' : slot.id;
+    if (usedKey.has(key)) continue;
+    slots.push(slot);
+    usedKey.add(key);
+  }
+  return slots;
+}
+
 /**
  * 랜덤 워크로 9~12개 방을 배치하고 인접 연결.
+ * floorNum 이 2 또는 4 일 때 일반 전투방 하나를 상점방으로 치환.
  * Phaser 의존 없는 순수 데이터 함수.
  */
-export function generateDungeon(targetCount) {
+export function generateDungeon(floorNum = 1, targetCount) {
   targetCount ??= 9 + Math.floor(Math.random() * 4); // 9-12
 
   const grid  = new Map(); // "col,row" → roomData
@@ -86,6 +150,21 @@ export function generateDungeon(targetCount) {
   let maxD = 0, bossId = 0;
   bfsDist.forEach((d, id) => { if (d > maxD) { maxD = d; bossId = id; } });
   rooms[bossId].type = 'boss';
+
+  // 짝수층(2·4)에 상점방 1개 — 보스·시작·이미 지정된 방 제외, 시작방 가까운 쪽 우선
+  if (floorNum === 2 || floorNum === 4) {
+    const cand = rooms
+      .filter(r => r.type === 'combat')
+      .map(r => ({ r, d: bfsDist.get(r.id) ?? Infinity }))
+      .sort((a, b) => a.d - b.d);
+    if (cand.length > 0) {
+      const half = Math.max(1, Math.ceil(cand.length / 2));
+      const pool = cand.slice(0, half);
+      const picked = pool[Math.floor(Math.random() * pool.length)];
+      picked.r.type = 'shop';
+      picked.r.shopSlots = _generateShopSlots();
+    }
+  }
 
   return { rooms, startId: 0, grid, gridCols: GRID_COLS, gridRows: GRID_ROWS };
 }
