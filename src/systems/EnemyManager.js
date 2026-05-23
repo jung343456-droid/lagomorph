@@ -239,16 +239,19 @@ export default class EnemyManager {
     });
   }
 
-  /** 방 전환 시 호출: 기존 적·아이템 정리 후 새 방에 스폰 */
-  spawnForRoom(count) {
+  /** 방 전환 시 호출: 기존 적·아이템 정리 후 새 방에 스폰.
+   *  일반 방은 1~3종 랜덤 서브셋, isExit=true면 항상 3종(또는 풀 전체) 사용. */
+  spawnForRoom(count, isExit = false) {
     this._clearAll();
     this._hadEnemies = count > 0;
+
+    const roomTable = this._buildRoomTable(isExit);
 
     const pad = WALL_T + 55;
     for (let i = 0; i < count; i++) {
       const x    = pad + Math.random() * (ROOM_W - pad * 2);
       const y    = pad + Math.random() * (ROOM_H - pad * 2);
-      const type = this._pickType();
+      const type = this._pickType(roomTable);
       if (type === 'rat') {
         // 3마리 묶음 스폰
         for (let j = 0; j < 3; j++) {
@@ -320,8 +323,8 @@ export default class EnemyManager {
 
   // ── private ─────────────────────────────────────────
 
-  _pickType() {
-    const table = FLOOR_SPAWN_TABLES[this.floorNum] ?? FLOOR_SPAWN_TABLES[5];
+  _pickType(table) {
+    table ??= FLOOR_SPAWN_TABLES[this.floorNum] ?? FLOOR_SPAWN_TABLES[5];
     const total = table.reduce((s, e) => s + e.weight, 0);
     let r = Math.random() * total;
     for (const entry of table) {
@@ -329,6 +332,20 @@ export default class EnemyManager {
       if (r <= 0) return entry.type;
     }
     return table[table.length - 1].type;
+  }
+
+  /** 방 단위 적 풀: 일반 방은 1~3종 랜덤, 출구방은 항상 3종 (풀이 더 작으면 전체). */
+  _buildRoomTable(isExit = false) {
+    const floorTable = FLOOR_SPAWN_TABLES[this.floorNum] ?? FLOOR_SPAWN_TABLES[5];
+    const target = isExit ? 3 : (1 + Math.floor(Math.random() * 3));
+    const size   = Math.min(target, floorTable.length);
+    // Fisher-Yates 셔플 후 앞 size개 선택
+    const arr = floorTable.slice();
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr.slice(0, size);
   }
 
   _collectAllCores() {

@@ -1,6 +1,6 @@
 /**
  * 족제비 (Weasel) — 기습형
- * HP 22 / 속도 160→280 / 데미지 12 / 코어 드롭 2
+ * HP 22 / 속도 160→280 / 데미지 9 / 코어 드롭 2
  *
  * 패턴:
  *   idle     → approach(220px 이내 탐지)
@@ -45,7 +45,7 @@ export default class Weasel {
     this.hp     = 22;
     this.maxHp  = 22;
     this.speed  = APPROACH_SPEED;
-    this.damage = 12;
+    this.damage = 9;
 
     this.state      = 'idle';
     this._prevState = 'idle';

@@ -117,8 +117,8 @@ export default class RoomManager {
         // 층 3: Wolf 2마리 중간 보스
         this.enemyManager.spawnMidBoss(ROOM_W / 2, ROOM_H / 3);
       } else {
-        // 층 1·2·4: 보스 없음 — 일반 적 +2~3마리 (출구방)
-        this.enemyManager.spawnForRoom(this._exitRoomCount());
+        // 층 1·2·4: 보스 없음 — 일반 적 +2~3마리 (출구방, 항상 3종)
+        this.enemyManager.spawnForRoom(this._exitRoomCount(), true);
       }
     } else {
       // 일반 전투방
