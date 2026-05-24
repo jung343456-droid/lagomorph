@@ -40,7 +40,7 @@ export const ITEM_DEFS = {
   },
   ice_claws: {
     name:  '얼음 발톱',
-    desc:  '명중 시 30% 확률로 2초 빙결 (이동 불가)',
+    desc:  '명중 시 30% 확률로 3초 빙결 (이동 불가)',
     color: 0x88ddff,
     apply: (player) => { player.hasIce = true; },
   },

@@ -27,6 +27,11 @@ const MM_CW  = 13;
 const MM_CH  = 9;
 const MM_PAD = 2;
 
+// 확대 미니맵 오버레이
+const MM_LARGE_CW  = 32;
+const MM_LARGE_CH  = 32;
+const MM_LARGE_PAD = 6;
+
 // 가방 버튼 (맵 영역 우측)
 const BAG_CX = GAME_W - 18;   // = 372
 const BAG_CY = 54;
@@ -36,6 +41,10 @@ const BAG_H  = 24;
 // 보스 HP 바
 const BOSS_BAR_W = 300;
 const BOSS_BAR_H = 18;
+
+// 구역 메타 — 현재 구역 1(1~5층)만 구현됨. 구역 2/3 추가 시 분기 보강.
+const ZONE_NAMES = { 1: '야생', 2: '실험체', 3: '인간' };
+function zoneOf(floor) { return floor <= 5 ? 1 : floor <= 10 ? 2 : 3; }
 
 export default class UIScene extends Phaser.Scene {
   constructor() {
@@ -58,6 +67,12 @@ export default class UIScene extends Phaser.Scene {
     this._shopCardEls    = [];
     this._shopStaticEls  = [];
     this._shopSlots      = null;
+    this._minimapOpen        = false;
+    this._mmLargeCells       = [];
+    this._minimapStaticEls   = [];
+    this._currentDungeonData = null;
+    this._currentRoomId      = null;
+    this._currentFloor       = 1;
 
     this._buildTopPanel();
     this._buildChargeGauge();
@@ -68,22 +83,33 @@ export default class UIScene extends Phaser.Scene {
     this._buildBossHPBar();
     this._buildBagOverlay();
     this._buildShopOverlay();
+    this._buildMinimapHitArea();
+    this._buildMinimapOverlay();
     this._bindKeys();
 
     this.scene.get('GameScene').events.on(
       'room-entered',
-      ({ roomData, dungeonData }) => this._refreshMinimap(dungeonData, roomData.id),
+      ({ roomData, dungeonData }) => {
+        this._currentDungeonData = dungeonData;
+        this._currentRoomId      = roomData.id;
+        this._refreshMinimap(dungeonData, roomData.id);
+        if (this._minimapOpen) this._refreshLargeMinimap();
+      },
       this,
     );
     this.scene.get('GameScene').events.on(
       'floor-changed',
-      (floor) => { this._floorText.setText(`F${floor}`); },
+      (floor) => {
+        this._currentFloor = floor;
+        this._floorText.setText(`Z${zoneOf(floor)} · F${floor}`);
+        if (this._minimapOpen) this._refreshLargeMinimap();
+      },
       this,
     );
   }
 
   update() {
-    if (this._bagOpen || this._shopOpen) return;
+    if (this._bagOpen || this._shopOpen || this._minimapOpen) return;
     const { player, attackManager, enemyManager } = this.gameScene ?? {};
     if (player)        this._updateHP(player.hp, player.maxHp);
     if (attackManager) this._updateChargeGauge(attackManager);
@@ -101,8 +127,8 @@ export default class UIScene extends Phaser.Scene {
     this.add.rectangle(0, TOP_H, GAME_W, 2, 0x3366aa, 1).setOrigin(0, 0);
     // 상태 | 맵 구분선
     this.add.rectangle(DIVIDER_X, TOP_H / 2 + 6, 1, TOP_H - 16, 0x334466, 0.9).setOrigin(0.5, 0.5);
-    // 층 표시기 (미니맵 하단 중앙)
-    this._floorText = this.add.text(272, TOP_H - 8, 'F1', {
+    // 구역·층 표시기 (미니맵 하단 중앙)
+    this._floorText = this.add.text(272, TOP_H - 8, 'Z1 · F1', {
       fontSize: '10px', color: '#4ecca3', fontFamily: 'monospace',
     }).setOrigin(0.5, 1);
   }
@@ -203,6 +229,160 @@ export default class UIScene extends Phaser.Scene {
       ].forEach(({ dir, mx, my }) => {
         if (doors[dir] === null) return;
         this._mmCells.push(this.add.rectangle(mx, my, 2, 2, 0xaaaaaa));
+      });
+    });
+  }
+
+  // ── 미니맵 클릭 히트 영역 + 확대 힌트 ───────────────
+
+  _buildMinimapHitArea() {
+    // 셀이 위에 그려져도 픽업되도록 미니맵 영역 전체를 덮는 투명 hit rect
+    const totalW = 8 * MM_CW + MM_PAD * 2;  // 격자 폭 고정 (DungeonGenerator GRID_COLS=8)
+    const totalH = 6 * MM_CH + MM_PAD * 2;  // 격자 높이 고정 (GRID_ROWS=6)
+    const hit = this.add
+      .rectangle(MM_OX - MM_PAD, MM_OY - MM_PAD, totalW, totalH, 0xffffff, 0.001)
+      .setOrigin(0, 0)
+      .setDepth(10)
+      .setInteractive({ cursor: 'pointer' });
+    hit.on('pointerdown', () => this._openMinimap());
+    hit.on('pointerover', () => { if (this._mmZoomIcon) this._mmZoomIcon.setColor('#ffffff'); });
+    hit.on('pointerout',  () => { if (this._mmZoomIcon) this._mmZoomIcon.setColor('#88aacc'); });
+
+    // 확대 힌트 아이콘 (미니맵 우상단)
+    this._mmZoomIcon = this.add.text(MM_OX + 8 * MM_CW - 2, MM_OY - 1, '⊕', {
+      fontSize: '11px', color: '#88aacc', fontFamily: 'monospace', fontStyle: 'bold',
+    }).setOrigin(1, 0).setDepth(11);
+  }
+
+  // ── 확대 미니맵 오버레이 ─────────────────────────────
+
+  _buildMinimapOverlay() {
+    const panelW = 340, panelH = 480;
+    const panelX = GAME_W / 2, panelY = GAME_H / 2;
+
+    const backdrop = this.add.rectangle(0, 0, GAME_W, GAME_H, 0x000000, 0.84)
+      .setOrigin(0, 0).setDepth(100).setInteractive();
+    backdrop.on('pointerdown', () => this._closeMinimap());
+
+    // 패널 자체를 인터랙티브로 — 패널 내부 클릭이 backdrop 까지 도달하지 못하게 흡수
+    const panel = this.add.rectangle(panelX, panelY, panelW, panelH, 0x0c0c18)
+      .setStrokeStyle(2, 0x445588, 0.9).setDepth(101).setInteractive();
+
+    const title = this.add.text(panelX, panelY - panelH / 2 + 22, 'MAP', {
+      fontSize: '15px', color: '#99aabb', fontFamily: 'monospace', fontStyle: 'bold',
+    }).setOrigin(0.5).setDepth(102);
+
+    this._mmOverlayTitleText = this.add.text(panelX, panelY - panelH / 2 + 42, '', {
+      fontSize: '12px', color: '#4ecca3', fontFamily: 'monospace',
+    }).setOrigin(0.5).setDepth(102);
+
+    const titleLine = this.add.rectangle(panelX, panelY - panelH / 2 + 58, panelW - 24, 1, 0x334466)
+      .setDepth(102);
+
+    const closeBtn = this.add.text(panelX + panelW / 2 - 18, panelY - panelH / 2 + 22, '✕', {
+      fontSize: '15px', color: '#667788', fontFamily: 'monospace',
+    }).setOrigin(0.5).setDepth(102).setInteractive({ cursor: 'pointer' });
+    closeBtn.on('pointerdown', () => this._closeMinimap());
+    closeBtn.on('pointerover', () => closeBtn.setColor('#ffffff'));
+    closeBtn.on('pointerout',  () => closeBtn.setColor('#667788'));
+
+    // 범례 (하단)
+    const legendY = panelY + panelH / 2 - 44;
+    const legend = this.add.text(panelX, legendY,
+      '■ 현재   ■ 클리어   ■ 미클리어   ■ 상점   ■ 보스',
+      { fontSize: '9px', color: '#5a6878', fontFamily: 'monospace' }
+    ).setOrigin(0.5).setDepth(102);
+
+    const hint = this.add.text(panelX, panelY + panelH / 2 - 16, '맵 외부 / ESC / M / ✕ 로 닫기', {
+      fontSize: '10px', color: '#334455', fontFamily: 'monospace',
+    }).setOrigin(0.5).setDepth(102);
+
+    this._minimapStaticEls = [backdrop, panel, title, this._mmOverlayTitleText, titleLine, closeBtn, legend, hint];
+    this._minimapStaticEls.forEach(el => el.setVisible(false));
+
+    this._mmOverlayCenterX = panelX;
+    this._mmOverlayCenterY = panelY + 8;  // 타이틀 영역 보정용 약간 아래
+  }
+
+  _openMinimap() {
+    if (this._minimapOpen || this._bagOpen || this._shopOpen) return;
+    if (!this._currentDungeonData) return;  // 던전 데이터 없으면 열지 않음
+    this._minimapOpen = true;
+    this._minimapStaticEls.forEach(el => el.setVisible(true));
+    this._refreshLargeMinimap();
+    this.scene.get('GameScene').scene.pause();
+  }
+
+  _closeMinimap() {
+    if (!this._minimapOpen) return;
+    this._minimapOpen = false;
+    this._minimapStaticEls.forEach(el => el.setVisible(false));
+    this._mmLargeCells.forEach(el => { if (el.active) el.destroy(); });
+    this._mmLargeCells = [];
+    this.scene.get('GameScene').scene.resume();
+  }
+
+  _refreshLargeMinimap() {
+    this._mmLargeCells.forEach(el => { if (el.active) el.destroy(); });
+    this._mmLargeCells = [];
+    if (!this._currentDungeonData) return;
+
+    const floor    = this._currentFloor;
+    const zone     = zoneOf(floor);
+    const zoneName = ZONE_NAMES[zone] ?? '';
+    this._mmOverlayTitleText.setText(`ZONE ${zone}${zoneName ? ' · ' + zoneName : ''}   ·   FLOOR ${floor}`);
+
+    const { rooms, gridCols, gridRows } = this._currentDungeonData;
+    const totalW = gridCols * MM_LARGE_CW;
+    const totalH = gridRows * MM_LARGE_CH;
+    const ox = this._mmOverlayCenterX - totalW / 2;
+    const oy = this._mmOverlayCenterY - totalH / 2;
+
+    const bg = this.add.rectangle(
+      ox - MM_LARGE_PAD, oy - MM_LARGE_PAD,
+      totalW + MM_LARGE_PAD * 2, totalH + MM_LARGE_PAD * 2,
+      0x000000, 0.6,
+    ).setOrigin(0, 0).setDepth(102);
+    this._mmLargeCells.push(bg);
+
+    rooms.filter(r => r.visited).forEach(r => {
+      const cx = ox + r.col * MM_LARGE_CW + MM_LARGE_CW / 2;
+      const cy = oy + r.row * MM_LARGE_CH + MM_LARGE_CH / 2;
+      const isCurrent = r.id === this._currentRoomId;
+      const color = isCurrent           ? 0x4ecca3
+        : r.type === 'start'  ? 0x888844
+        : r.type === 'shop'   ? 0xddcc22
+        : r.type === 'boss'   ? (r.cleared ? 0x554444 : 0xff2222)
+        : r.cleared           ? 0x445566
+        :                       0x664444;
+
+      const cell = this.add.rectangle(cx, cy, MM_LARGE_CW - 4, MM_LARGE_CH - 4, color).setDepth(103);
+      if (isCurrent) cell.setStrokeStyle(2, 0xffffff, 0.9);
+      this._mmLargeCells.push(cell);
+
+      // 방 유형 라벨
+      let label = '';
+      if (r.type === 'start')      label = 'S';
+      else if (r.type === 'shop')  label = '$';
+      else if (r.type === 'boss')  label = 'B';
+      if (label) {
+        this._mmLargeCells.push(
+          this.add.text(cx, cy, label, {
+            fontSize: '13px', color: '#0a0a14', fontFamily: 'monospace', fontStyle: 'bold',
+          }).setOrigin(0.5).setDepth(104),
+        );
+      }
+
+      // 문 연결 표시 (인접 셀까지 짧은 라인)
+      const { doors } = r;
+      [
+        { dir: 'up',    mx: cx,                       my: cy - MM_LARGE_CH / 2 + 1, w: 4, h: 4 },
+        { dir: 'down',  mx: cx,                       my: cy + MM_LARGE_CH / 2 - 1, w: 4, h: 4 },
+        { dir: 'left',  mx: cx - MM_LARGE_CW / 2 + 1, my: cy,                       w: 4, h: 4 },
+        { dir: 'right', mx: cx + MM_LARGE_CW / 2 - 1, my: cy,                       w: 4, h: 4 },
+      ].forEach(({ dir, mx, my, w, h }) => {
+        if (doors[dir] === null) return;
+        this._mmLargeCells.push(this.add.rectangle(mx, my, w, h, 0xaaaaaa).setDepth(104));
       });
     });
   }
@@ -492,6 +672,9 @@ export default class UIScene extends Phaser.Scene {
     em.spendCores(slot.cost);
     this._applyShopSlot(slot, player);
     slot.sold = true;
+    // 상점 오픈 중에는 update()가 스킵되므로 HP·코어 카운터를 즉시 반영
+    this._updateHP(player.hp, player.maxHp);
+    this._coreText.setText(String(em.coreCount));
     this._refreshShopCards();
   }
 
@@ -602,12 +785,15 @@ export default class UIScene extends Phaser.Scene {
     const zKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.Z);
     const xKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.X);
     const iKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.I);
+    const mKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.M);
     zKey.on('down', () => this._flashSlot(0));
     xKey.on('down', () => this._flashSlot(1));
     iKey.on('down', () => { if (this._bagOpen) this._closeBag(); else this._openBag(); });
+    mKey.on('down', () => { if (this._minimapOpen) this._closeMinimap(); else this._openMinimap(); });
     this.input.keyboard.on('keydown-ESC', () => {
-      if (this._bagOpen)       this._closeBag();
-      else if (this._shopOpen) this.closeShop();
+      if (this._bagOpen)           this._closeBag();
+      else if (this._shopOpen)     this.closeShop();
+      else if (this._minimapOpen)  this._closeMinimap();
     });
   }
 

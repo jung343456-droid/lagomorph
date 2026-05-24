@@ -181,7 +181,7 @@ export default class EnemyManager {
       }
     }
 
-    // 빙결 이동 제한 (2초간 속도 강제 0)
+    // 빙결 이동 제한 (3초간 속도 강제 0)
     for (const [enemy, entry] of this._frozen) {
       if (!enemy.alive) { this._frozen.delete(enemy); continue; }
       entry.timer -= dt;
@@ -390,7 +390,7 @@ export default class EnemyManager {
 
   _applyFreeze(enemy) {
     if (this._frozen.has(enemy)) return;
-    this._frozen.set(enemy, { timer: 2 });
+    this._frozen.set(enemy, { timer: 3 });
     enemy._hpFill?.setFillStyle(0x88ccff);
   }
 

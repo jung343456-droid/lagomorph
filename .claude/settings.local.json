@@ -30,7 +30,10 @@
       "Bash(rtk curl *)",
       "Bash(curl -s -o /dev/null -w '%{http_code}' http://localhost:5173/__TRACKED_VAR__)",
       "PowerShell($paths = @\\('src/scenes/UIScene.js','src/scenes/GameScene.js','src/scenes/BootScene.js','src/entities/Shopkeeper.js','src/world/DungeonGenerator.js','src/world/Room.js','src/world/RoomManager.js','src/systems/EnemyManager.js','src/systems/AttackManager.js'\\); foreach \\($p in $paths\\) { try { $r = Invoke-WebRequest -Uri \"http://localhost:5173/$p\" -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop; \"{0,3} {1}  \\({2} bytes\\)\" -f $r.StatusCode, $p, $r.RawContentLength } catch { \"ERR $p $\\($_.Exception.Message\\)\" } })",
-      "PowerShell($r = Invoke-WebRequest -Uri \"http://localhost:5173/\" -UseBasicParsing -TimeoutSec 5; $r.Content)"
+      "PowerShell($r = Invoke-WebRequest -Uri \"http://localhost:5173/\" -UseBasicParsing -TimeoutSec 5; $r.Content)",
+      "Bash(rtk npx *)",
+      "Bash(taskkill /F /FI \"WINDOWTITLE eq npm*\" /T)",
+      "Bash(rtk ps *)"
     ]
   }
 }

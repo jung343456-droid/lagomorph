@@ -18,7 +18,7 @@
 | `sharp_claws` | 예리한 발톱 | 청록 `0x00ccff` | 근거리 공격 데미지 ×1.20 | `player.meleeDamageMult += 0.20` |
 | `poison_claws` | 독성 발톱 | 보라 `0xaa44ff` | 근거리 공격 명중 시 10초간 독 (maxHp×0.5%/s, 최소 1/s) | `player.hasPoison = true` |
 | `fire_claws` | 화염 발톱 | 빨강 `0xff2200` | 근거리 공격 명중 시 3초 화상 (maxHp×2%/s, 최소 2/s) | `player.hasFire = true` |
-| `ice_claws` | 얼음 발톱 | 하늘 `0x88ddff` | 근거리 공격 명중 시 30% 확률로 2초 빙결 (이동 불가) | `player.hasIce = true` |
+| `ice_claws` | 얼음 발톱 | 하늘 `0x88ddff` | 근거리 공격 명중 시 30% 확률로 3초 빙결 (이동 불가) | `player.hasIce = true` |
 | `swift_feet` | 질주 발 | 초록 `0x00ee66` | 이동속도 ×1.30 | `player.speed *= 1.3; player.baseSpeed *= 1.3` |
 | `tough_hide` | 강인한 가죽 | 빨강 `0xff4455` | 최대 HP +50, 즉시 50 회복 | `player.maxHp += 50; player.heal(50)` |
 | `quick_claws` | 민첩한 발톱 | 노랑 `0xffee00` | 근거리 충전 속도 ×1.5 | `player.chargeSpeedMult *= 1.5` |
@@ -62,7 +62,7 @@
 - 시각: HP바 주황-빨강(`0xff4422`) → 만료 시 초록 복원, 데미지 숫자 `#ff6622`
 
 ### 빙결 (freeze)
-- `_frozen` Map — `{ timer: 2 }`
+- `_frozen` Map — `{ timer: 3 }`
 - 중첩 없음: 발동 확률 30% (hit당), 만료 후 재발동 가능
 - 효과: 매 프레임 velocity 강제 0 (이동 완전 불가)
 - 시각: HP바 하늘색(`0x88ccff`) → 만료 시 초록 복원
