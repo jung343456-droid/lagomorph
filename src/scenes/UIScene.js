@@ -500,33 +500,25 @@ export default class UIScene extends Phaser.Scene {
     if (slot.kind === 'heal_pct')  { player.heal(Math.floor(player.maxHp * slot.ratio)); return; }
     if (slot.kind === 'heal_full') { player.heal(player.maxHp); return; }
     if (slot.kind === 'item') {
-      // 인벤토리 미보유 패시브 우선, 모두 보유 시 전체에서 랜덤
-      const ownedNames = new Set((player.inventory ?? []).map(it => it.name));
-      const allIds     = Object.keys(ITEM_DEFS);
-      const available  = allIds.filter(id => !ownedNames.has(ITEM_DEFS[id].name));
-      const pool       = available.length ? available : allIds;
-      const id         = pool[Math.floor(Math.random() * pool.length)];
-      const def        = ITEM_DEFS[id];
+      // 생성 시점에 이미 선정된 패시브 적용 (slot.id 고정)
+      const def = ITEM_DEFS[slot.id];
       def.apply(player);
       player.inventory.push({ name: def.name, color: def.color, desc: def.desc });
       // 다음 런 시작방 풀에도 포함되도록 영속 해금 갱신
       const unlocked = PassiveItem.getUnlocked();
-      if (!unlocked.includes(id)) {
-        unlocked.push(id);
+      if (!unlocked.includes(slot.id)) {
+        unlocked.push(slot.id);
         try { localStorage.setItem('lagomorph_unlocked', JSON.stringify(unlocked)); } catch {}
       }
-      slot.name = def.name;          // 구매 후 카드에 실제 이름 표시
-      slot._iconColor = def.color;   // SOLD 카드 아이콘 색상에도 반영
     }
   }
 
   _shopName(slot) {
-    if (slot.kind === 'item') return slot.name ?? '? 랜덤 패시브';
     return slot.name;
   }
 
   _shopDesc(slot, player) {
-    if (slot.kind === 'item')      return '미보유 패시브 아이템 1개';
+    if (slot.kind === 'item')      return slot.desc ?? '';
     if (slot.kind === 'heal')      return `HP +${slot.amount}`;
     if (slot.kind === 'heal_pct')  return `HP +${Math.floor(player.maxHp * slot.ratio)} (50%)`;
     if (slot.kind === 'heal_full') return 'HP 완전 회복';
@@ -534,7 +526,7 @@ export default class UIScene extends Phaser.Scene {
   }
 
   _shopIconColor(slot) {
-    if (slot.kind === 'item')      return slot._iconColor ?? 0xddaa44;
+    if (slot.kind === 'item')      return slot.color ?? 0xddaa44;
     if (slot.kind === 'heal_full') return 0xff6688;
     if (slot.kind === 'heal_pct')  return 0xff9966;
     // 정액 회복: 낮은 단계 청록 → 높은 단계 황녹 점진 변화

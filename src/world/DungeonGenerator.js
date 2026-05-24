@@ -1,3 +1,5 @@
+import { ITEM_DEFS } from '../entities/PassiveItem';
+
 const GRID_COLS = 8;
 const GRID_ROWS = 6;
 
@@ -41,8 +43,14 @@ function _pickShopEntry() {
 
 function _entryToSlot(entry) {
   if (entry.kind === 'item') {
-    // 실제 아이템 id는 구매 시 결정 (당시 인벤토리 반영)
-    return { kind: 'item', cost: 20, sold: false };
+    // 생성 시점에 패시브 1개 미리 선정 → 카드에 실제 이름/설명 표시
+    const ids = Object.keys(ITEM_DEFS);
+    const id  = ids[Math.floor(Math.random() * ids.length)];
+    const def = ITEM_DEFS[id];
+    return {
+      kind: 'item', id, name: def.name, desc: def.desc, color: def.color,
+      cost: 45, sold: false,
+    };
   }
   if (entry.kind === 'heal') {
     const t = HEAL_TIERS[entry.tierIdx];
@@ -54,7 +62,7 @@ function _entryToSlot(entry) {
   return { kind: 'heal_full', id: entry.id, name: entry.name, cost: entry.cost, sold: false };
 }
 
-/** 3개 슬롯 무작위 추첨 — 같은 id 중복 금지 (item 슬롯은 1장만 허용) */
+/** 3개 슬롯 무작위 추첨 — 같은 id 중복 금지 (패시브끼리도 다른 아이템) */
 function _generateShopSlots() {
   const slots = [];
   const usedKey = new Set();
@@ -63,10 +71,9 @@ function _generateShopSlots() {
     attempts++;
     const entry = _pickShopEntry();
     const slot  = _entryToSlot(entry);
-    const key   = slot.kind === 'item' ? 'item' : slot.id;
-    if (usedKey.has(key)) continue;
+    if (usedKey.has(slot.id)) continue;
     slots.push(slot);
-    usedKey.add(key);
+    usedKey.add(slot.id);
   }
   return slots;
 }

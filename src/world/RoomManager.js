@@ -137,15 +137,16 @@ export default class RoomManager {
     if (!this.currentRoomData || this.currentRoomData.cleared) return;
     this.currentRoomData.cleared = true;
     this.scene.cameras.main.flash(300, 100, 220, 160, false);
+    this._room.unlockDoors();
+    this._clearedAt = this.scene.time.now;
+
     if (this.currentRoomData.type === 'boss') {
-      // 보스방: 문은 잠금 유지 — 플레이어는 계단을 통해서만 다음 층으로 진행
+      // 보스방: 계단으로 다음 층 진행 + 인접 방 자유 왕복 가능
       this.scene.events.emit('boss-cleared', {
         x: ROOM_W / 2, y: ROOM_H / 2, floor: this.floorNum, roomId: this.currentRoomData.id,
       });
       return;
     }
-    this._room.unlockDoors();
-    this._clearedAt = this.scene.time.now;
 
     // 보스가 없는 던전(현재 빌드에선 발생하지 않지만 향후 대비): 클리어된 방에 계단 신호
     const hasBoss = this.dungeonData.rooms.some(r => r.type === 'boss');

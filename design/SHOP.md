@@ -34,7 +34,7 @@
 
 | 종류 | id | 이름 | 가격 | 효과 |
 |---|---|---|---|---|
-| 패시브 아이템 | `item` | (랜덤 패시브) | 20 | `ITEM_DEFS` 중 미보유 우선 1개 |
+| 패시브 아이템 | `item` | (방 생성 시 미리 선정된 특정 패시브) | 45 | `ITEM_DEFS` 중 1개 사전 선정 — 카드에 실제 이름/설명 노출 |
 | 회복 1 | `heal_1` | 토끼풀 한 줌 | 1 | HP +8 |
 | 회복 2 | `heal_2` | 민들레잎 | 2 | HP +16 |
 | 회복 3 | `heal_3` | 무 조각 | 3 | HP +24 |
@@ -50,8 +50,8 @@
 
 ### 뽑기 규칙
 - 가중치: 패시브 30% / 정액 회복 8단계 55% / `heal_half` 10% / `heal_full` 5%
-- 슬롯 간 **중복 금지** (같은 id 두 장 방지). 패시브 슬롯 1장은 그대로 허용
-- 충돌 시 재추첨 (최대 5회 후 강제 통과)
+- 패시브 슬롯이 두 번 뽑히면 서로 다른 패시브여야 함 — 슬롯 id 단위로 중복 금지 (정액 회복도 같은 id 두 장 금지)
+- 충돌 시 재추첨 (최대 30회 후 강제 통과)
 - maxHp 초과분은 잘려 표시 — `현재HP + 회복량 > maxHp`일 때 가격 라벨 회색 "비효율" 표시 (UX 힌트)
 
 ## 구매 플로우
@@ -65,7 +65,7 @@
 ```js
 roomData.type = 'shop';
 roomData.shopSlots = [
-  { kind: 'item',      id: 'sharp_claws', name: '예리한 발톱', cost: 20, sold: false },
+  { kind: 'item',      id: 'sharp_claws', name: '예리한 발톱', desc: '근거리 공격 데미지 ×1.20', color: 0x00ccff, cost: 45, sold: false },
   { kind: 'heal',      id: 'heal_3',      name: '무 조각',     amount: 24, cost: 3,  sold: false },
   { kind: 'heal_pct',  id: 'heal_half',   name: '푸짐한 한 끼', ratio: 0.5, cost: 10, sold: false },
   // 또는

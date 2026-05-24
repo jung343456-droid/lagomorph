@@ -1,6 +1,6 @@
 /**
  * 들쥐 (Rat) — 돌진형 군집
- * HP 12 / 속도 192 / 데미지 5 / 코어 드롭 1
+ * HP 12 / 속도 205 / 데미지 5 / 코어 드롭 1
  * 스폰: 3마리 묶음 (120° 간격, 18px 반경 분산)
  *
  * 패턴:
@@ -12,7 +12,7 @@
  * speedMult: Wolf 오라(180px 이내) 적용 시 이동속도 ×1.2
  */
 const DETECT_R   = 280;
-const RUSH_SPEED = 192;
+const RUSH_SPEED = 205;
 const RUSH_DUR   = 1.2;
 const COOL_DUR   = 0.3;
 const RAT_W      = 14;   // 물리 body 크기 (canvas 20×14 비율 반영)
