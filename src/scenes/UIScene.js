@@ -127,10 +127,10 @@ export default class UIScene extends Phaser.Scene {
     this.add.rectangle(0, TOP_H, GAME_W, 2, 0x3366aa, 1).setOrigin(0, 0);
     // 상태 | 맵 구분선
     this.add.rectangle(DIVIDER_X, TOP_H / 2 + 6, 1, TOP_H - 16, 0x334466, 0.9).setOrigin(0.5, 0.5);
-    // 구역·층 표시기 (미니맵 하단 중앙)
-    this._floorText = this.add.text(272, TOP_H - 8, 'Z1 · F1', {
-      fontSize: '10px', color: '#4ecca3', fontFamily: 'monospace',
-    }).setOrigin(0.5, 1);
+    // 구역·층 표시기 (미니맵 상단 위 빈 공간)
+    this._floorText = this.add.text(272, 10, 'Z1 · F1', {
+      fontSize: '10px', color: '#4ecca3', fontFamily: 'monospace', fontStyle: 'bold',
+    }).setOrigin(0.5, 0.5);
   }
 
   // ── 충전 게이지 (상태 영역 상단) ─────────────────────
@@ -293,11 +293,7 @@ export default class UIScene extends Phaser.Scene {
       { fontSize: '9px', color: '#5a6878', fontFamily: 'monospace' }
     ).setOrigin(0.5).setDepth(102);
 
-    const hint = this.add.text(panelX, panelY + panelH / 2 - 16, '맵 외부 / ESC / M / ✕ 로 닫기', {
-      fontSize: '10px', color: '#334455', fontFamily: 'monospace',
-    }).setOrigin(0.5).setDepth(102);
-
-    this._minimapStaticEls = [backdrop, panel, title, this._mmOverlayTitleText, titleLine, closeBtn, legend, hint];
+    this._minimapStaticEls = [backdrop, panel, title, this._mmOverlayTitleText, titleLine, closeBtn, legend];
     this._minimapStaticEls.forEach(el => el.setVisible(false));
 
     this._mmOverlayCenterX = panelX;
@@ -420,14 +416,15 @@ export default class UIScene extends Phaser.Scene {
     const panelW = 310, panelH = 420;
     const panelX = GAME_W / 2, panelY = GAME_H / 2;
 
-    // 어두운 배경 (클릭 차단)
+    // 어두운 배경 — 외부 영역 탭 시 닫기
     const backdrop = this.add.rectangle(0, 0, GAME_W, GAME_H, 0x000000, 0.84)
       .setOrigin(0, 0).setDepth(100)
       .setInteractive();
+    backdrop.on('pointerdown', () => this._closeBag());
 
-    // 패널
+    // 패널 — 인터랙티브로 만들어 패널 내부 클릭이 backdrop 까지 도달하지 못하게 흡수
     const panel = this.add.rectangle(panelX, panelY, panelW, panelH, 0x0c0c18)
-      .setStrokeStyle(2, 0x445588, 0.9).setDepth(101);
+      .setStrokeStyle(2, 0x445588, 0.9).setDepth(101).setInteractive();
 
     // 상단 타이틀
     const title = this.add.text(panelX, panelY - panelH / 2 + 22, '보유 아이템', {
@@ -446,12 +443,7 @@ export default class UIScene extends Phaser.Scene {
     closeBtn.on('pointerover', () => closeBtn.setColor('#ffffff'));
     closeBtn.on('pointerout',  () => closeBtn.setColor('#667788'));
 
-    // ESC: 닫기 힌트
-    const hint = this.add.text(panelX, panelY + panelH / 2 - 16, 'ESC 또는 ✕ 로 닫기', {
-      fontSize: '10px', color: '#334455', fontFamily: 'monospace',
-    }).setOrigin(0.5).setDepth(102);
-
-    this._bagStaticEls = [backdrop, panel, title, titleLine, closeBtn, hint];
+    this._bagStaticEls = [backdrop, panel, title, titleLine, closeBtn];
     this._bagStaticEls.forEach(el => el.setVisible(false));
     this._panelY    = panelY;
     this._panelH    = panelH;
@@ -525,13 +517,14 @@ export default class UIScene extends Phaser.Scene {
     const panelW = 320, panelH = 460;
     const panelX = GAME_W / 2, panelY = GAME_H / 2;
 
-    // 어두운 배경 (클릭 차단)
+    // 어두운 배경 — 외부 영역 탭 시 닫기
     const backdrop = this.add.rectangle(0, 0, GAME_W, GAME_H, 0x000000, 0.75)
       .setOrigin(0, 0).setDepth(100).setInteractive();
+    backdrop.on('pointerdown', () => this.closeShop());
 
-    // 패널
+    // 패널 — 인터랙티브로 만들어 패널 내부 클릭이 backdrop 까지 도달하지 못하게 흡수
     const panel = this.add.rectangle(panelX, panelY, panelW, panelH, 0x18120c)
-      .setStrokeStyle(2, 0xddaa44, 0.9).setDepth(101);
+      .setStrokeStyle(2, 0xddaa44, 0.9).setDepth(101).setInteractive();
 
     // 상단 타이틀 + GRIM 라벨
     const title = this.add.text(panelX - panelW / 2 + 20, panelY - panelH / 2 + 22, 'GRIM 상점', {
@@ -555,12 +548,7 @@ export default class UIScene extends Phaser.Scene {
     const titleLine = this.add.rectangle(panelX, panelY - panelH / 2 + 42, panelW - 24, 1, 0x553322)
       .setDepth(102);
 
-    // 하단 힌트
-    const hint = this.add.text(panelX, panelY + panelH / 2 - 14, 'ESC 또는 ✕ 로 닫기', {
-      fontSize: '10px', color: '#553322', fontFamily: 'monospace',
-    }).setOrigin(0.5).setDepth(102);
-
-    this._shopStaticEls = [backdrop, panel, title, this._shopCoreText, closeBtn, titleLine, hint];
+    this._shopStaticEls = [backdrop, panel, title, this._shopCoreText, closeBtn, titleLine];
     this._shopStaticEls.forEach(el => el.setVisible(false));
 
     this._shopPanelX = panelX;
