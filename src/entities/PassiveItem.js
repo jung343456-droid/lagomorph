@@ -1,11 +1,12 @@
 /**
- * 패시브 아이템 픽업 — 총 13종
+ * 패시브 아이템 픽업 — 총 15종
  * 수집 시 플레이어 스탯에 영구 적용 (런 내 유지), 획득 이력 localStorage 저장
  *
  * 근거리 강화: wide_claws(반경), sharp_claws(데미지), quick_claws(충전속도)
  * 근거리 상태이상: poison_claws(독), fire_claws(화상), ice_claws(빙결), thunder_claws(연쇄)
  * 이동/생존: swift_feet(이동속도), tough_hide(최대HP), hunter_instinct(킬회복)
- * 트랩 강화: explosive_trap(스플래시), frugal_instinct(코어소모↓), big_trap(크기)
+ * 트랩 위장(스플래시+상태이상): fire_disguise(화상), ice_disguise(빙결), poison_disguise(중독)
+ * 트랩 강화: frugal_instinct(코어소모↓), big_trap(크기)
  *
  * 스폰 규칙:
  *   시작 방 — 해금된 아이템 중 랜덤 1개 (첫 런은 미스폰)
@@ -28,13 +29,13 @@ export const ITEM_DEFS = {
   },
   poison_claws: {
     name:  '독성 발톱',
-    desc:  '명중 시 10초 독 (0.5%/s, 최소 1)',
+    desc:  '명중 시 30% 확률로 10초 독 (1%/s, 최소 2)',
     color: 0xaa44ff,
     apply: (player) => { player.hasPoison = true; },
   },
   fire_claws: {
     name:  '화염 발톱',
-    desc:  '명중 시 3초 화상 (2%/s, 최소 2)',
+    desc:  '명중 시 30% 확률로 3초 화상 (2.5%/s, 최소 4)',
     color: 0xff2200,
     apply: (player) => { player.hasFire = true; },
   },
@@ -74,11 +75,23 @@ export const ITEM_DEFS = {
     color: 0xff6688,
     apply: (player) => { player.healOnKill += 5; },
   },
-  explosive_trap: {
-    name:  '폭발 트랩',
-    desc:  '트랩 명중 시 반경 40px 스플래시 15',
-    color: 0xff4400,
-    apply: (player) => { player.hasExplosiveTrap = true; },
+  fire_disguise: {
+    name:  '불꽃 위장',
+    desc:  '트랩 명중 시 반경 40px 스플래시 15 + 30% 확률 화상',
+    color: 0xff5522,
+    apply: (player) => { player.hasFireDisguise = true; },
+  },
+  ice_disguise: {
+    name:  '냉동 위장',
+    desc:  '트랩 명중 시 반경 40px 스플래시 15 + 30% 확률 빙결',
+    color: 0x66ccff,
+    apply: (player) => { player.hasIceDisguise = true; },
+  },
+  poison_disguise: {
+    name:  '독성 위장',
+    desc:  '트랩 명중 시 반경 40px 스플래시 15 + 30% 확률 중독',
+    color: 0x88dd44,
+    apply: (player) => { player.hasPoisonDisguise = true; },
   },
   frugal_instinct: {
     name:  '절약 본능',
@@ -87,7 +100,7 @@ export const ITEM_DEFS = {
     apply: (player) => { player.trapCostBonus += 1; },
   },
   big_trap: {
-    name:  '큰 볼일',
+    name:  '대식가',
     desc:  '트랩 크기 ×2 (22 → 44px)',
     color: 0x885500,
     apply: (player) => { player.trapSizeMult *= 2; },
@@ -143,9 +156,12 @@ export default class PassiveItem {
     this.dispose();
   }
 
-  /** localStorage에서 한 번이라도 획득한 아이템 ID 배열 반환 */
+  /** localStorage에서 한 번이라도 획득한 아이템 ID 배열 반환 (현재 ITEM_DEFS 에 존재하는 항목만) */
   static getUnlocked() {
-    try { return JSON.parse(localStorage.getItem('lagomorph_unlocked') || '[]'); } catch { return []; }
+    try {
+      const arr = JSON.parse(localStorage.getItem('lagomorph_unlocked') || '[]');
+      return arr.filter(id => ITEM_DEFS[id]);
+    } catch { return []; }
   }
 
   dispose() {

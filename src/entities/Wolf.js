@@ -9,7 +9,7 @@
  *           8초 뒤 첫 포효, 이후 20초마다 반복
  *   howl  → 1.5초 포효: 완전 정지 + 경직 취약
  *           종료 시 족제비(weasel) 2마리 소환
- *   stun  → 피격 경직 0.5초 + 넉백
+ *   stun  → 피격 경직 0.3초 + 넉백 (이 시간 동안 추가 피격 무시 = i-frame)
  *
  * 오라 (생존 중 상시):
  *   180px 이내 아군 speedMult ×1.2
@@ -155,7 +155,7 @@ export default class Wolf {
     }
     this._prevState = this.state;
     this.state      = 'stun';
-    this.stunTimer  = 0.5;
+    this.stunTimer  = 0.3;
     this._blinkHit();
     return false;
   }

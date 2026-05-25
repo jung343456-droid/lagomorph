@@ -35,16 +35,16 @@
 | 종류 | id | 이름 | 가격 | 효과 |
 |---|---|---|---|---|
 | 패시브 아이템 | `item` | (방 생성 시 미리 선정된 특정 패시브) | 45 | `ITEM_DEFS` 중 1개 사전 선정 — 카드에 실제 이름/설명 노출 |
-| 회복 1 | `heal_1` | 토끼풀 한 줌 | 1 | HP +8 |
-| 회복 2 | `heal_2` | 민들레잎 | 2 | HP +16 |
-| 회복 3 | `heal_3` | 무 조각 | 3 | HP +24 |
-| 회복 4 | `heal_4` | 잘 익은 당근 | 4 | HP +32 |
-| 회복 5 | `heal_5` | 사과 조각 | 5 | HP +40 |
-| 회복 6 | `heal_6` | 빨간 사과 | 6 | HP +48 |
-| 회복 7 | `heal_7` | 야생 베리 한 줌 | 7 | HP +56 |
-| 회복 8 | `heal_8` | 채소 샐러드 | 8 | HP +64 |
-| 50% 회복 | `heal_half` | 푸짐한 한 끼 | 10 | HP를 `maxHp * 0.5`만큼 회복 |
-| 전체 회복 | `heal_full` | 정원의 만찬 | 15 | HP를 maxHp로 |
+| 회복 1 | `heal_1` | 토끼풀 한 줌 | 5  | HP +8 |
+| 회복 2 | `heal_2` | 민들레잎 | 10 | HP +16 |
+| 회복 3 | `heal_3` | 무 조각 | 15 | HP +24 |
+| 회복 4 | `heal_4` | 잘 익은 당근 | 20 | HP +32 |
+| 회복 5 | `heal_5` | 사과 조각 | 25 | HP +40 |
+| 회복 6 | `heal_6` | 빨간 사과 | 30 | HP +48 |
+| 회복 7 | `heal_7` | 야생 베리 한 줌 | 35 | HP +56 |
+| 회복 8 | `heal_8` | 채소 샐러드 | 40 | HP +64 |
+| 50% 회복 | `heal_half` | 푸짐한 한 끼 | 50 | HP를 `maxHp * 0.5`만큼 회복 |
+| 전체 회복 | `heal_full` | 정원의 만찬 | 75 | HP를 maxHp로 |
 
 > 정액 회복(`heal_1`~`heal_8`)은 maxHp가 낮을 때 가성비 우위. `heal_half`는 maxHp가 클수록 가성비 우위 — `tough_hide` 빌드와 시너지. 빌드별로 다른 선택이 합리적.
 
@@ -66,10 +66,10 @@
 roomData.type = 'shop';
 roomData.shopSlots = [
   { kind: 'item',      id: 'sharp_claws', name: '예리한 발톱', desc: '근거리 공격 데미지 ×1.20', color: 0x00ccff, cost: 45, sold: false },
-  { kind: 'heal',      id: 'heal_3',      name: '무 조각',     amount: 24, cost: 3,  sold: false },
-  { kind: 'heal_pct',  id: 'heal_half',   name: '푸짐한 한 끼', ratio: 0.5, cost: 10, sold: false },
+  { kind: 'heal',      id: 'heal_3',      name: '무 조각',     amount: 24, cost: 15, sold: false },
+  { kind: 'heal_pct',  id: 'heal_half',   name: '푸짐한 한 끼', ratio: 0.5, cost: 50, sold: false },
   // 또는
-  { kind: 'heal_full', id: 'heal_full',   name: '정원의 만찬',  cost: 15, sold: false },
+  { kind: 'heal_full', id: 'heal_full',   name: '정원의 만찬',  cost: 75, sold: false },
 ];
 ```
 

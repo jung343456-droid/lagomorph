@@ -133,7 +133,7 @@ export default class EnemyManager {
       return true;
     });
 
-    // 독 데미지 틱 (스턴 무관, 매초 maxHp×0.5% 최소 1)
+    // 독 데미지 틱 (스턴 무관, 매초 maxHp×1% 최소 2)
     for (const [enemy, entry] of this._poisoned) {
       if (!enemy.alive) { this._poisoned.delete(enemy); continue; }
       entry.timer -= dt;
@@ -142,7 +142,7 @@ export default class EnemyManager {
         enemy._hpFill?.setFillStyle(0x44dd44);
         continue;
       }
-      entry.accum += Math.max(1, enemy.maxHp * 0.005) * dt;
+      entry.accum += Math.max(2, enemy.maxHp * 0.01) * dt;
       const toApply = Math.floor(entry.accum);
       if (toApply > 0) {
         entry.accum -= toApply;
@@ -157,7 +157,7 @@ export default class EnemyManager {
       }
     }
 
-    // 화상 데미지 틱 (3초간 maxHp×2%/s, 최소 2)
+    // 화상 데미지 틱 (3초간 maxHp×2.5%/s, 최소 4)
     for (const [enemy, entry] of this._burned) {
       if (!enemy.alive) { this._burned.delete(enemy); continue; }
       entry.timer -= dt;
@@ -166,7 +166,7 @@ export default class EnemyManager {
         enemy._hpFill?.setFillStyle(0x44dd44);
         continue;
       }
-      entry.accum += Math.max(2, enemy.maxHp * 0.02) * dt;
+      entry.accum += Math.max(4, enemy.maxHp * 0.025) * dt;
       const toApply = Math.floor(entry.accum);
       if (toApply > 0) {
         entry.accum -= toApply;
@@ -407,8 +407,8 @@ export default class EnemyManager {
       const isSpike = e.state === 'spike';
 
       if (!isSpike) {
-        if (this.player.hasPoison)  this._applyPoison(e);
-        if (this.player.hasFire)    this._applyBurn(e);
+        if (this.player.hasPoison && Math.random() < 0.3) this._applyPoison(e);
+        if (this.player.hasFire && Math.random() < 0.3) this._applyBurn(e);
         if (this.player.hasIce && Math.random() < 0.3) this._applyFreeze(e);
         if (this.player.hasThunder) directHit.push(e);
       }

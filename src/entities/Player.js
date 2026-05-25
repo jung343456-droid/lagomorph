@@ -11,12 +11,14 @@
  *   meleeRadiusMult  1.0   근거리 반경 배율
  *   meleeDamageMult  1.0   근거리 데미지 배율
  *   chargeSpeedMult  1.0   근거리 충전 속도 배율
- *   hasPoison        false  근거리 명중 시 독 부여
- *   hasFire          false  근거리 명중 시 화상 부여
+ *   hasPoison        false  근거리 명중 시 30% 확률 독 부여
+ *   hasFire          false  근거리 명중 시 30% 확률 화상 부여
  *   hasIce           false  근거리 명중 시 30% 확률 빙결
  *   hasThunder       false  근거리 명중 시 70px 연쇄 8피해
  *   healOnKill       0      적 처치 시 HP 회복량
- *   hasExplosiveTrap false  트랩 폭발 스플래시
+ *   hasFireDisguise   false  불꽃 위장 — 트랩 스플래시 + 30% 화상
+ *   hasIceDisguise    false  냉동 위장 — 트랩 스플래시 + 30% 빙결
+ *   hasPoisonDisguise false  독성 위장 — 트랩 스플래시 + 30% 중독
  *   trapCostBonus    0      트랩 코어 소모 감소
  *   trapSizeMult     1      트랩 크기 배율
  */
@@ -47,7 +49,9 @@ export default class Player {
     this.hasThunder       = false;
     this.healOnKill       = 0;
     this.chargeSpeedMult  = 1.0;
-    this.hasExplosiveTrap = false;
+    this.hasFireDisguise   = false;
+    this.hasIceDisguise    = false;
+    this.hasPoisonDisguise = false;
     this.trapCostBonus    = 0;
     this.trapSizeMult     = 1;
     this.inventory        = [];

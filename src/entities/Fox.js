@@ -6,7 +6,7 @@
  *   idle  → chase(250px 이내 탐지)
  *   chase → 플레이어를 직접 추격
  *   chase → flee(HP 30% 이하 시 2초간 도주, 이후 1.5초 유예 후 재도주 가능)
- *   stun  → 피격 시 0.4초 경직 + 넉백
+ *   stun  → 피격 시 0.3초 경직 + 넉백 (이 시간 동안 추가 피격 무시 = i-frame)
  *
  * speedMult: Wolf 오라(180px 이내) 적용 시 이동속도 ×1.2
  */
@@ -141,7 +141,7 @@ export default class Fox {
     }
     this._prevState = this.state;
     this.state      = 'stun';
-    this.stunTimer  = 0.4;
+    this.stunTimer  = 0.3;
     this._blinkHit();
     return false;
   }

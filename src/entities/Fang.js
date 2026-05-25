@@ -26,7 +26,7 @@ const BASE_CHASE_SPEED  = 180;
 const DASH_SPEED        = 440;
 const DASH_DURATION     = 0.45;
 const WALL_STUN_DUR     = 1.5;
-const HIT_STUN_DUR      = 0.35;
+const HIT_STUN_DUR      = 0.3;
 
 const STOMP_WINDUP      = 0.6;
 const STOMP_RADIUS      = 150;

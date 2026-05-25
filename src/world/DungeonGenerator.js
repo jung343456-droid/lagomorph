@@ -11,24 +11,24 @@ const DIRS = [
 ];
 
 // ── 상점 슬롯 풀 ──────────────────────────────────────
-// 정액 회복 (1코어 = 8 HP 비례), 50% 회복, 전체 회복, 패시브 아이템
+// 정액 회복 (1코어 ≈ 1.6 HP 비례), 50% 회복, 전체 회복, 패시브 아이템
 const HEAL_TIERS = [
-  { id: 'heal_1', name: '토끼풀 한 줌',    cost: 1, amount: 8  },
-  { id: 'heal_2', name: '민들레잎',        cost: 2, amount: 16 },
-  { id: 'heal_3', name: '무 조각',         cost: 3, amount: 24 },
-  { id: 'heal_4', name: '잘 익은 당근',    cost: 4, amount: 32 },
-  { id: 'heal_5', name: '사과 조각',       cost: 5, amount: 40 },
-  { id: 'heal_6', name: '빨간 사과',       cost: 6, amount: 48 },
-  { id: 'heal_7', name: '야생 베리 한 줌', cost: 7, amount: 56 },
-  { id: 'heal_8', name: '채소 샐러드',     cost: 8, amount: 64 },
+  { id: 'heal_1', name: '토끼풀 한 줌',    cost: 5,  amount: 8  },
+  { id: 'heal_2', name: '민들레잎',        cost: 10, amount: 16 },
+  { id: 'heal_3', name: '무 조각',         cost: 15, amount: 24 },
+  { id: 'heal_4', name: '잘 익은 당근',    cost: 20, amount: 32 },
+  { id: 'heal_5', name: '사과 조각',       cost: 25, amount: 40 },
+  { id: 'heal_6', name: '빨간 사과',       cost: 30, amount: 48 },
+  { id: 'heal_7', name: '야생 베리 한 줌', cost: 35, amount: 56 },
+  { id: 'heal_8', name: '채소 샐러드',     cost: 40, amount: 64 },
 ];
 
 // 가중치: 패시브 30, 정액 회복 8단계 합 55(균등), heal_half 10, heal_full 5
 const SHOP_POOL = [
   { kind: 'item',                                                                weight: 30 },
   ...HEAL_TIERS.map((_, i) => ({ kind: 'heal', tierIdx: i, weight: 55 / 8 })),
-  { kind: 'heal_pct',  id: 'heal_half', name: '푸짐한 한 끼', ratio: 0.5, cost: 10, weight: 10 },
-  { kind: 'heal_full', id: 'heal_full', name: '정원의 만찬',               cost: 15, weight: 5  },
+  { kind: 'heal_pct',  id: 'heal_half', name: '푸짐한 한 끼', ratio: 0.5, cost: 50, weight: 10 },
+  { kind: 'heal_full', id: 'heal_full', name: '정원의 만찬',               cost: 75, weight: 5  },
 ];
 
 function _pickShopEntry() {

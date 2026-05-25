@@ -7,7 +7,7 @@
  *   chase → 55px/s로 플레이어 추격
  *   spike → 2초마다 발동, 1초간 가시 원형 AoE(반경 65px, 데미지 12 + 넉백)
  *           spike 중 무적 — 공격받으면 플레이어만 넉백(데미지 없음)
- *   stun  → 피격 시 0.4초 경직 + 넉백 (spike 중 발동 불가)
+ *   stun  → 피격 시 0.3초 경직 + 넉백 (spike 중 발동 불가, 이 시간 동안 추가 피격 무시 = i-frame)
  *
  * 시각: spike 중 hedgehog-spike 스프라이트 + AoE 원 페이드아웃
  * speedMult: Wolf 오라(180px 이내) 적용 시 추격 속도 ×1.2
@@ -173,7 +173,7 @@ export default class Hedgehog {
     }
     this._prevState = this.state;
     this.state      = 'stun';
-    this.stunTimer  = 0.4;
+    this.stunTimer  = 0.3;
     this._blinkHit();
     return false;
   }

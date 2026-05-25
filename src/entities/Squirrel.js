@@ -7,7 +7,7 @@
  *   kite → 선호 거리 140px 유지하며 플레이어 주위 횡이동 (1.5초마다 방향 전환)
  *          100px 이하 접근 시 반대 방향 후퇴(140px/s)
  *          2.5초마다 도토리 투척 (HP 30% 이하: 1.2초마다)
- *   stun → 피격 시 0.4초 경직 + 넉백
+ *   stun → 피격 시 0.3초 경직 + 넉백 (이 시간 동안 추가 피격 무시 = i-frame)
  *
  * 도토리: 속도 230px/s, 벽 도달 시 소멸, 플레이어 22px 이내 명중 시 데미지
  * speedMult: Wolf 오라(180px 이내) 적용 시 횡이동·후퇴 속도 ×1.2
@@ -139,7 +139,7 @@ export default class Squirrel {
     }
     this._prevState = this.state;
     this.state      = 'stun';
-    this.stunTimer  = 0.4;
+    this.stunTimer  = 0.3;
     this._blinkHit();
     return false;
   }

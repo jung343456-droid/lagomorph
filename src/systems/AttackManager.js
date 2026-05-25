@@ -12,7 +12,7 @@ const MELEE_TIERS = [
 ];
 
 const POOP_COST     = 3;    // 설치형 공격 1회당 소모 코어 수
-const POOP_COOLDOWN = 0.5;  // 설치형 공격 재사용 대기 시간 (초)
+const POOP_COOLDOWN = 0.3;  // 설치형 공격 재사용 대기 시간 (초)
 const POOP_DMG      = 30;   // 설치형 공격 명중 데미지
 const POOP_SIZE     = 22;   // 설치형 오브젝트 크기 (px)
 const MAX_POOPS     = 5;    // 동시에 배치 가능한 최대 설치물 수
@@ -21,8 +21,9 @@ const POOP_COLOR    = 0x7B3F20; // 설치물 색상 (갈색)
 const FOX_KNOCKBACK_PER_DMG = 12;   // 설치형 공격 넉백 강도 = 데미지 × 이 값
 const FOX_KNOCKBACK_DUR     = 0.22; // 설치형 공격 넉백 지속 시간 (초)
 
-const SPLASH_RADIUS = 40;  // 폭발 트랩 스플래시 반경 (px)
-const SPLASH_DMG    = 15;  // 폭발 트랩 스플래시 데미지
+const SPLASH_RADIUS = 40;  // 위장 트랩 스플래시 반경 (px)
+const SPLASH_DMG    = 15;  // 위장 트랩 스플래시 데미지
+const DISGUISE_PROC = 0.3; // 위장 트랩 상태이상 발동 확률 (명중 enemy 1마리당, 위장 종류별 독립)
 
 // UIScene._buildSkillSlots 와 동일한 레이아웃 상수
 const SLOT_SIZE = 56, SLOT_GAP = 10, UI_MARGIN = 20; // 스킬 슬롯 크기·간격·화면 여백 (px)
@@ -284,12 +285,18 @@ export default class AttackManager {
       if (enemy.isBoss) { em.dropRareItem(enemy.x, enemy.y); em.boss = null; }
     }
 
+    // 위장 트랩: 직접 명중한 적에게 상태이상 시도 (spike·사망 제외)
+    if (this._anyDisguise() && !isSpike && !dead) {
+      this._applyDisguiseStatus(enemy, em);
+    }
+
     const splashX = poopGO.x;
     const splashY = poopGO.y;
     this._destroyPoop(poop);
 
-    if (this.player.hasExplosiveTrap) {
-      this._spawnRing(splashX, splashY, 0xff6600, SPLASH_RADIUS * 2);
+    // 위장 트랩 스플래시: 주변 적에게 폭발 데미지 + 상태이상 시도
+    if (this._anyDisguise()) {
+      this._spawnRing(splashX, splashY, this._disguiseRingColor(), SPLASH_RADIUS * 2);
       em.enemies.forEach(other => {
         if (!other.alive || other === enemy || other.state === 'stun') return;
         if (Phaser.Math.Distance.Between(splashX, splashY, other.x, other.y) > SPLASH_RADIUS) return;
@@ -304,9 +311,31 @@ export default class AttackManager {
         if (splashDead) {
           em.dropCores(other.x, other.y, other.coreDrops ?? 3);
           if (other.isBoss) { em.dropRareItem(other.x, other.y); em.boss = null; }
+        } else if (other.state !== 'spike') {
+          this._applyDisguiseStatus(other, em);
         }
       });
     }
+  }
+
+  _anyDisguise() {
+    const p = this.player;
+    return p.hasFireDisguise || p.hasIceDisguise || p.hasPoisonDisguise;
+  }
+
+  _applyDisguiseStatus(enemy, em) {
+    const p = this.player;
+    if (p.hasFireDisguise   && Math.random() < DISGUISE_PROC) em._applyBurn(enemy);
+    if (p.hasIceDisguise    && Math.random() < DISGUISE_PROC) em._applyFreeze(enemy);
+    if (p.hasPoisonDisguise && Math.random() < DISGUISE_PROC) em._applyPoison(enemy);
+  }
+
+  _disguiseRingColor() {
+    const p = this.player;
+    if (p.hasFireDisguise)   return 0xff6622;
+    if (p.hasIceDisguise)    return 0x88ccff;
+    if (p.hasPoisonDisguise) return 0xaa44ff;
+    return 0xff6600;
   }
 
   _destroyPoop(poop) {
