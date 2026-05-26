@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import BootScene from './scenes/BootScene';
+import HubScene from './scenes/HubScene';
 import GameScene from './scenes/GameScene';
 import UIScene from './scenes/UIScene';
 import { GAME_W, GAME_H } from './constants';
@@ -26,7 +27,7 @@ const config = {
   input: {
     activePointers: 3, // 멀티터치 최대 3포인터
   },
-  scene: [BootScene, GameScene, UIScene],
+  scene: [BootScene, HubScene, GameScene, UIScene],
 };
 
 export default new Phaser.Game(config);

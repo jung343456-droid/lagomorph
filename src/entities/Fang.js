@@ -67,6 +67,7 @@ export default class Fang {
     this.maxHp  = 500;
     this.speed  = BASE_CHASE_SPEED;
     this.damage = 25;
+    this.displayName = 'FANG';
 
     this.state      = 'idle';
     this._prevState = 'idle';

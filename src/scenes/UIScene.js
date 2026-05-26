@@ -413,7 +413,7 @@ export default class UIScene extends Phaser.Scene {
   // ── 가방 오버레이 ─────────────────────────────────────
 
   _buildBagOverlay() {
-    const panelW = 310, panelH = 420;
+    const panelW = 320, panelH = 640;
     const panelX = GAME_W / 2, panelY = GAME_H / 2;
 
     // 어두운 배경 — 외부 영역 탭 시 닫기
@@ -427,7 +427,7 @@ export default class UIScene extends Phaser.Scene {
       .setStrokeStyle(2, 0x445588, 0.9).setDepth(101).setInteractive();
 
     // 상단 타이틀
-    const title = this.add.text(panelX, panelY - panelH / 2 + 22, '보유 아이템', {
+    const title = this.add.text(panelX, panelY - panelH / 2 + 22, '상태 & 인벤토리', {
       fontSize: '15px', color: '#99aabb', fontFamily: 'monospace', fontStyle: 'bold',
     }).setOrigin(0.5).setDepth(102);
 
@@ -454,7 +454,7 @@ export default class UIScene extends Phaser.Scene {
   _openBag() {
     this._bagOpen = true;
     this._bagStaticEls.forEach(el => el.setVisible(true));
-    this._refreshItemList();
+    this._refreshBagContents();
     this.scene.get('GameScene').scene.pause();
   }
 
@@ -466,48 +466,160 @@ export default class UIScene extends Phaser.Scene {
     this.scene.get('GameScene').scene.resume();
   }
 
-  _refreshItemList() {
+  _refreshBagContents() {
     this._bagItemEls.forEach(el => { if (el.active) el.destroy(); });
     this._bagItemEls = [];
 
-    const items    = this.gameScene?.player?.inventory ?? [];
-    const startY   = this._panelY - this._panelH / 2 + 58;
-    const iconX    = this._panelX - this._panelW / 2 + 28;
-    const textX    = iconX + 24;
-    const rowH     = 52;
+    const player = this.gameScene?.player;
+    if (!player) return;
+
+    let y = this._panelY - this._panelH / 2 + 50;
+    y = this._drawStatsSection(player, y);
+    y = this._drawSpecialChips(player, y);
+    this._drawItemSection(player, y);
+  }
+
+  /** 스탯 섹션 — 2열 그리드. 기본값보다 강화된 항목은 청록색 강조. */
+  _drawStatsSection(player, startY) {
+    const cx = this._panelX;
+    const w  = this._panelW - 36;
+    const leftX  = cx - w / 2;
+    const rightX = cx + w / 2;
+
+    // 헤더
+    this._bagItemEls.push(this.add.text(leftX, startY, 'STATS', {
+      fontSize: '11px', color: '#6688aa', fontFamily: 'monospace', fontStyle: 'bold',
+      letterSpacing: 2,
+    }).setOrigin(0, 0.5).setDepth(102));
+    let y = startY + 16;
+
+    const pct = (v) => `${Math.round(v * 100)}%`;
+    const mult = (v) => `×${v.toFixed(2)}`;
+
+    // 좌측 / 우측 컬럼 항목 정의. enhanced=true 면 청록 강조.
+    const trapCost = Math.max(1, 3 - player.trapCostBonus);
+    const stats = [
+      { label: '체력',         value: `${player.hp}/${player.maxHp}`,                enhanced: player.maxHp > 200 },
+      { label: '이동속도',     value: `${Math.round(player.baseSpeed)}`,             enhanced: player.baseSpeed > 200 },
+      { label: '근거리 피해',  value: mult(player.meleeDamageMult),                  enhanced: player.meleeDamageMult > 1 },
+      { label: '근거리 반경',  value: mult(player.meleeRadiusMult),                  enhanced: player.meleeRadiusMult > 1 },
+      { label: '충전속도',     value: mult(player.chargeSpeedMult),                  enhanced: player.chargeSpeedMult > 1 },
+      { label: '치명타율',     value: pct(player.critRate),                          enhanced: player.critRate > 0.15 },
+      { label: '치명 위력',    value: mult(player.critMult),                         enhanced: player.critMult > 1.5 },
+      { label: '트랩 비용',    value: `${trapCost}◆`,                                enhanced: player.trapCostBonus > 0 },
+      { label: '트랩 크기',    value: mult(player.trapSizeMult),                     enhanced: player.trapSizeMult > 1 },
+      { label: '코어 배율',    value: mult(player.coreDropMult ?? 1),                enhanced: (player.coreDropMult ?? 1) > 1 },
+      { label: '처치 회복',    value: `${player.healOnKill ?? 0}`,                   enhanced: (player.healOnKill ?? 0) > 0 },
+      { label: '방 클리어 회복', value: `${player.hpPerRoomClear ?? 0}`,             enhanced: (player.hpPerRoomClear ?? 0) > 0 },
+    ];
+
+    const rowH = 17;
+    stats.forEach((s, i) => {
+      const col   = i % 2;
+      const row   = Math.floor(i / 2);
+      const rowY  = y + row * rowH;
+      const colLX = col === 0 ? leftX : cx + 6;
+      const colRX = col === 0 ? cx - 6 : rightX;
+
+      this._bagItemEls.push(this.add.text(colLX, rowY, s.label, {
+        fontSize: '10px', color: '#7788aa', fontFamily: 'monospace',
+      }).setOrigin(0, 0.5).setDepth(102));
+      this._bagItemEls.push(this.add.text(colRX, rowY, s.value, {
+        fontSize: '11px',
+        color: s.enhanced ? '#88eecc' : '#ddeeff',
+        fontFamily: 'monospace',
+        fontStyle: s.enhanced ? 'bold' : 'normal',
+      }).setOrigin(1, 0.5).setDepth(102));
+    });
+
+    return y + Math.ceil(stats.length / 2) * rowH + 6;
+  }
+
+  /** 보유 중인 상태이상/위장 트랩 효과를 칩으로 가로 나열. 보유한 것만 표시. */
+  _drawSpecialChips(player, startY) {
+    const effects = [
+      { on: player.hasPoison,         label: '독',         color: 0x6a3a8a, text: '#cc99ff' },
+      { on: player.hasFire,           label: '화상',       color: 0x8a3a1a, text: '#ff9966' },
+      { on: player.hasIce,            label: '빙결',       color: 0x2a6688, text: '#99ddff' },
+      { on: player.hasThunder,        label: '연쇄',       color: 0x888822, text: '#eeff66' },
+      { on: player.hasFireDisguise,   label: '화염 위장',  color: 0x8a3a1a, text: '#ff9966' },
+      { on: player.hasIceDisguise,    label: '얼음 위장',  color: 0x2a6688, text: '#99ddff' },
+      { on: player.hasPoisonDisguise, label: '독성 위장',  color: 0x4a6622, text: '#aadd66' },
+    ].filter(e => e.on);
+
+    if (effects.length === 0) return startY;
+
+    const leftX = this._panelX - this._panelW / 2 + 18;
+    this._bagItemEls.push(this.add.text(leftX, startY, 'EFFECTS', {
+      fontSize: '11px', color: '#6688aa', fontFamily: 'monospace', fontStyle: 'bold',
+      letterSpacing: 2,
+    }).setOrigin(0, 0.5).setDepth(102));
+    let chipY = startY + 18;
+    let chipX = leftX;
+    const maxX = this._panelX + this._panelW / 2 - 18;
+
+    effects.forEach(e => {
+      const padX = 8;
+      const tmpText = this.add.text(0, 0, e.label, {
+        fontSize: '10px', fontFamily: 'monospace',
+      }).setOrigin(0).setVisible(false);
+      const w = tmpText.width + padX * 2;
+      tmpText.destroy();
+
+      // 줄바꿈
+      if (chipX + w > maxX) { chipX = leftX; chipY += 22; }
+
+      const bg = this.add.rectangle(chipX, chipY, w, 18, e.color, 0.45)
+        .setStrokeStyle(1, e.color, 0.9).setOrigin(0, 0.5).setDepth(102);
+      const tx = this.add.text(chipX + padX, chipY, e.label, {
+        fontSize: '10px', color: e.text, fontFamily: 'monospace', fontStyle: 'bold',
+      }).setOrigin(0, 0.5).setDepth(103);
+      this._bagItemEls.push(bg, tx);
+
+      chipX += w + 6;
+    });
+
+    return chipY + 18;
+  }
+
+  /** 아이템 섹션 — 컴팩트 1열. 아이콘 + 이름 + 설명. */
+  _drawItemSection(player, startY) {
+    const items = player.inventory ?? [];
+    const leftX = this._panelX - this._panelW / 2 + 18;
+    const headerLabel = `ITEMS (${items.length})`;
+    this._bagItemEls.push(this.add.text(leftX, startY + 6, headerLabel, {
+      fontSize: '11px', color: '#6688aa', fontFamily: 'monospace', fontStyle: 'bold',
+      letterSpacing: 2,
+    }).setOrigin(0, 0.5).setDepth(102));
+
+    const listStartY = startY + 22;
+    const iconX = leftX + 4;
+    const textX = iconX + 18;
+    const rowH  = 28;
 
     if (items.length === 0) {
-      const t = this.add.text(this._panelX, this._panelY, '보유 아이템 없음', {
-        fontSize: '13px', color: '#445566', fontFamily: 'monospace',
-      }).setOrigin(0.5).setDepth(102);
-      this._bagItemEls.push(t);
+      this._bagItemEls.push(this.add.text(this._panelX, listStartY + 16, '보유 아이템 없음', {
+        fontSize: '12px', color: '#445566', fontFamily: 'monospace',
+      }).setOrigin(0.5).setDepth(102));
       return;
     }
 
     items.forEach((item, i) => {
-      const rowY = startY + i * rowH + rowH / 2;
-
-      const icon = this.add.rectangle(iconX, rowY, 20, 20, item.color)
-        .setOrigin(0.5).setDepth(102);
-
-      const name = this.add.text(textX, rowY - 8, item.name, {
-        fontSize: '13px', color: '#ddeeff', fontFamily: 'monospace',
-      }).setOrigin(0, 0.5).setDepth(102);
-
-      const desc = this.add.text(textX, rowY + 10, item.desc ?? '', {
-        fontSize: '10px', color: '#7788aa', fontFamily: 'monospace',
-      }).setOrigin(0, 0.5).setDepth(102);
-
-      // 행 구분선 (마지막 제외)
+      const rowY = listStartY + i * rowH + rowH / 2;
+      this._bagItemEls.push(
+        this.add.rectangle(iconX, rowY, 12, 12, item.color).setOrigin(0.5).setDepth(102),
+        this.add.text(textX, rowY - 6, item.name, {
+          fontSize: '11px', color: '#ddeeff', fontFamily: 'monospace', fontStyle: 'bold',
+        }).setOrigin(0, 0.5).setDepth(102),
+        this.add.text(textX, rowY + 7, item.desc ?? '', {
+          fontSize: '9px', color: '#6677aa', fontFamily: 'monospace',
+        }).setOrigin(0, 0.5).setDepth(102),
+      );
       if (i < items.length - 1) {
-        const sep = this.add.rectangle(
-          this._panelX, rowY + rowH / 2,
-          this._panelW - 24, 1, 0x1e2030,
-        ).setDepth(102);
-        this._bagItemEls.push(sep);
+        this._bagItemEls.push(this.add.rectangle(
+          this._panelX, rowY + rowH / 2, this._panelW - 36, 1, 0x1e2030,
+        ).setDepth(102));
       }
-
-      this._bagItemEls.push(icon, name, desc);
     });
   }
 
@@ -559,11 +671,44 @@ export default class UIScene extends Phaser.Scene {
 
   openShop(slots) {
     if (this._shopOpen || !slots) return;
+    // 슬롯은 던전 생성 시점에 baked 되므로, 그 사이 보스/다른 상점에서 같은 패시브를 획득했을 수 있다.
+    // 상점 오픈 시점에 보유 패시브와 충돌하는 'item' 슬롯을 다시 추첨한다.
+    this._dedupeItemSlots(slots);
     this._shopOpen   = true;
     this._shopSlots  = slots;
     this._shopStaticEls.forEach(el => el.setVisible(true));
     this._refreshShopCards();
     this.scene.get('GameScene').scene.pause();
+  }
+
+  /** 보유 패시브와 겹치는 'item' 슬롯을 미보유 아이템으로 재추첨. 없으면 sold 처리. */
+  _dedupeItemSlots(slots) {
+    const player = this.gameScene?.player;
+    if (!player) return;
+    const owned = new Set((player.inventory ?? []).map(i => i.id));
+    // 같은 상점에 동일 id 두 개가 들어가지 않도록 현재 슬롯 id 도 제외 집합에 포함
+    const usedInShop = new Set(
+      slots.filter(s => s.kind === 'item' && s.id).map(s => s.id),
+    );
+    slots.forEach(slot => {
+      if (slot.kind !== 'item' || slot.sold) return;
+      if (!owned.has(slot.id)) return;
+      // 후보: ITEM_DEFS 중 보유하지 않고, 같은 상점의 다른 슬롯이 가지지 않은 id
+      const candidates = Object.keys(ITEM_DEFS)
+        .filter(id => !owned.has(id) && !usedInShop.has(id));
+      if (candidates.length === 0) {
+        slot.sold = true;
+        return;
+      }
+      const newId = candidates[Math.floor(Math.random() * candidates.length)];
+      const def   = ITEM_DEFS[newId];
+      usedInShop.delete(slot.id);
+      slot.id    = newId;
+      slot.name  = def.name;
+      slot.desc  = def.desc;
+      slot.color = def.color;
+      usedInShop.add(newId);
+    });
   }
 
   closeShop() {
@@ -674,7 +819,7 @@ export default class UIScene extends Phaser.Scene {
       // 생성 시점에 이미 선정된 패시브 적용 (slot.id 고정)
       const def = ITEM_DEFS[slot.id];
       def.apply(player);
-      player.inventory.push({ name: def.name, color: def.color, desc: def.desc });
+      player.inventory.push({ id: slot.id, name: def.name, color: def.color, desc: def.desc });
       // 다음 런 시작방 풀에도 포함되도록 영속 해금 갱신
       const unlocked = PassiveItem.getUnlocked();
       if (!unlocked.includes(slot.id)) {

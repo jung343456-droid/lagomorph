@@ -23,11 +23,19 @@ const TABLE_COLOR   = 0x6b4226;
 const TABLE_STROKE  = 0x3d2615;
 
 export default class Shopkeeper {
-  constructor(scene, x, y, shopSlots) {
-    this.scene     = scene;
-    this.shopSlots = shopSlots;
-    this.isNear    = false;
-    this.alive     = true;
+  /**
+   * @param {Phaser.Scene} scene
+   * @param {number} x
+   * @param {number} y
+   * @param {Array|null} shopSlots  상점 슬롯 (Hub 의 해금 NPC 는 null 전달)
+   * @param {string} [interactEvent='shop-open-requested']  근접 시 발행할 씬 이벤트
+   */
+  constructor(scene, x, y, shopSlots, interactEvent = 'shop-open-requested') {
+    this.scene         = scene;
+    this.shopSlots     = shopSlots;
+    this.interactEvent = interactEvent;
+    this.isNear        = false;
+    this.alive         = true;
 
     if (scene.textures.exists('grim')) {
       this.gameObject = scene.add.image(x, y, 'grim').setDepth(8);
@@ -63,8 +71,8 @@ export default class Shopkeeper {
     const near = d < NEAR_R;
     if (near !== this.isNear) {
       this.isNear = near;
-      // 범위 진입(far → near) 순간에만 상점 오픈 요청 — 범위 내 이동·재진입까지 가드는 이 분기 자체로 처리됨
-      if (near) this.scene.events.emit('shop-open-requested');
+      // 범위 진입(far → near) 순간에만 이벤트 발행 — 범위 내 이동·재진입까지 가드는 이 분기 자체로 처리됨
+      if (near) this.scene.events.emit(this.interactEvent);
     }
   }
 

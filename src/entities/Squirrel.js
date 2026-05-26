@@ -1,11 +1,11 @@
 /**
  * 다람쥐 (Squirrel) — 원거리형
- * HP 18 / 속도 110 / 데미지 6(도토리) / 코어 드롭 2
+ * HP 18 / 속도 105 / 데미지 6(도토리) / 코어 드롭 2
  *
  * 패턴:
  *   idle → kite(260px 이내 탐지)
  *   kite → 선호 거리 140px 유지하며 플레이어 주위 횡이동 (1.5초마다 방향 전환)
- *          100px 이하 접근 시 반대 방향 후퇴(140px/s)
+ *          100px 이하 접근 시 반대 방향 후퇴(120px/s)
  *          2.5초마다 도토리 투척 (HP 30% 이하: 1.2초마다)
  *   stun → 피격 시 0.3초 경직 + 넉백 (이 시간 동안 추가 피격 무시 = i-frame)
  *
@@ -15,8 +15,8 @@
 const DETECT_R        = 260;
 const PREFER_DIST     = 140;
 const CLOSE_DIST      = 100;
-const KITE_SPEED      = 110;
-const RETREAT_SPEED   = 140;
+const KITE_SPEED      = 105;
+const RETREAT_SPEED   = 120;
 const THROW_CD        = 2.5;
 const THROW_CD_RAGE   = 1.2;
 const ACORN_SPEED     = 230;
@@ -50,6 +50,7 @@ export default class Squirrel {
     this.maxHp  = 18;
     this.speed  = KITE_SPEED;
     this.damage = 5;
+    this.displayName = '다람쥐';
 
     this.state      = 'idle';
     this._prevState = 'idle';
@@ -205,7 +206,9 @@ export default class Squirrel {
       .setDisplaySize(ACORN_SIZE, ACORN_SIZE)
       .setRotation(Math.atan2(ny, nx))
       .setDepth(8);
-    this.scene.enemyManager.addEnemyProjectile(proj, SQUIRREL_DMG, nx * ACORN_SPEED, ny * ACORN_SPEED);
+    this.scene.enemyManager.addEnemyProjectile(
+      proj, SQUIRREL_DMG, nx * ACORN_SPEED, ny * ACORN_SPEED, '다람쥐 도토리',
+    );
   }
 
   _updateSprite() {

@@ -10,6 +10,7 @@ import Core     from '../entities/Core';
 import RareItem, { PICKUP_R as RARE_PICKUP_R, MAGNET_SPEED as RARE_MAGNET_SPEED, COLLECT_R as RARE_COLLECT_R } from '../entities/RareItem';
 import { ROOM_W, ROOM_H, WALL_T } from '../world/Room';
 import { showDamageNumber } from '../utils/DamageNumbers';
+import { addMetaCores } from '../data/MetaProgress';
 
 const CORE_PICKUP_R          = 65;  // 코어 자동 흡수 시작 반경 (px)
 const CORE_MAGNET_SPEED      = 400; // 코어 자석 이동 속도 (px/s)
@@ -84,6 +85,28 @@ export default class EnemyManager {
     const dt = delta / 1000;
     this.enemies.forEach(e => e.update(delta, this.player));
 
+    // 적 위치 안전 클램프 — 강한 넉백이 lockDoors 블록을 뚫고 벽 너머로 빠지는 사례 차단.
+    //   문 잠금이 풀린 클리어방에서는 적이 존재하지 않으므로 항상 안전.
+    //   클램프된 축의 외향 속도는 0으로 끊어 매 프레임 다시 벽을 향해 튕기는 루프 방지.
+    this.enemies.forEach(e => {
+      if (!e.alive) return;
+      const go   = e.gameObject;
+      const body = go?.body;
+      if (!body) return;
+      const hw = body.halfWidth;
+      const hh = body.halfHeight;
+      const minX = WALL_T + hw;
+      const maxX = ROOM_W - WALL_T - hw;
+      const minY = WALL_T + hh;
+      const maxY = ROOM_H - WALL_T - hh;
+      let cx = go.x, cy = go.y, clamped = false;
+      if      (cx < minX) { cx = minX; clamped = true; if (body.velocity.x < 0) body.setVelocityX(0); }
+      else if (cx > maxX) { cx = maxX; clamped = true; if (body.velocity.x > 0) body.setVelocityX(0); }
+      if      (cy < minY) { cy = minY; clamped = true; if (body.velocity.y < 0) body.setVelocityY(0); }
+      else if (cy > maxY) { cy = maxY; clamped = true; if (body.velocity.y > 0) body.setVelocityY(0); }
+      if (clamped) go.setPosition(cx, cy);
+    });
+
     // 접촉 데미지 (플레이어 ← 모든 적)
     this.enemies.forEach(e => {
       if (!e.alive || e.attackCooldown > 0 || e.state === 'stun') return;
@@ -95,6 +118,8 @@ export default class EnemyManager {
         e.attackCooldown = 1;
         const nx   = d > 0 ? dx / d : 0;
         const ny   = d > 0 ? dy / d : 0;
+        // 사망 시 결과창에서 표시할 가해자 이름 — takeDamage 결과가 무적이라 false 반환이어도 마지막 접촉자로 기록
+        this.player.lastDamageSource = e.displayName ?? '적';
         const dead = this.player.takeDamage(e.damage, {
           dx: nx, dy: ny,
           force:    PLAYER_KNOCKBACK_FORCE,
@@ -120,6 +145,7 @@ export default class EnemyManager {
       const pdy = this.player.y - y;
       const pd  = Math.sqrt(pdx * pdx + pdy * pdy);
       if (pd < 20) {
+        this.player.lastDamageSource = proj.displayName ?? '적 투사체';
         const dead = this.player.takeDamage(proj.damage, {
           dx: pd > 0 ? pdx / pd : 0,
           dy: pd > 0 ? pdy / pd : 0,
@@ -133,7 +159,7 @@ export default class EnemyManager {
       return true;
     });
 
-    // 독 데미지 틱 (스턴 무관, 매초 maxHp×1% 최소 2)
+    // 독 데미지 틱 — 1초마다 정수 데미지 한 번 (max(2, floor(maxHp×1%))). 0.5초 단위 1피해 누적 방식 폐기.
     for (const [enemy, entry] of this._poisoned) {
       if (!enemy.alive) { this._poisoned.delete(enemy); continue; }
       entry.timer -= dt;
@@ -142,12 +168,12 @@ export default class EnemyManager {
         enemy._hpFill?.setFillStyle(0x44dd44);
         continue;
       }
-      entry.accum += Math.max(2, enemy.maxHp * 0.01) * dt;
-      const toApply = Math.floor(entry.accum);
-      if (toApply > 0) {
-        entry.accum -= toApply;
-        const died = enemy.poisonHp(toApply);
-        showDamageNumber(this.scene, enemy.x, enemy.y - enemy.gameObject.height / 2, toApply, '#cc88ff');
+      entry.tickTimer -= dt;
+      if (entry.tickTimer <= 0) {
+        entry.tickTimer += 1;
+        const dmg = Math.max(2, Math.floor(enemy.maxHp * 0.01));
+        const died = enemy.poisonHp(dmg);
+        showDamageNumber(this.scene, enemy.x, enemy.y - enemy.gameObject.height / 2, dmg, '#cc88ff');
         if (died) {
           this._poisoned.delete(enemy);
           this.dropCores(enemy.x, enemy.y, enemy.coreDrops ?? 3);
@@ -157,7 +183,7 @@ export default class EnemyManager {
       }
     }
 
-    // 화상 데미지 틱 (3초간 maxHp×2.5%/s, 최소 4)
+    // 화상 데미지 틱 — 1초마다 정수 데미지 (max(4, floor(maxHp×2.5%))). 3초 지속 → 3틱.
     for (const [enemy, entry] of this._burned) {
       if (!enemy.alive) { this._burned.delete(enemy); continue; }
       entry.timer -= dt;
@@ -166,12 +192,12 @@ export default class EnemyManager {
         enemy._hpFill?.setFillStyle(0x44dd44);
         continue;
       }
-      entry.accum += Math.max(4, enemy.maxHp * 0.025) * dt;
-      const toApply = Math.floor(entry.accum);
-      if (toApply > 0) {
-        entry.accum -= toApply;
-        const died = enemy.poisonHp(toApply);
-        showDamageNumber(this.scene, enemy.x, enemy.y - enemy.gameObject.height / 2, toApply, '#ff6622');
+      entry.tickTimer -= dt;
+      if (entry.tickTimer <= 0) {
+        entry.tickTimer += 1;
+        const dmg = Math.max(4, Math.floor(enemy.maxHp * 0.025));
+        const died = enemy.poisonHp(dmg);
+        showDamageNumber(this.scene, enemy.x, enemy.y - enemy.gameObject.height / 2, dmg, '#ff6622');
         if (died) {
           this._burned.delete(enemy);
           this.dropCores(enemy.x, enemy.y, enemy.coreDrops ?? 3);
@@ -210,7 +236,13 @@ export default class EnemyManager {
       const d  = Math.sqrt(dx * dx + dy * dy);
       if (core.magnetized || d < CORE_PICKUP_R) {
         if (!core.magnetized) core.startMagnet();
-        if (d < 12) { core.collect(); this.coreCount++; return false; }
+        if (d < 12) {
+          core.collect();
+          this.coreCount++;
+          // 픽업한 코어는 메타 코어로도 +1 영속 적립 (시작 시 부여된 30 은 제외)
+          addMetaCores(1);
+          return false;
+        }
         core.gameObject.x += (dx / d) * CORE_MAGNET_SPEED * dt;
         core.gameObject.y += (dy / d) * CORE_MAGNET_SPEED * dt;
         return true;
@@ -309,9 +341,9 @@ export default class EnemyManager {
     this.scene.events.emit('rare-item-dropped');
   }
 
-  /** 다람쥐 투사체 등록 (Squirrel에서 호출) */
-  addEnemyProjectile(go, damage, vx, vy) {
-    this._enemyProjs.push({ go, damage, vx, vy });
+  /** 적 투사체 등록 (예: 다람쥐 도토리). displayName 은 사망 결과창의 사인 표기용. */
+  addEnemyProjectile(go, damage, vx, vy, displayName = '적 투사체') {
+    this._enemyProjs.push({ go, damage, vx, vy, displayName });
   }
 
   /** 층 전환 시 모든 적·투사체·드롭 즉시 정리 */
@@ -378,13 +410,14 @@ export default class EnemyManager {
 
   _applyPoison(enemy) {
     if (this._poisoned.has(enemy)) return;
-    this._poisoned.set(enemy, { timer: 10, accum: 0 });
+    // tickTimer 1 → 첫 데미지는 부여 후 1초 뒤 발생 (즉발 X)
+    this._poisoned.set(enemy, { timer: 10, tickTimer: 1 });
     enemy._hpFill?.setFillStyle(0xaa44ff);
   }
 
   _applyBurn(enemy) {
     if (this._burned.has(enemy)) return;
-    this._burned.set(enemy, { timer: 3, accum: 0 });
+    this._burned.set(enemy, { timer: 3, tickTimer: 1 });
     enemy._hpFill?.setFillStyle(0xff4422);
   }
 
@@ -418,12 +451,14 @@ export default class EnemyManager {
       const len = Math.sqrt(ddx * ddx + ddy * ddy);
       const nx  = len > 0 ? ddx / len : aimDir.x;
       const ny  = len > 0 ? ddy / len : aimDir.y;
-      const dead = e.takeDamage(tierData.damage, {
+      // 치명타 굴림 — 넉백은 원본 데미지 기준으로 계산해 과한 넉백 폭주 방지
+      const { damage: appliedDmg, isCrit } = this.player.rollAttackDamage(tierData.damage);
+      const dead = e.takeDamage(appliedDmg, {
         dx: nx, dy: ny,
         force:    tierData.damage * KNOCKBACK_PER_DMG,
         duration: KNOCKBACK_DUR,
       });
-      if (!isSpike) showDamageNumber(this.scene, e.x, e.y - e.gameObject.height / 2, tierData.damage);
+      if (!isSpike) showDamageNumber(this.scene, e.x, e.y - e.gameObject.height / 2, appliedDmg, '#ffffff', isCrit);
       if (dead) {
         this._poisoned.delete(e);
         this._burned.delete(e);
@@ -513,6 +548,9 @@ export default class EnemyManager {
   }
 
   dropCores(x, y, count) {
-    for (let i = 0; i < count; i++) this.cores.push(new Core(this.scene, x, y));
+    // 영구 해금 '코어 수집기' (×1.15) — 소수점은 반올림, 최소 1개는 보장
+    const mult = this.player?.coreDropMult ?? 1;
+    const finalCount = Math.max(1, Math.round(count * mult));
+    for (let i = 0; i < finalCount; i++) this.cores.push(new Core(this.scene, x, y));
   }
 }

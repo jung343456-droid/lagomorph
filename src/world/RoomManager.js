@@ -1,4 +1,5 @@
 import Room, { ROOM_W, ROOM_H, WALL_T, DOOR_W, DOOR_HX, DOOR_VY } from './Room';
+import { markShopDiscovered } from '../data/MetaProgress';
 
 const TRIGGER_MARGIN  = 20;  // 문 전환 트리거 여백: 방 가장자리에서 이 거리 이내 진입 시 방 전환 (px)
 const TRIGGER_VEL_MIN = 30;  // 문 트리거 발화에 필요한 최소 속도 (px/s) — 의도된 진입만 허용
@@ -112,6 +113,8 @@ export default class RoomManager {
       // 상점방: 적 없음, 진입 즉시 클리어, 문 잠금 없음
       roomData.cleared = true;
       this._room.unlockDoors();
+      // 영속 플래그 — 이후 모든 런에서 Hub 에 상점 NPC 가 등장
+      markShopDiscovered();
     } else if (roomData.type === 'boss') {
       this._room.lockDoors();
       if (this.floorNum === 5) {
@@ -139,6 +142,9 @@ export default class RoomManager {
     this.scene.cameras.main.flash(300, 100, 220, 160, false);
     this._room.unlockDoors();
     this._clearedAt = this.scene.time.now;
+
+    // 영구 해금 '전투 적응' — 방 클리어 시 HP 회복
+    if (this.player.hpPerRoomClear > 0) this.player.heal(this.player.hpPerRoomClear);
 
     if (this.currentRoomData.type === 'boss') {
       // 보스방: 계단으로 다음 층 진행 + 인접 방 자유 왕복 가능

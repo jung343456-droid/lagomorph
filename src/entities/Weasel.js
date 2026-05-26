@@ -19,10 +19,10 @@ const DASH_SPEED     = 280;
 const DASH_DUR       = 0.4;
 const COOL_DUR       = 0.8;
 const COOL_DUR_RAGE  = 0.4;
-const WEASEL_W       = 16;   // 물리 body 크기
-const WEASEL_H       = 24;
-const WEASEL_DW      = 28;   // 표시 크기 (canvas 18:28 비율 ≈ 유지)
-const WEASEL_DH      = 44;
+const WEASEL_W       = 14;   // 물리 body 크기 (이전 16에서 15% 축소)
+const WEASEL_H       = 20;
+const WEASEL_DW      = 24;   // 표시 크기 (이전 28×44에서 15% 축소)
+const WEASEL_DH      = 37;
 
 function calcDir(vx, vy) {
   if (Math.abs(vx) < 1 && Math.abs(vy) < 1) return null;
@@ -43,6 +43,7 @@ export default class Weasel {
     this.scene = scene;
 
     this.hp     = 22;
+    this.displayName = '족제비';
     this.maxHp  = 22;
     this.speed  = APPROACH_SPEED;
     this.damage = 9;

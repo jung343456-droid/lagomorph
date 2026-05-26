@@ -38,6 +38,7 @@ export default class Fox {
     this.maxHp  = 30;
     this.speed  = 140;
     this.damage = 8;
+    this.displayName = '여우';
 
     this.state      = 'idle';
     this._prevState = 'idle';

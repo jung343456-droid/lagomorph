@@ -42,6 +42,7 @@ export default class Rat {
     this.maxHp  = 12;
     this.speed  = RUSH_SPEED;
     this.damage = 5;
+    this.displayName = '쥐';
 
     this.state      = 'idle';
     this._prevState = 'idle';

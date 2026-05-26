@@ -41,10 +41,11 @@ function _pickShopEntry() {
   return SHOP_POOL[SHOP_POOL.length - 1];
 }
 
-function _entryToSlot(entry) {
+function _entryToSlot(entry, excludeItemIds) {
   if (entry.kind === 'item') {
     // 생성 시점에 패시브 1개 미리 선정 → 카드에 실제 이름/설명 표시
-    const ids = Object.keys(ITEM_DEFS);
+    const ids = Object.keys(ITEM_DEFS).filter(id => !excludeItemIds.has(id));
+    if (ids.length === 0) return null; // 가용 패시브 없음 — 호출부에서 다른 엔트리 재추첨
     const id  = ids[Math.floor(Math.random() * ids.length)];
     const def = ITEM_DEFS[id];
     return {
@@ -62,18 +63,24 @@ function _entryToSlot(entry) {
   return { kind: 'heal_full', id: entry.id, name: entry.name, cost: entry.cost, sold: false };
 }
 
-/** 3개 슬롯 무작위 추첨 — 같은 id 중복 금지 (패시브끼리도 다른 아이템) */
-function _generateShopSlots() {
+/**
+ * 3개 슬롯 무작위 추첨.
+ *  - 슬롯 간 같은 id 중복 금지 (heal_1 과 heal_1 같이 들어가지 않음)
+ *  - ownedItemIds: 플레이어가 이미 보유한 패시브 id 목록 — 해당 패시브는 'item' 슬롯에서 제외
+ */
+function _generateShopSlots(ownedItemIds = []) {
   const slots = [];
   const usedKey = new Set();
+  const excludeItems = new Set(ownedItemIds); // 보유 패시브 + 이미 이 상점에 들어간 패시브
   let attempts = 0;
-  while (slots.length < 3 && attempts < 30) {
+  while (slots.length < 3 && attempts < 40) {
     attempts++;
     const entry = _pickShopEntry();
-    const slot  = _entryToSlot(entry);
-    if (usedKey.has(slot.id)) continue;
+    const slot  = _entryToSlot(entry, excludeItems);
+    if (!slot || usedKey.has(slot.id)) continue;
     slots.push(slot);
     usedKey.add(slot.id);
+    if (slot.kind === 'item') excludeItems.add(slot.id);
   }
   return slots;
 }
@@ -81,9 +88,10 @@ function _generateShopSlots() {
 /**
  * 랜덤 워크로 9~12개 방을 배치하고 인접 연결.
  * floorNum 이 2 또는 4 일 때 일반 전투방 하나를 상점방으로 치환.
+ * ownedItemIds: 상점 패시브 슬롯 추첨에서 제외할 보유 아이템 id 목록.
  * Phaser 의존 없는 순수 데이터 함수.
  */
-export function generateDungeon(floorNum = 1, targetCount) {
+export function generateDungeon(floorNum = 1, targetCount, ownedItemIds = []) {
   targetCount ??= 9 + Math.floor(Math.random() * 4); // 9-12
 
   const grid  = new Map(); // "col,row" → roomData
@@ -169,7 +177,7 @@ export function generateDungeon(floorNum = 1, targetCount) {
       const pool = cand.slice(0, half);
       const picked = pool[Math.floor(Math.random() * pool.length)];
       picked.r.type = 'shop';
-      picked.r.shopSlots = _generateShopSlots();
+      picked.r.shopSlots = _generateShopSlots(ownedItemIds);
     }
   }
 

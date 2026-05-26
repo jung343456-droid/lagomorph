@@ -140,12 +140,13 @@ export default class PassiveItem {
 
   get x()     { return this.gameObject.x; }
   get y()     { return this.gameObject.y; }
+  get id()    { return this._id; }
   get alive() { return this._alive; }
 
   collect(player) {
     if (!this._alive) return;
     this._def.apply(player);
-    player.inventory.push({ name: this._def.name, color: this._def.color, desc: this._def.desc });
+    player.inventory.push({ id: this._id, name: this._def.name, color: this._def.color, desc: this._def.desc });
     // 영속 해금 목록 갱신 (다음 런 시작 방 풀에 포함됨)
     const unlocked = PassiveItem.getUnlocked();
     if (!unlocked.includes(this._id)) {

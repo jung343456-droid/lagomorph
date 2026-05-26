@@ -10,6 +10,8 @@
  * 패시브 아이템 스탯 (기본값):
  *   meleeRadiusMult  1.0   근거리 반경 배율
  *   meleeDamageMult  1.0   근거리 데미지 배율
+ *   critRate         0.15  치명타율 (rollAttackDamage 에서 사용)
+ *   critMult         1.5   치명타 위력 배율
  *   chargeSpeedMult  1.0   근거리 충전 속도 배율
  *   hasPoison        false  근거리 명중 시 30% 확률 독 부여
  *   hasFire          false  근거리 명중 시 30% 확률 화상 부여
@@ -21,8 +23,11 @@
  *   hasPoisonDisguise false  독성 위장 — 트랩 스플래시 + 30% 중독
  *   trapCostBonus    0      트랩 코어 소모 감소
  *   trapSizeMult     1      트랩 크기 배율
+ *   coreDropMult     1      드롭 코어량 배율 (영구 해금 '코어 수집기')
+ *   hpPerRoomClear   0      방 클리어 시 회복량 (영구 해금 '전투 적응')
  */
 import { showDamageNumber } from '../utils/DamageNumbers';
+import { applyUnlocksToPlayer } from '../data/MetaProgress';
 
 const DISPLAY_W = 55; // 스프라이트 표시 너비 (px) — 히트박스와 동일
 const DISPLAY_H = 62; // 스프라이트 표시 높이 (px) — 원본 8:9 비율 유지
@@ -40,9 +45,12 @@ export default class Player {
     this._invincible     = false;
     this._knockbackTimer = 0;
     this.facingDir       = { x: 0, y: 1 };
+    this.lastDamageSource = null; // 마지막으로 피해 입힌 적 식별자 (사망 결과창 표시용)
 
     this.meleeRadiusMult  = 1.0;
     this.meleeDamageMult  = 1.0;
+    this.critRate         = 0.15;  // 기본 치명타율 15%
+    this.critMult         = 1.5;   // 치명타 위력 ×1.5
     this.hasPoison        = false;
     this.hasFire          = false;
     this.hasIce           = false;
@@ -54,8 +62,13 @@ export default class Player {
     this.hasPoisonDisguise = false;
     this.trapCostBonus    = 0;
     this.trapSizeMult     = 1;
+    this.coreDropMult     = 1;   // 코어 수집기 해금 시 적용 (EnemyManager.dropCores 참조)
+    this.hpPerRoomClear   = 0;   // 전투 적응 해금 시 적용 (RoomManager._onRoomCleared 참조)
     this.inventory        = [];
     this._dir            = 'bottom';
+
+    // 영구 해금 효과 — 기본 스탯 셋업 직후, 게임오브젝트 생성 전에 적용
+    applyUnlocksToPlayer(this);
 
     this.gameObject = scene.add.image(x, y, 'soma-bottom');
     this.gameObject.setDisplaySize(DISPLAY_W, DISPLAY_H);
@@ -119,6 +132,16 @@ export default class Player {
 
   heal(amount) {
     this.hp = Math.min(this.maxHp, this.hp + amount);
+  }
+
+  /**
+   * 치명타 굴림 — base 데미지에 critRate 확률로 critMult 배율 적용.
+   * @returns {{ damage:number, isCrit:boolean }} 적용할 정수 데미지와 치명타 여부
+   */
+  rollAttackDamage(base) {
+    const isCrit = Math.random() < this.critRate;
+    const damage = isCrit ? Math.round(base * this.critMult) : base;
+    return { damage, isCrit };
   }
 
   get x() { return this.gameObject.x; }

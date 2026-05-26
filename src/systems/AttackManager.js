@@ -274,12 +274,14 @@ export default class AttackManager {
     const len = Math.sqrt(ddx * ddx + ddy * ddy);
     const nx  = len > 0 ? ddx / len : 1;
     const ny  = len > 0 ? ddy / len : 0;
-    const dead = enemy.takeDamage(poop.damage, {
+    // 트랩 직격 데미지에 치명타 적용 — 넉백은 원본 기준
+    const { damage: trapDmg, isCrit: trapCrit } = this.player.rollAttackDamage(poop.damage);
+    const dead = enemy.takeDamage(trapDmg, {
       dx: nx, dy: ny,
       force:    poop.damage * FOX_KNOCKBACK_PER_DMG,
       duration: FOX_KNOCKBACK_DUR,
     }, 'poop');
-    if (!isSpike) showDamageNumber(this.scene, enemy.x, enemy.y - enemyGO.height / 2, poop.damage);
+    if (!isSpike) showDamageNumber(this.scene, enemy.x, enemy.y - enemyGO.height / 2, trapDmg, '#ffffff', trapCrit);
     if (dead) {
       em.dropCores(enemy.x, enemy.y, enemy.coreDrops ?? 3);
       if (enemy.isBoss) { em.dropRareItem(enemy.x, enemy.y); em.boss = null; }
@@ -302,12 +304,13 @@ export default class AttackManager {
         if (Phaser.Math.Distance.Between(splashX, splashY, other.x, other.y) > SPLASH_RADIUS) return;
         const odx = other.x - splashX, ody = other.y - splashY;
         const ol  = Math.sqrt(odx * odx + ody * ody) || 1;
-        const splashDead = other.takeDamage(SPLASH_DMG, {
+        const { damage: splashDmg, isCrit: splashCrit } = this.player.rollAttackDamage(SPLASH_DMG);
+        const splashDead = other.takeDamage(splashDmg, {
           dx: odx / ol, dy: ody / ol,
           force:    SPLASH_DMG * FOX_KNOCKBACK_PER_DMG,
           duration: FOX_KNOCKBACK_DUR,
         }, 'poop');
-        showDamageNumber(this.scene, other.x, other.y - other.gameObject.height / 2, SPLASH_DMG);
+        showDamageNumber(this.scene, other.x, other.y - other.gameObject.height / 2, splashDmg, '#ffffff', splashCrit);
         if (splashDead) {
           em.dropCores(other.x, other.y, other.coreDrops ?? 3);
           if (other.isBoss) { em.dropRareItem(other.x, other.y); em.boss = null; }

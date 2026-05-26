@@ -61,7 +61,7 @@ export default class BootScene extends Phaser.Scene {
 
   create() {
     this._generateTextures();
-    this.scene.start('GameScene');
+    this.scene.start('HubScene');
   }
 
   // 외부 에셋 없이 실행할 수 있도록 프로그래밍 방식으로 텍스처 생성

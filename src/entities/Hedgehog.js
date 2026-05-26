@@ -50,6 +50,7 @@ export default class Hedgehog {
     this.maxHp  = 70;
     this.speed  = CHASE_SPEED;
     this.damage = 16;
+    this.displayName = '고슴도치';
 
     this.state      = 'idle';
     this._prevState = 'idle';

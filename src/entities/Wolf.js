@@ -54,6 +54,7 @@ export default class Wolf {
     this.speed     = CHASE_SPEED;
     this.damage    = 12;
     this.speedMult = 1.0;
+    this.displayName = '늑대';
 
     this.state      = 'idle';
     this._prevState = 'idle';
