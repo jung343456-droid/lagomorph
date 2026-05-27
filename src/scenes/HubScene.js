@@ -5,6 +5,7 @@
  *   - 중앙: 토끼가 잠들어있는 기상 기계 (탭/근접 시 런 시작)
  *   - 좌측(상점 한 번 이상 발견 시): GRIM NPC — 근접 시 영구 해금 메뉴 오픈
  *   - 상단: 메타 코어 잔량 표시
+ *   - 상단 우측: '초기화' 버튼 — 2단 확인 후 모든 메타 진행(코어/해금/패시브 이력) 삭제 + scene.restart()
  *
  * 흐름:
  *   BootScene → HubScene → (기상 기계 작동) → GameScene → (사망/클리어) → HubScene
@@ -20,7 +21,7 @@ import InputManager from '../utils/InputManager';
 import Shopkeeper from '../entities/Shopkeeper';
 import Room, { ROOM_W, ROOM_H } from '../world/Room';
 import UnlockMenu from '../ui/UnlockMenu';
-import { getMetaCores, getShopDiscovered } from '../data/MetaProgress';
+import { getMetaCores, getShopDiscovered, resetAllProgress } from '../data/MetaProgress';
 
 const MACHINE_W       = 110;
 const MACHINE_H       = 140;
@@ -197,6 +198,78 @@ export default class HubScene extends Phaser.Scene {
     this._metaText = this.add.text(GAME_W / 2, 48, `◆ ${getMetaCores()}`, {
       fontSize: '20px', color: '#ffcc44', fontFamily: 'monospace', fontStyle: 'bold',
     }).setOrigin(0.5).setScrollFactor(0).setDepth(51);
+
+    // 우측 상단 초기화 버튼 — 2단 확인 후 모든 메타 진행 삭제
+    const resetBtn = this.add.text(GAME_W - 10, 10, '초기화', {
+      fontSize: '11px', color: '#aa6666', fontFamily: 'monospace',
+      backgroundColor: '#1a1018', padding: { x: 8, y: 4 },
+    }).setOrigin(1, 0).setScrollFactor(0).setDepth(51).setInteractive({ cursor: 'pointer' });
+    resetBtn.on('pointerover', () => resetBtn.setColor('#ff8888'));
+    resetBtn.on('pointerout',  () => resetBtn.setColor('#aa6666'));
+    resetBtn.on('pointerdown', () => this._showResetConfirm1());
+  }
+
+  // ── 초기화 2단 확인 ──────────────────────────────────
+
+  _showResetConfirm1() {
+    this._buildConfirmModal({
+      text: '메타 코어와 영구 해금 상태가\n모두 삭제됩니다.\n계속하시겠습니까?',
+      okLabel: '계속',
+      okColor: '#ffcc66',
+      onOk: () => this._showResetConfirm2(),
+    });
+  }
+
+  _showResetConfirm2() {
+    this._buildConfirmModal({
+      text: '정말로 초기화하시겠습니까?\n되돌릴 수 없습니다.',
+      okLabel: '초기화',
+      okColor: '#ff5555',
+      onOk: () => this._doReset(),
+    });
+  }
+
+  _doReset() {
+    resetAllProgress();
+    this.cameras.main.fadeOut(250, 0, 0, 0);
+    this.cameras.main.once('camerafadeoutcomplete', () => this.scene.restart());
+  }
+
+  _buildConfirmModal({ text, okLabel = '확인', cancelLabel = '취소', okColor = '#4ecca3', onOk }) {
+    const cx = GAME_W / 2, cy = GAME_H / 2;
+    const panelW = 280, panelH = 180;
+    const els = [];
+    const close = () => els.forEach(el => { if (el?.active) el.destroy(); });
+
+    const backdrop = this.add.rectangle(0, 0, GAME_W, GAME_H, 0x000000, 0.7)
+      .setOrigin(0).setScrollFactor(0).setDepth(200).setInteractive();
+    backdrop.on('pointerdown', close); // 바깥 탭 = 취소 (보수적 동작)
+    els.push(backdrop);
+
+    const panel = this.add.rectangle(cx, cy, panelW, panelH, 0x1a1a28)
+      .setStrokeStyle(2, 0x4a4a6a).setScrollFactor(0).setDepth(201).setInteractive();
+    els.push(panel);
+
+    els.push(this.add.text(cx, cy - 28, text, {
+      fontSize: '13px', color: '#ddddee', fontFamily: 'monospace', align: 'center',
+      lineSpacing: 4,
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(202));
+
+    const cancelBtn = this.add.text(cx - 60, cy + 50, cancelLabel, {
+      fontSize: '13px', color: '#cccccc', fontFamily: 'monospace', fontStyle: 'bold',
+      backgroundColor: '#2a2a36', padding: { x: 14, y: 6 },
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(202).setInteractive({ cursor: 'pointer' });
+    cancelBtn.on('pointerdown', close);
+    cancelBtn.on('pointerover', () => cancelBtn.setColor('#ffffff'));
+    cancelBtn.on('pointerout',  () => cancelBtn.setColor('#cccccc'));
+    els.push(cancelBtn);
+
+    const okBtn = this.add.text(cx + 60, cy + 50, okLabel, {
+      fontSize: '13px', color: okColor, fontFamily: 'monospace', fontStyle: 'bold',
+      backgroundColor: '#2a2a36', padding: { x: 14, y: 6 },
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(202).setInteractive({ cursor: 'pointer' });
+    okBtn.on('pointerdown', () => { close(); onOk?.(); });
+    els.push(okBtn);
   }
 
   _openUnlockMenu() {

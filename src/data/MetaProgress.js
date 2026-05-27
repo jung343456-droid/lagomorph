@@ -17,6 +17,7 @@ import { UNLOCK_NODES } from './UnlockTree';
 const META_CORES_KEY       = 'lagomorph_meta_cores';
 const UNLOCK_NODES_KEY     = 'lagomorph_unlock_nodes';
 const SHOP_DISCOVERED_KEY  = 'lagomorph_shop_discovered';
+const PASSIVE_ITEMS_KEY    = 'lagomorph_unlocked'; // PassiveItem.js 와 키 공유 — 초기화 대상에 포함
 
 // ── 메타 코어 ────────────────────────────────────────
 
@@ -95,4 +96,16 @@ export function getShopDiscovered() {
 /** 상점방을 처음 진입하는 순간 호출 — 이후 모든 런에서 Hub 에 NPC 가 등장한다. */
 export function markShopDiscovered() {
   try { localStorage.setItem(SHOP_DISCOVERED_KEY, 'true'); } catch {}
+}
+
+// ── 전체 초기화 ──────────────────────────────────────
+
+/** 메타 코어·해금 노드·상점 발견·패시브 획득 이력을 전부 삭제. Hub HUD 초기화 버튼에서 호출. */
+export function resetAllProgress() {
+  try {
+    localStorage.removeItem(META_CORES_KEY);
+    localStorage.removeItem(UNLOCK_NODES_KEY);
+    localStorage.removeItem(SHOP_DISCOVERED_KEY);
+    localStorage.removeItem(PASSIVE_ITEMS_KEY);
+  } catch {}
 }
