@@ -1,11 +1,11 @@
 /**
  * 다람쥐 (Squirrel) — 원거리형
- * HP 18 / 속도 105 / 데미지 6(도토리) / 코어 드롭 2
+ * HP 18 / 속도 105 / 데미지 8(도토리) / 코어 드롭 2
  *
  * 패턴:
  *   idle → kite(260px 이내 탐지)
  *   kite → 선호 거리 140px 유지하며 플레이어 주위 횡이동 (1.5초마다 방향 전환)
- *          100px 이하 접근 시 반대 방향 후퇴(120px/s)
+ *          100px 이하 접근 시 반대 방향 후퇴(130px/s)
  *          2.5초마다 도토리 투척 (HP 30% 이하: 1.2초마다)
  *   stun → 피격 시 0.3초 경직 + 넉백 (이 시간 동안 추가 피격 무시 = i-frame)
  *
@@ -16,12 +16,12 @@ const DETECT_R        = 260;
 const PREFER_DIST     = 140;
 const CLOSE_DIST      = 100;
 const KITE_SPEED      = 105;
-const RETREAT_SPEED   = 120;
+const RETREAT_SPEED   = 130;
 const THROW_CD        = 2.5;
 const THROW_CD_RAGE   = 1.2;
 const ACORN_SPEED     = 230;
 const ACORN_SIZE      = 14;
-const SQUIRREL_DMG    = 6;
+const SQUIRREL_DMG    = 8;
 const LATERAL_FLIP    = 1.5;
 const SQUIRREL_W      = 18;   // 물리 body 크기 (canvas 22×22 정사각형 반영)
 const SQUIRREL_H      = 18;
@@ -77,7 +77,7 @@ export default class Squirrel {
 
     this.gameObject = scene.add.image(x, y, 'squirrel-idle').setDisplaySize(SQUIRREL_DW, SQUIRREL_DH);
     scene.physics.add.existing(this.gameObject);
-    this.gameObject.body.setSize(SQUIRREL_W, SQUIRREL_H);
+    this._applyBodySize();
     this.gameObject.body.setCollideWorldBounds(true);
     this.gameObject.setDepth(9);
 
@@ -226,7 +226,15 @@ export default class Squirrel {
     if (this._curKey !== key) {
       this._curKey = key;
       this.gameObject.setTexture(key).setDisplaySize(SQUIRREL_DW, SQUIRREL_DH);
+      this._applyBodySize();
     }
+  }
+
+  // body.setSize 는 source 픽셀이라 setDisplaySize 로 확대된 작은 텍스처 위에선 body 가 부풀려진다.
+  _applyBodySize() {
+    const sx = this.gameObject.scaleX || 1;
+    const sy = this.gameObject.scaleY || 1;
+    this.gameObject.body.setSize(SQUIRREL_W / sx, SQUIRREL_H / sy, true);
   }
 
   _buildHpBar() {

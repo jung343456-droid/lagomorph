@@ -179,6 +179,7 @@ export default class EnemyManager {
           this.dropCores(enemy.x, enemy.y, enemy.coreDrops ?? 3);
           if (enemy.isBoss) { this.dropRareItem(enemy.x, enemy.y); this.boss = null; }
           if (this.player.healOnKill > 0) this.player.heal(this.player.healOnKill);
+          if (this.player.hasHuntersEye) this.player._pendingCrit = true;
         }
       }
     }
@@ -203,6 +204,7 @@ export default class EnemyManager {
           this.dropCores(enemy.x, enemy.y, enemy.coreDrops ?? 3);
           if (enemy.isBoss) { this.dropRareItem(enemy.x, enemy.y); this.boss = null; }
           if (this.player.healOnKill > 0) this.player.heal(this.player.healOnKill);
+          if (this.player.hasHuntersEye) this.player._pendingCrit = true;
         }
       }
     }
@@ -459,6 +461,10 @@ export default class EnemyManager {
         duration: KNOCKBACK_DUR,
       });
       if (!isSpike) showDamageNumber(this.scene, e.x, e.y - e.gameObject.height / 2, appliedDmg, '#ffffff', isCrit);
+      // 피의 향연 — 치명타 명중 시 HP 회복 (실제 데미지가 들어간 경우만, spike 반사는 제외)
+      if (isCrit && !isSpike && this.player.critHealAmount > 0) {
+        this.player.heal(this.player.critHealAmount);
+      }
       if (dead) {
         this._poisoned.delete(e);
         this._burned.delete(e);
@@ -466,6 +472,8 @@ export default class EnemyManager {
         this.dropCores(e.x, e.y, e.coreDrops ?? 3);
         if (e.isBoss) { this.dropRareItem(e.x, e.y); this.boss = null; }
         if (this.player.healOnKill > 0) this.player.heal(this.player.healOnKill);
+        // 사냥꾼의 눈 — 다음 1발 확정 치명
+        if (this.player.hasHuntersEye) this.player._pendingCrit = true;
       }
     });
 
@@ -501,6 +509,7 @@ export default class EnemyManager {
           this.dropCores(nearest.x, nearest.y, nearest.coreDrops ?? 3);
           if (nearest.isBoss) { this.dropRareItem(nearest.x, nearest.y); this.boss = null; }
           if (this.player.healOnKill > 0) this.player.heal(this.player.healOnKill);
+          if (this.player.hasHuntersEye) this.player._pendingCrit = true;
         }
         chained.add(nearest);
         nextFrontier.push(nearest);

@@ -1,6 +1,6 @@
 /**
  * 여우 (Fox) — 추격형
- * HP 30 / 속도 140 / 데미지 8 / 코어 드롭 3
+ * HP 30 / 속도 140 / 데미지 10 / 코어 드롭 3
  *
  * 패턴:
  *   idle  → chase(250px 이내 탐지)
@@ -37,7 +37,7 @@ export default class Fox {
     this.hp     = 30;
     this.maxHp  = 30;
     this.speed  = 140;
-    this.damage = 8;
+    this.damage = 10;
     this.displayName = '여우';
 
     this.state      = 'idle';
@@ -62,7 +62,7 @@ export default class Fox {
 
     this.gameObject = scene.add.image(x, y, 'fox-s').setDisplaySize(FOX_DW, FOX_DH);
     scene.physics.add.existing(this.gameObject);
-    this.gameObject.body.setSize(FOX_W, FOX_H);
+    this._applyBodySize();
     this.gameObject.body.setCollideWorldBounds(true);
     this.gameObject.setDepth(9);
 
@@ -182,7 +182,16 @@ export default class Fox {
     if (this._curKey !== key) {
       this._curKey = key;
       this.gameObject.setTexture(key).setDisplaySize(FOX_DW, FOX_DH);
+      this._applyBodySize();
     }
+  }
+
+  // body.setSize 는 source 픽셀이므로 setDisplaySize 로 확대된 작은 텍스처 위에서는
+  // body 가 scale 배로 부풀려진다. 표시 픽셀 기준 FOX_W × FOX_H 가 되도록 scale 역산.
+  _applyBodySize() {
+    const sx = this.gameObject.scaleX || 1;
+    const sy = this.gameObject.scaleY || 1;
+    this.gameObject.body.setSize(FOX_W / sx, FOX_H / sy, true);
   }
 
   _buildHpBar() {

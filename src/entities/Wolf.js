@@ -80,7 +80,7 @@ export default class Wolf {
 
     this.gameObject = scene.add.image(x, y, 'wolf-s').setDisplaySize(WOLF_DW, WOLF_DH);
     scene.physics.add.existing(this.gameObject);
-    this.gameObject.body.setSize(WOLF_W, WOLF_H);
+    this._applyBodySize();
     this.gameObject.body.setCollideWorldBounds(true);
     this.gameObject.setDepth(9);
 
@@ -264,7 +264,15 @@ export default class Wolf {
     if (this._curKey !== key) {
       this._curKey = key;
       this.gameObject.setTexture(key).setDisplaySize(WOLF_DW, WOLF_DH);
+      this._applyBodySize();
     }
+  }
+
+  // body.setSize 는 source 픽셀이라 setDisplaySize 로 확대된 작은 텍스처 위에선 body 가 부풀려진다.
+  _applyBodySize() {
+    const sx = this.gameObject.scaleX || 1;
+    const sy = this.gameObject.scaleY || 1;
+    this.gameObject.body.setSize(WOLF_W / sx, WOLF_H / sy, true);
   }
 
   _buildHpBar() {

@@ -73,7 +73,7 @@ export default class Weasel {
 
     this.gameObject = scene.add.image(x, y, 'weasel-idle').setDisplaySize(WEASEL_DW, WEASEL_DH);
     scene.physics.add.existing(this.gameObject);
-    this.gameObject.body.setSize(WEASEL_W, WEASEL_H);
+    this._applyBodySize();
     this.gameObject.body.setCollideWorldBounds(true);
     this.gameObject.setDepth(9);
 
@@ -206,7 +206,15 @@ export default class Weasel {
     if (this._curKey !== key) {
       this._curKey = key;
       this.gameObject.setTexture(key).setDisplaySize(WEASEL_DW, WEASEL_DH);
+      this._applyBodySize();
     }
+  }
+
+  // body.setSize 는 source 픽셀이라 setDisplaySize 로 확대된 작은 텍스처 위에선 body 가 부풀려진다.
+  _applyBodySize() {
+    const sx = this.gameObject.scaleX || 1;
+    const sy = this.gameObject.scaleY || 1;
+    this.gameObject.body.setSize(WEASEL_W / sx, WEASEL_H / sy, true);
   }
 
   _buildHpBar() {

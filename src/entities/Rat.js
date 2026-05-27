@@ -67,7 +67,7 @@ export default class Rat {
 
     this.gameObject = scene.add.image(x, y, 'rat-idle').setDisplaySize(RAT_DW, RAT_DH);
     scene.physics.add.existing(this.gameObject);
-    this.gameObject.body.setSize(RAT_W, RAT_H);
+    this._applyBodySize();
     this.gameObject.body.setCollideWorldBounds(true);
     this.gameObject.setDepth(9);
 
@@ -197,7 +197,15 @@ export default class Rat {
     if (this._curKey !== key) {
       this._curKey = key;
       this.gameObject.setTexture(key).setDisplaySize(RAT_DW, RAT_DH);
+      this._applyBodySize();
     }
+  }
+
+  // body.setSize 는 source 픽셀이라 setDisplaySize 로 확대된 작은 텍스처 위에선 body 가 부풀려진다.
+  _applyBodySize() {
+    const sx = this.gameObject.scaleX || 1;
+    const sy = this.gameObject.scaleY || 1;
+    this.gameObject.body.setSize(RAT_W / sx, RAT_H / sy, true);
   }
 
   _buildHpBar() {

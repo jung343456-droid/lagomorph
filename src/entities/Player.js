@@ -11,7 +11,9 @@
  *   meleeRadiusMult  1.0   근거리 반경 배율
  *   meleeDamageMult  1.0   근거리 데미지 배율
  *   critRate         0.15  치명타율 (rollAttackDamage 에서 사용)
- *   critMult         1.5   치명타 위력 배율
+ *   critMult         1.5   치명타 피해 배율
+ *   hasHuntersEye    false 적 처치 후 다음 1발 확정 치명 (사냥꾼의 눈)
+ *   critHealAmount   0     치명타 명중 시 회복량 (피의 향연)
  *   chargeSpeedMult  1.0   근거리 충전 속도 배율
  *   hasPoison        false  근거리 명중 시 30% 확률 독 부여
  *   hasFire          false  근거리 명중 시 30% 확률 화상 부여
@@ -50,7 +52,10 @@ export default class Player {
     this.meleeRadiusMult  = 1.0;
     this.meleeDamageMult  = 1.0;
     this.critRate         = 0.15;  // 기본 치명타율 15%
-    this.critMult         = 1.5;   // 치명타 위력 ×1.5
+    this.critMult         = 1.5;   // 치명타 피해 ×1.5
+    this.hasHuntersEye    = false; // 사냥꾼의 눈 — 적 처치 후 다음 한 발 확정 치명
+    this.critHealAmount   = 0;     // 피의 향연 — 치명타 명중 시 회복량
+    this._pendingCrit     = false; // 다음 rollAttackDamage 1 회를 강제 치명타로
     this.hasPoison        = false;
     this.hasFire          = false;
     this.hasIce           = false;
@@ -73,10 +78,19 @@ export default class Player {
     this.gameObject = scene.add.image(x, y, 'soma-bottom');
     this.gameObject.setDisplaySize(DISPLAY_W, DISPLAY_H);
     scene.physics.add.existing(this.gameObject);
-    this.gameObject.body.setSize(BODY_W, BODY_H, true);
+    this._applyBodySize();
     this.gameObject.body.setCollideWorldBounds(true);
     this.gameObject.body.setMaxVelocity(350, 350);
     this.gameObject.setDepth(10);
+  }
+
+  // body.setSize 는 source(scale 전) 픽셀이라 setDisplaySize 로 축소된
+  // 큰 원본 텍스처(soma ~380~460px) 위에서는 그대로 넣으면 body 가 ~8px 로 줄어든다.
+  // 표시 픽셀 기준 BODY_W × BODY_H 가 되도록 scale 을 역산한다.
+  _applyBodySize() {
+    const sx = this.gameObject.scaleX || 1;
+    const sy = this.gameObject.scaleY || 1;
+    this.gameObject.body.setSize(BODY_W / sx, BODY_H / sy, true);
   }
 
   update({ x, y }, delta) {
@@ -136,10 +150,17 @@ export default class Player {
 
   /**
    * 치명타 굴림 — base 데미지에 critRate 확률로 critMult 배율 적용.
+   * `_pendingCrit` 이 true 면 확률 무시하고 확정 치명 (사냥꾼의 눈 보유 + 직전 처치 시 set).
    * @returns {{ damage:number, isCrit:boolean }} 적용할 정수 데미지와 치명타 여부
    */
   rollAttackDamage(base) {
-    const isCrit = Math.random() < this.critRate;
+    let isCrit;
+    if (this._pendingCrit) {
+      isCrit = true;
+      this._pendingCrit = false;
+    } else {
+      isCrit = Math.random() < this.critRate;
+    }
     const damage = isCrit ? Math.round(base * this.critMult) : base;
     return { damage, isCrit };
   }
@@ -155,6 +176,8 @@ export default class Player {
     this.gameObject.setTexture(`soma-${dir}`);
     // 텍스처 교체 시 스케일이 초기화되므로 재적용
     this.gameObject.setDisplaySize(DISPLAY_W, DISPLAY_H);
+    // 방향마다 원본 텍스처 크기가 달라 scale 이 바뀌므로 body 도 재계산
+    this._applyBodySize();
   }
 
   _vecToDir(x, y) {

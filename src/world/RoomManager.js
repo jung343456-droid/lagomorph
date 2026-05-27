@@ -1,7 +1,7 @@
 import Room, { ROOM_W, ROOM_H, WALL_T, DOOR_W, DOOR_HX, DOOR_VY } from './Room';
 import { markShopDiscovered } from '../data/MetaProgress';
 
-const TRIGGER_MARGIN  = 20;  // 문 전환 트리거 여백: 방 가장자리에서 이 거리 이내 진입 시 방 전환 (px)
+const TRIGGER_MARGIN  = 45;  // 문 전환 트리거 여백: 플레이어 center 가 방 가장자리에서 이 거리 이내일 때 전환 (px). 플레이어 body half-size(≈27) 보다 커야 함 — 월드 경계에 막혀 center 가 더 가까이 못 감.
 const TRIGGER_VEL_MIN = 30;  // 문 트리거 발화에 필요한 최소 속도 (px/s) — 의도된 진입만 허용
 const ENTER_GRACE_MS  = 450; // 방 진입 직후 문 트리거 차단 시간 (ms) — 연쇄 전환 방지
 const CLEAR_GRACE_MS  = 700; // 방 클리어 직후 문 트리거 차단 시간 (ms) — 적 처치 위치가 문 근처일 때 즉시 전환 방지

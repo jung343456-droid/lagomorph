@@ -41,11 +41,12 @@ export default class GameScene extends Phaser.Scene {
     this._passiveItems = [];
     this._spawnStartRoomItem();
 
-    // 계단 상태 (아래층 진입 트리거)
+    // 계단 상태 (아래층 진입 트리거 — A 버튼 입력 필요)
     this._stairs           = null;
     this._stairsRoomId     = null;
     this._stairsPos        = null;
     this._stairsTriggered  = false;
+    this._stairsNear       = false;
 
     // 엔드 스크린 — scene.restart() 시 게임 오브젝트는 파괴되지만 인스턴스 프로퍼티는 잔존하므로 명시 리셋
     this._endScreenEls    = null;
@@ -323,15 +324,28 @@ export default class GameScene extends Phaser.Scene {
       targets: [rect, text], scaleX: 1.15, scaleY: 1.15,
       duration: 600, yoyo: true, repeat: -1, ease: 'Sine.InOut',
     });
-    this._stairs = { rect, text, pulse };
+    // 근접 시 표시되는 입력 프롬프트 (A 버튼 / Z 키)
+    const prompt = this.add.text(x, y + 36, '▼ A 키 / 탭 — 다음 층', {
+      fontSize: '12px', color: '#4ecca3', fontFamily: 'monospace', fontStyle: 'bold',
+      stroke: '#000000', strokeThickness: 3,
+    }).setOrigin(0.5).setDepth(9).setVisible(false);
+    const promptBlink = this.tweens.add({
+      targets: prompt, alpha: 0.55,
+      duration: 500, yoyo: true, repeat: -1, ease: 'Sine.InOut',
+    });
+    this._stairs = { rect, text, pulse, prompt, promptBlink };
+    this._stairsNear = false;
   }
 
   _disposeStairs() {
     if (!this._stairs) return;
     this._stairs.pulse?.remove();
-    if (this._stairs.rect.active) this._stairs.rect.destroy();
-    if (this._stairs.text.active) this._stairs.text.destroy();
+    this._stairs.promptBlink?.remove();
+    if (this._stairs.rect.active)   this._stairs.rect.destroy();
+    if (this._stairs.text.active)   this._stairs.text.destroy();
+    if (this._stairs.prompt?.active) this._stairs.prompt.destroy();
     this._stairs = null;
+    this._stairsNear = false;
   }
 
   _showFloorBanner(floor) {
@@ -366,14 +380,24 @@ export default class GameScene extends Phaser.Scene {
       if (d < 30) item.collect(this.player);
     }
 
+    // 계단 근접 프롬프트 — 자동 트리거는 제거됨. A 버튼 / Z 키 / A 슬롯 탭 입력으로만 이동.
     if (this._stairs && !this._stairsTriggered) {
       const d = Phaser.Math.Distance.Between(
         this.player.x, this.player.y, this._stairs.rect.x, this._stairs.rect.y,
       );
-      if (d < 28) {
-        this._stairsTriggered = true;
-        this._advanceFloor();
+      const near = d < 50;
+      if (near !== this._stairsNear) {
+        this._stairsNear = near;
+        if (this._stairs.prompt?.active) this._stairs.prompt.setVisible(near);
       }
     }
+  }
+
+  /** AttackManager 가 A 버튼 입력 시 우선 호출. 계단 근접이면 다음 층 전환을 트리거하고 true 반환. */
+  _tryEnterStairs() {
+    if (!this._stairs || this._stairsTriggered || !this._stairsNear) return false;
+    this._stairsTriggered = true;
+    this._advanceFloor();
+    return true;
   }
 }

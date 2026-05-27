@@ -3,7 +3,7 @@ import { GAME_W, GAME_H, HUD_H } from '../constants';
 export const ROOM_W = GAME_W;           // 방 너비 = 캔버스 너비
 export const ROOM_H = GAME_H - HUD_H;  // 방 높이 = 게임플레이 뷰포트 높이 (스크롤 없음)
 export const WALL_T = 20;   // 벽 두께 (px)
-export const DOOR_W = 60;   // 문 통로 너비 (px)
+export const DOOR_W = 80;   // 문 통로 너비 (px) — 플레이어 body(55×53) 가 여유롭게 통과하도록 80
 
 const WALL_COLOR     = 0x3a3a5e; // 벽 색상 (진한 남색)
 const OBSTACLE_COLOR = 0x2a2a50; // 장애물 색상

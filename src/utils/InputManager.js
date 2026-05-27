@@ -31,6 +31,17 @@ export default class InputManager {
     this._createGfx();
     this._bindPointers();
     this._bindKeyboard();
+
+    // scene.start(other) 로 씬 전환 시 listener 가 잔존해 다음 씬의 새 InputManager 와
+    // pointerId 가 충돌 → 신규 인스턴스가 활성화되지 않는 사례를 차단한다.
+    scene.events.once('shutdown', () => this.destroy());
+    scene.events.once('destroy',  () => this.destroy());
+
+    // scene.pause()(예: 상점 오픈) 중에는 pointerup 이 도달하지 않아 손을 떼도 active 상태가
+    // 유지되어 unpause 후 이동/조준이 고정되는 버그가 있었음. pause·resume 시점에 강제 리셋.
+    this._pauseReset = () => this._reset();
+    scene.events.on('pause',  this._pauseReset);
+    scene.events.on('resume', this._pauseReset);
   }
 
   // ── public ───────────────────────────────────────────
@@ -41,12 +52,19 @@ export default class InputManager {
   }
 
   destroy() {
-    this._baseGfx.destroy();
-    this._thumbGfx.destroy();
+    if (this._destroyed) return;
+    this._destroyed = true;
+    if (this._baseGfx?.active)  this._baseGfx.destroy();
+    if (this._thumbGfx?.active) this._thumbGfx.destroy();
     const i = this.scene.input;
     i.off('pointerdown', this._onDown, this);
     i.off('pointermove', this._onMove, this);
     i.off('pointerup',   this._onUp,   this);
+    if (this._pauseReset) {
+      this.scene.events.off('pause',  this._pauseReset);
+      this.scene.events.off('resume', this._pauseReset);
+      this._pauseReset = null;
+    }
   }
 
   // ── private ──────────────────────────────────────────

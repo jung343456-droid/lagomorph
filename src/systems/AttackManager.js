@@ -74,6 +74,26 @@ export default class AttackManager {
 
     this._bindPointers();
     this._bindKeyboard();
+
+    // scene.pause()(상점 오픈) 중에는 pointerup/keyup 이 도달하지 않아 _mCharging/_mKeydown 이
+    // 켜진 채 남고, 닫은 뒤에도 A 버튼이 눌려있는 듯한 상태가 지속된다. pause·resume 시 강제 취소.
+    this._pauseReset = () => this.cancelCharge();
+    scene.events.on('pause',  this._pauseReset);
+    scene.events.on('resume', this._pauseReset);
+  }
+
+  /** 충전 상태 전체 리셋 — pause/resume 또는 외부에서 입력 흐름이 끊긴 경우 호출. */
+  cancelCharge() {
+    this._mCharging   = false;
+    this._mChargeTime = 0;
+    this._mPointerId  = null;
+    this._mKeydown    = false;
+    this.isCharging       = false;
+    this.chargeNormalized = 0;
+    this.currentTier      = 0;
+    this.tierColor        = MELEE_TIERS[0].color;
+    this.tierLabel        = '';
+    if (this._previewGfx?.active) this._previewGfx.clear();
   }
 
   // ── public ──────────────────────────────────────────
@@ -122,6 +142,11 @@ export default class AttackManager {
     i.off('pointerup',   this._onUp,   this);
     if (this._zKey) this._zKey.destroy();
     if (this._xKey) this._xKey.destroy();
+    if (this._pauseReset) {
+      this.scene.events.off('pause',  this._pauseReset);
+      this.scene.events.off('resume', this._pauseReset);
+      this._pauseReset = null;
+    }
   }
 
   // ── 포인터 바인딩 ────────────────────────────────────
@@ -132,7 +157,10 @@ export default class AttackManager {
         this._startPlace();
         return;
       }
-      if (!this._inASlot(p) || this._mCharging) return;
+      if (!this._inASlot(p)) return;
+      // 계단 근접 시 A 슬롯 탭은 다음 층 진입으로 가로채기 (공격 충전은 건너뜀)
+      if (this.scene._tryEnterStairs?.()) return;
+      if (this._mCharging) return;
       this._mPointerId  = p.id;
       this._mCharging   = true;
       this._mChargeTime = 0;
@@ -158,6 +186,8 @@ export default class AttackManager {
     this._xKey = this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.X);
 
     this._zKey.on('down', () => {
+      // 계단 근접 시 Z 키는 다음 층 진입으로 가로채기
+      if (this.scene._tryEnterStairs?.()) return;
       if (this._mCharging) return;
       this._mKeydown    = true;
       this._mCharging   = true;
@@ -282,9 +312,15 @@ export default class AttackManager {
       duration: FOX_KNOCKBACK_DUR,
     }, 'poop');
     if (!isSpike) showDamageNumber(this.scene, enemy.x, enemy.y - enemyGO.height / 2, trapDmg, '#ffffff', trapCrit);
+    // 피의 향연 — 트랩 직격 치명 시 회복
+    if (trapCrit && !isSpike && this.player.critHealAmount > 0) {
+      this.player.heal(this.player.critHealAmount);
+    }
     if (dead) {
       em.dropCores(enemy.x, enemy.y, enemy.coreDrops ?? 3);
       if (enemy.isBoss) { em.dropRareItem(enemy.x, enemy.y); em.boss = null; }
+      // 사냥꾼의 눈 — 트랩 처치도 동일 트리거
+      if (this.player.hasHuntersEye) this.player._pendingCrit = true;
     }
 
     // 위장 트랩: 직접 명중한 적에게 상태이상 시도 (spike·사망 제외)
@@ -311,9 +347,13 @@ export default class AttackManager {
           duration: FOX_KNOCKBACK_DUR,
         }, 'poop');
         showDamageNumber(this.scene, other.x, other.y - other.gameObject.height / 2, splashDmg, '#ffffff', splashCrit);
+        if (splashCrit && other.state !== 'spike' && this.player.critHealAmount > 0) {
+          this.player.heal(this.player.critHealAmount);
+        }
         if (splashDead) {
           em.dropCores(other.x, other.y, other.coreDrops ?? 3);
           if (other.isBoss) { em.dropRareItem(other.x, other.y); em.boss = null; }
+          if (this.player.hasHuntersEye) this.player._pendingCrit = true;
         } else if (other.state !== 'spike') {
           this._applyDisguiseStatus(other, em);
         }

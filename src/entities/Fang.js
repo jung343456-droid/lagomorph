@@ -107,7 +107,7 @@ export default class Fang {
 
     this.gameObject = scene.add.image(x, y, 'fang-s').setDisplaySize(FANG_DW, FANG_DH);
     scene.physics.add.existing(this.gameObject);
-    this.gameObject.body.setSize(FANG_W, FANG_H);
+    this._applyBodySize();
     this.gameObject.body.setCollideWorldBounds(true);
     this.gameObject.body.setMaxVelocity(450, 450);
     this.gameObject.setDepth(9);
@@ -406,6 +406,7 @@ export default class Fang {
     this._patternCd = 0.8;
 
     this.gameObject.setTexture('fang-rage').setDisplaySize(FANG_DW, FANG_DH);
+    this._applyBodySize();
     this._curKey = 'fang-rage';
     this.scene.cameras.main.flash(450, 255, 0, 0, false);
   }
@@ -427,8 +428,16 @@ export default class Fang {
     if (this._curKey !== key) {
       this._curKey = key;
       this.gameObject.setTexture(key).setDisplaySize(FANG_DW, FANG_DH);
+      this._applyBodySize();
     }
     if (this._phase === 2) this.gameObject.setTint(PHASE2_TINT);
+  }
+
+  // body.setSize 는 source 픽셀이라 setDisplaySize 로 확대된 작은 텍스처 위에선 body 가 부풀려진다.
+  _applyBodySize() {
+    const sx = this.gameObject.scaleX || 1;
+    const sy = this.gameObject.scaleY || 1;
+    this.gameObject.body.setSize(FANG_W / sx, FANG_H / sy, true);
   }
 
   // ── HP 바 ─────────────────────────────────────────────

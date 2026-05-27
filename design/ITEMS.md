@@ -29,6 +29,11 @@
 | `poison_disguise` | 독성 위장 | 연두 `0x88dd44` | 설치물 명중 시 반경 40px 스플래시 15 + 30% 확률 중독 | `player.hasPoisonDisguise = true` |
 | `frugal_instinct` | 절약 본능 | 노랑 `0xffdd00` | 설치물 코어 소모 3→2 | `player.trapCostBonus += 1` |
 | `big_trap` | 대식가 | 갈색 `0x885500` | 설치물 크기 ×2 (22→44px) | `player.trapSizeMult *= 2` |
+| `cruel_claws` | 잔혹한 발톱 | 진홍 `0xcc1144` | 치명타율 +15% (15→30%) | `player.critRate += 0.15` |
+| `precision_strike` | 정밀 일격 | 황금 `0xddcc22` | 치명타율 +10%, 치명타 피해 +50% | `player.critRate += 0.10; player.critMult += 0.5` |
+| `savage_strike` | 광폭한 일격 | 짙은빨강 `0x8b0000` | 치명타 피해 +100% (×1.5→×2.5) | `player.critMult += 1.0` |
+| `hunter_eye` | 사냥꾼의 눈 | 황색 `0xddaa00` | 적 처치 후 다음 1발 확정 치명 | `player.hasHuntersEye = true` |
+| `blood_feast` | 피의 향연 | 자홍 `0xaa0033` | 치명타 명중 시 HP +5 (근거리·트랩 직격·트랩 스플래시 모두) | `player.critHealAmount += 5` |
 
 ---
 
@@ -49,6 +54,11 @@
 | `hasPoisonDisguise` | `false` | 트랩 스플래시 + 30% 확률 중독 부여 여부 |
 | `trapCostBonus` | `0` | 트랩 코어 소모 감소량 (실제 소모 = max(1, 3 - bonus)) |
 | `trapSizeMult` | `1` | 트랩 크기 배율 |
+| `critRate` | `0.15` | 치명타율 (0~1). `rollAttackDamage` 가 매 공격마다 굴림 |
+| `critMult` | `1.5` | 치명타 피해 배율 (damage × critMult) |
+| `hasHuntersEye` | `false` | 적 처치 시 `_pendingCrit = true` set → 다음 1발 확정 치명 |
+| `critHealAmount` | `0` | 치명타 명중 시 즉시 회복할 HP량 (근거리/트랩 직격/스플래시 모두) |
+| `_pendingCrit` | `false` | 다음 `rollAttackDamage` 1회 강제 치명 (사냥꾼의 눈 내부 상태) |
 
 ---
 

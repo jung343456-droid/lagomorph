@@ -4,6 +4,8 @@
  *
  * 근거리 강화: wide_claws(반경), sharp_claws(데미지), quick_claws(충전속도)
  * 근거리 상태이상: poison_claws(독), fire_claws(화상), ice_claws(빙결), thunder_claws(연쇄)
+ * 치명타: cruel_claws(치명타율), precision_strike(둘 다), savage_strike(위력),
+ *         hunter_eye(처치 후 확정), blood_feast(치명 회복)
  * 이동/생존: swift_feet(이동속도), tough_hide(최대HP), hunter_instinct(킬회복)
  * 트랩 위장(스플래시+상태이상): fire_disguise(화상), ice_disguise(빙결), poison_disguise(중독)
  * 트랩 강화: frugal_instinct(코어소모↓), big_trap(크기)
@@ -104,6 +106,36 @@ export const ITEM_DEFS = {
     desc:  '트랩 크기 ×2 (22 → 44px)',
     color: 0x885500,
     apply: (player) => { player.trapSizeMult *= 2; },
+  },
+  cruel_claws: {
+    name:  '잔혹한 발톱',
+    desc:  '치명타율 +15% (15 → 30%)',
+    color: 0xcc1144,
+    apply: (player) => { player.critRate += 0.15; },
+  },
+  precision_strike: {
+    name:  '정밀 일격',
+    desc:  '치명타율 +10%, 치명타 피해 +50%',
+    color: 0xddcc22,
+    apply: (player) => { player.critRate += 0.10; player.critMult += 0.5; },
+  },
+  savage_strike: {
+    name:  '광폭한 일격',
+    desc:  '치명타 피해 +100% (×1.5 → ×2.5)',
+    color: 0x8b0000,
+    apply: (player) => { player.critMult += 1.0; },
+  },
+  hunter_eye: {
+    name:  '사냥꾼의 눈',
+    desc:  '적 처치 후 다음 1발 확정 치명',
+    color: 0xddaa00,
+    apply: (player) => { player.hasHuntersEye = true; },
+  },
+  blood_feast: {
+    name:  '피의 향연',
+    desc:  '치명타 명중 시 HP +5',
+    color: 0xaa0033,
+    apply: (player) => { player.critHealAmount += 5; },
   },
 };
 

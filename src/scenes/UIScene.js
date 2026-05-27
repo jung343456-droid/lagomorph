@@ -505,7 +505,7 @@ export default class UIScene extends Phaser.Scene {
       { label: '근거리 반경',  value: mult(player.meleeRadiusMult),                  enhanced: player.meleeRadiusMult > 1 },
       { label: '충전속도',     value: mult(player.chargeSpeedMult),                  enhanced: player.chargeSpeedMult > 1 },
       { label: '치명타율',     value: pct(player.critRate),                          enhanced: player.critRate > 0.15 },
-      { label: '치명 위력',    value: mult(player.critMult),                         enhanced: player.critMult > 1.5 },
+      { label: '치명타 피해',  value: mult(player.critMult),                         enhanced: player.critMult > 1.5 },
       { label: '트랩 비용',    value: `${trapCost}◆`,                                enhanced: player.trapCostBonus > 0 },
       { label: '트랩 크기',    value: mult(player.trapSizeMult),                     enhanced: player.trapSizeMult > 1 },
       { label: '코어 배율',    value: mult(player.coreDropMult ?? 1),                enhanced: (player.coreDropMult ?? 1) > 1 },

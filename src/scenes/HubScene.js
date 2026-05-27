@@ -203,8 +203,10 @@ export default class HubScene extends Phaser.Scene {
     if (this._unlockMenu?.alive) return;
     this._unlockMenu = new UnlockMenu(this, () => {
       this._unlockMenu = null;
-      // 메뉴 닫힌 직후 NPC 가 여전히 근접 범위 안이면 즉시 재오픈되지 않도록 리셋
-      if (this._shopkeeper) this._shopkeeper.isNear = false;
+      // 닫힌 직후 플레이어가 여전히 NPC 근접 범위 안이면, Shopkeeper.update 의 far→near 엣지에서
+      // 'unlock-menu-requested' 가 다시 발행되어 메뉴가 즉시 재오픈되는 버그가 있었음.
+      // isNear=true 로 두어 "이미 진입한 상태" 로 간주 → 한 번 멀어졌다 다시 와야만 재오픈.
+      if (this._shopkeeper) this._shopkeeper.isNear = true;
       // 메타 잔량 즉시 동기화
       if (this._metaText?.active) this._metaText.setText(`◆ ${getMetaCores()}`);
     });
