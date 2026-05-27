@@ -33,7 +33,8 @@ export default class GameScene extends Phaser.Scene {
     this.roomManager = new RoomManager(this, this.player, this.enemyManager);
     this.roomManager.setFloor(this.currentFloor);
     this.roomManager.init(generateDungeon(
-      this.currentFloor, undefined, this._ownedItemIds(), this.player.shopSlotBonus ?? 0,
+      this.currentFloor, undefined, this._ownedItemIds(),
+      this.player.shopSlotBonus ?? 0, this.player.shopPriceMult ?? 1,
     ));
 
     // 상점방 NPC (현재 방이 'shop' 일 때만 살아 있음)
@@ -272,11 +273,23 @@ export default class GameScene extends Phaser.Scene {
   }
 
   _spawnStartRoomItem() {
-    const owned    = new Set(this._ownedItemIds());
-    const unlocked = PassiveItem.getUnlocked().filter(id => !owned.has(id));
-    if (unlocked.length > 0) {
-      const id = unlocked[Math.floor(Math.random() * unlocked.length)];
-      this._passiveItems.push(new PassiveItem(this, ROOM_W / 2 + 80, ROOM_H / 2, id));
+    const owned = new Set(this._ownedItemIds());
+    const pool  = PassiveItem.getUnlocked().filter(id => !owned.has(id));
+    // 영구 해금 '기억 단편화' 시 추가 슬롯 — 기본 1개 + extraStartItems
+    const desired   = 1 + (this.player.extraStartItems ?? 0);
+    const count     = Math.min(pool.length, desired);
+    const positions = [
+      { x: ROOM_W / 2 + 80, y: ROOM_H / 2 },
+      { x: ROOM_W / 2 - 80, y: ROOM_H / 2 },
+      { x: ROOM_W / 2,      y: ROOM_H / 2 - 80 },
+      { x: ROOM_W / 2,      y: ROOM_H / 2 + 80 },
+    ];
+    // Fisher-Yates 부분 셔플 — 중복 없이 count 개 선택
+    for (let i = 0; i < count; i++) {
+      const j = i + Math.floor(Math.random() * (pool.length - i));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+      const pos = positions[i] ?? positions[0];
+      this._passiveItems.push(new PassiveItem(this, pos.x, pos.y, pool[i]));
     }
   }
 
@@ -300,7 +313,8 @@ export default class GameScene extends Phaser.Scene {
       this.enemyManager.clearAll();
       this.roomManager.setFloor(this.currentFloor);
       this.roomManager.init(generateDungeon(
-        this.currentFloor, undefined, this._ownedItemIds(), this.player.shopSlotBonus ?? 0,
+        this.currentFloor, undefined, this._ownedItemIds(),
+        this.player.shopSlotBonus ?? 0, this.player.shopPriceMult ?? 1,
       ));
       this.events.emit('floor-changed', this.currentFloor);
       cam.fadeIn(500, 0, 0, 0);

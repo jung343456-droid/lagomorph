@@ -52,8 +52,8 @@ export const UNLOCK_NODES = {
   },
   last_struggle: {
     branch: 'survival', tier: 4, prereq: 'combat_adapt', cost: 400,
-    name: '최후의 발버둥', desc: '1회 사망 무효 (후속)',
-    apply: null, // TODO: 사망 시 복원 로직
+    name: '최후의 발버둥', desc: '1회 사망 무효 (HP 30% 복원, 런당)',
+    apply: (p) => { p.extraLives = (p.extraLives ?? 0) + 1; },
   },
 
   // ── 특수 계열 ──────────────────────────────────────
@@ -69,13 +69,13 @@ export const UNLOCK_NODES = {
   },
   memory_frag: {
     branch: 'special', tier: 3, prereq: 'core_collector', cost: 180,
-    name: '기억 단편화', desc: '시작 시 추가 아이템 (후속)',
-    apply: null, // TODO: 시작 시 보너스 패시브 1개
+    name: '기억 단편화', desc: '시작 방 아이템 +1',
+    apply: (p) => { p.extraStartItems = (p.extraStartItems ?? 0) + 1; },
   },
-  voss_protocol: {
+  merchant_credit: {
     branch: 'special', tier: 4, prereq: 'memory_frag', cost: 360,
-    name: 'VOSS 프로토콜', desc: '레전드 드롭률 +3% (후속)',
-    apply: null, // TODO: 등급 시스템 도입 후
+    name: '상인의 신용', desc: '상점 가격 -10% (모든 슬롯)',
+    apply: (p) => { p.shopPriceMult = (p.shopPriceMult ?? 1) * 0.9; },
   },
 };
 

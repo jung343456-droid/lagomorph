@@ -41,7 +41,10 @@ function _pickShopEntry() {
   return SHOP_POOL[SHOP_POOL.length - 1];
 }
 
-function _entryToSlot(entry, excludeItemIds) {
+function _entryToSlot(entry, excludeItemIds, priceMult = 1) {
+  // 가격 할인 — Math.floor 로 처리, 최소 1 보장. priceMult 가 1 이면 원가 유지.
+  const price = (raw) => priceMult === 1 ? raw : Math.max(1, Math.floor(raw * priceMult));
+
   if (entry.kind === 'item') {
     // 생성 시점에 패시브 1개 미리 선정 → 카드에 실제 이름/설명 표시
     const ids = Object.keys(ITEM_DEFS).filter(id => !excludeItemIds.has(id));
@@ -50,17 +53,17 @@ function _entryToSlot(entry, excludeItemIds) {
     const def = ITEM_DEFS[id];
     return {
       kind: 'item', id, name: def.name, desc: def.desc, color: def.color,
-      cost: 45, sold: false,
+      cost: price(45), sold: false,
     };
   }
   if (entry.kind === 'heal') {
     const t = HEAL_TIERS[entry.tierIdx];
-    return { kind: 'heal', id: t.id, name: t.name, amount: t.amount, cost: t.cost, sold: false };
+    return { kind: 'heal', id: t.id, name: t.name, amount: t.amount, cost: price(t.cost), sold: false };
   }
   if (entry.kind === 'heal_pct') {
-    return { kind: 'heal_pct', id: entry.id, name: entry.name, ratio: entry.ratio, cost: entry.cost, sold: false };
+    return { kind: 'heal_pct', id: entry.id, name: entry.name, ratio: entry.ratio, cost: price(entry.cost), sold: false };
   }
-  return { kind: 'heal_full', id: entry.id, name: entry.name, cost: entry.cost, sold: false };
+  return { kind: 'heal_full', id: entry.id, name: entry.name, cost: price(entry.cost), sold: false };
 }
 
 /**
@@ -68,8 +71,9 @@ function _entryToSlot(entry, excludeItemIds) {
  *  - 슬롯 간 같은 id 중복 금지 (heal_1 과 heal_1 같이 들어가지 않음)
  *  - ownedItemIds: 플레이어가 이미 보유한 패시브 id 목록 — 해당 패시브는 'item' 슬롯에서 제외
  *  - extraSlots: '상인의 호의' 등 영구 해금으로 부여되는 추가 슬롯 수
+ *  - priceMult: '상인의 신용' 해금 시 0.8 — 모든 슬롯 cost 에 곱하고 floor (최소 1)
  */
-function _generateShopSlots(ownedItemIds = [], extraSlots = 0) {
+function _generateShopSlots(ownedItemIds = [], extraSlots = 0, priceMult = 1) {
   const targetCount = 3 + Math.max(0, extraSlots);
   const slots = [];
   const usedKey = new Set();
@@ -79,7 +83,7 @@ function _generateShopSlots(ownedItemIds = [], extraSlots = 0) {
   while (slots.length < targetCount && attempts < maxAttempts) {
     attempts++;
     const entry = _pickShopEntry();
-    const slot  = _entryToSlot(entry, excludeItems);
+    const slot  = _entryToSlot(entry, excludeItems, priceMult);
     if (!slot || usedKey.has(slot.id)) continue;
     slots.push(slot);
     usedKey.add(slot.id);
@@ -93,9 +97,12 @@ function _generateShopSlots(ownedItemIds = [], extraSlots = 0) {
  * floorNum 이 2 또는 4 일 때 일반 전투방 하나를 상점방으로 치환.
  * ownedItemIds: 상점 패시브 슬롯 추첨에서 제외할 보유 아이템 id 목록.
  * extraShopSlots: 영구 해금 '상인의 호의' 등으로 기본 3슬롯에 더할 추가 슬롯 수.
+ * shopPriceMult: 영구 해금 '상인의 신용' 등으로 모든 상점 가격에 곱할 배율 (기본 1).
  * Phaser 의존 없는 순수 데이터 함수.
  */
-export function generateDungeon(floorNum = 1, targetCount, ownedItemIds = [], extraShopSlots = 0) {
+export function generateDungeon(
+  floorNum = 1, targetCount, ownedItemIds = [], extraShopSlots = 0, shopPriceMult = 1,
+) {
   targetCount ??= 9 + Math.floor(Math.random() * 4); // 9-12
 
   const grid  = new Map(); // "col,row" → roomData
@@ -181,7 +188,7 @@ export function generateDungeon(floorNum = 1, targetCount, ownedItemIds = [], ex
       const pool = cand.slice(0, half);
       const picked = pool[Math.floor(Math.random() * pool.length)];
       picked.r.type = 'shop';
-      picked.r.shopSlots = _generateShopSlots(ownedItemIds, extraShopSlots);
+      picked.r.shopSlots = _generateShopSlots(ownedItemIds, extraShopSlots, shopPriceMult);
     }
   }
 

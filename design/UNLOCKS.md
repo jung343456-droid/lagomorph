@@ -47,7 +47,7 @@
 | 1 | 강인한 몸 I | 시작 HP +10 (`maxHp`, `hp` 동시) | 40 | ✅ |
 | 2 | 두꺼운 가죽 I | 받는 피해 -5% (`damageReduction += 0.05`, 최소 1 보장) | 80 | ✅ |
 | 3 | 전투 적응 | 방 클리어 시 HP +5 (`hpPerRoomClear`) | 160 | ✅ |
-| 4 | 최후의 발버둥 | 1회 사망 무효 (런당) | 400 | 🔧 |
+| 4 | 최후의 발버둥 | 치명타 1회 흡수 + 최대 HP 30% 복원 (`extraLives +1`, 런당) | 400 | ✅ |
 
 ### 특수 계열
 
@@ -55,13 +55,14 @@
 |---|---|---|---|---|
 | 1 | 상인의 호의 | 상점 슬롯 +1 (3 → 4) (`shopSlotBonus +1`) | 50 | ✅ |
 | 2 | 코어 수집기 | 드롭 코어량 ×1.15 (`coreDropMult`) | 90 | ✅ |
-| 3 | 기억 단편화 | 시작 시 추가 아이템 1개 | 180 | 🔧 |
-| 4 | VOSS 프로토콜 | 레전드 드롭률 +3% | 360 | 🔧 |
+| 3 | 기억 단편화 | 시작 방 아이템 +1 (`extraStartItems +1`) | 180 | ✅ |
+| 4 | 상인의 신용 | 상점 모든 슬롯 가격 ×0.9, Math.floor (`shopPriceMult ×= 0.9`) | 360 | ✅ |
 
 > 변경 이력 (설계 정정):
 > - 공격 t3: 관통 각인 → **충전 가속** (3단계 관통 기능 폐기)
 > - 생존 t2: 회피 본능 → **두꺼운 가죽 I** (대시 시스템 미도입으로 폐기)
 > - 특수 t1: 예민한 감각 → **상인의 호의** (이벤트방 미도입으로 폐기)
+> - 특수 t4: VOSS 프로토콜(레전드 드롭률) → **상인의 신용** (아이템 등급 시스템 미도입으로 폐기)
 
 ---
 
@@ -70,10 +71,13 @@
 | 역할 | 위치 |
 |---|---|
 | 노드 정의(name·desc·cost·prereq·apply) | `src/data/UnlockTree.js` (`UNLOCK_NODES`) |
-| 메타 코어/해금 ID 영속 저장 + 적용 헬퍼 | `src/data/MetaProgress.js` (`applyUnlocksToPlayer`) |
+| 메타 코어/해금 ID 영속 저장 + 적용 헬퍼 | `src/data/MetaProgress.js` (`applyUnlocksToPlayer`, `resetAllProgress`) |
 | 메뉴 UI 렌더링 | `src/ui/UnlockMenu.js` |
 | 진입 트리거 NPC | `src/entities/Shopkeeper.js` (HubScene 인스턴스, GRIM) |
-| 저장 키 | `lagomorph_meta_cores`, `lagomorph_unlock_nodes`, `lagomorph_shop_discovered` (localStorage) |
+| 최후의 발버둥 발동 로직 | `src/entities/Player.js` (`takeDamage` 치명 흡수 분기) |
+| 기억 단편화 적용 | `src/scenes/GameScene.js` (`_spawnStartRoomItem` 루프) |
+| 상인의 신용 적용 | `src/world/DungeonGenerator.js` (`_entryToSlot` 의 `price()` 헬퍼, Math.floor 반올림) |
+| 저장 키 | `lagomorph_meta_cores`, `lagomorph_unlock_nodes`, `lagomorph_shop_discovered`, `lagomorph_unlocked` (localStorage) |
 
 ---
 

@@ -29,6 +29,9 @@
  *   hpPerRoomClear   0      방 클리어 시 회복량 (영구 해금 '전투 적응')
  *   shopSlotBonus    0      상점 슬롯 추가 수 (영구 해금 '상인의 호의' — 기본 3 + 보너스)
  *   damageReduction  0      받는 피해 감산 비율 (영구 해금 '두꺼운 가죽 I' — amount × (1-reduction), 최소 1)
+ *   extraLives       0      런당 사망 무효 횟수 (영구 해금 '최후의 발버둥' — 치명타 흡수 후 maxHp×30% 복원)
+ *   extraStartItems  0      시작 방 추가 아이템 수 (영구 해금 '기억 단편화' — 기본 1 + 보너스)
+ *   shopPriceMult    1      상점 가격 배율 (영구 해금 '상인의 신용' — ×0.9, DungeonGenerator._generateShopSlots 참조)
  */
 import { showDamageNumber } from '../utils/DamageNumbers';
 import { applyUnlocksToPlayer } from '../data/MetaProgress';
@@ -73,6 +76,9 @@ export default class Player {
     this.hpPerRoomClear   = 0;   // 전투 적응 해금 시 적용 (RoomManager._onRoomCleared 참조)
     this.shopSlotBonus    = 0;   // 상인의 호의 해금 시 +1 (DungeonGenerator._generateShopSlots 참조)
     this.damageReduction  = 0;   // 두꺼운 가죽 I 해금 시 +0.05 (takeDamage 에서 amount × (1-reduction))
+    this.extraLives       = 0;   // 최후의 발버둥 해금 시 +1 (takeDamage 치명 흡수)
+    this.extraStartItems  = 0;   // 기억 단편화 해금 시 +1 (GameScene._spawnStartRoomItem 참조)
+    this.shopPriceMult    = 1;   // 상인의 신용 해금 시 ×0.9 (DungeonGenerator._generateShopSlots 참조)
     this.inventory        = [];
     this._dir            = 'bottom';
 
@@ -118,6 +124,35 @@ export default class Player {
     if (amount > 0 && this.damageReduction > 0) {
       amount = Math.max(1, Math.round(amount * (1 - this.damageReduction)));
     }
+
+    // 최후의 발버둥 — 치명타 흡수 (런당 extraLives 회 한정)
+    //   amount >= hp 일 때만 발동: 일반 피격은 평소대로 처리, 정말 죽을 한 방만 무효화
+    //   복원량은 maxHp×30%, 1초 무적 + 노란 깜빡임으로 즉시 재피격 방지
+    if (amount > 0 && amount >= this.hp && this.extraLives > 0) {
+      this.extraLives--;
+      this.hp = Math.max(1, Math.round(this.maxHp * 0.3));
+      this._invincible = true;
+      this._showLastStruggleFX();
+      if (knockback) {
+        const { dx, dy, force, duration } = knockback;
+        this._knockbackTimer = duration;
+        this.gameObject.body.setVelocity(dx * force, dy * force);
+      }
+      this.scene.tweens.killTweensOf(this.gameObject);
+      this.scene.tweens.add({
+        targets:  this.gameObject,
+        alpha:    0.3,
+        duration: 120,
+        yoyo:     true,
+        repeat:   6,
+        onComplete: () => {
+          this.gameObject.setAlpha(1);
+          this._invincible = false;
+        },
+      });
+      return false;
+    }
+
     this.hp = Math.max(0, this.hp - amount);
     this._invincible = true;
     if (amount > 0) showDamageNumber(this.scene, this.x, this.y - DISPLAY_H / 2, amount, '#ff5555');
@@ -142,6 +177,21 @@ export default class Player {
     });
 
     return this.hp <= 0;
+  }
+
+  _showLastStruggleFX() {
+    const txt = this.scene.add.text(this.x, this.y - DISPLAY_H, '최후의 발버둥!', {
+      fontSize: '14px', color: '#ffee44', fontFamily: 'monospace', fontStyle: 'bold',
+      stroke: '#000000', strokeThickness: 3,
+    }).setOrigin(0.5).setDepth(60);
+    this.scene.tweens.add({
+      targets:  txt,
+      y:        txt.y - 36,
+      alpha:    0,
+      duration: 1200,
+      ease:     'Quad.Out',
+      onComplete: () => { if (txt.active) txt.destroy(); },
+    });
   }
 
   /** 보스 포효 등 무피해 기절 (무적 중엔 무시) */

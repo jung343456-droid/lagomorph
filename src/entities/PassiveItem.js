@@ -12,6 +12,7 @@
  *
  * 스폰 규칙:
  *   시작 방 — 해금된 아이템 중 랜덤 1개 (첫 런은 미스폰)
+ *             '기억 단편화' 해금 시 player.extraStartItems 만큼 추가 (GameScene._spawnStartRoomItem)
  *   보스 클리어 — ITEM_DEFS 전체 랜덤 1개 드롭
  */
 const ITEM_SIZE = 18;
