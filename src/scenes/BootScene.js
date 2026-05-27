@@ -39,8 +39,15 @@ export default class BootScene extends Phaser.Scene {
     ['top', 'top-right', 'right', 'bottom-right', 'bottom', 'bottom-left', 'left', 'top-left']
       .forEach(d => this.load.image(`soma-${d}`, `assets/characters/soma-${d}.png`));
 
+    // zone-2 용 (석재) — zone-2 에서 다시 사용
     ['tile_floor', 'tile_floor_b', 'tile_crack', 'tile_moss', 'tile_wall', 'tile_obstacle']
       .forEach(key => this.load.image(key, `assets/tiles/${key}.png`));
+
+    // zone-1 용 (풀밭) — 바닥 4종 + 장애물 3종 + 울타리(벽)
+    [
+      'grass_floor', 'grass_floor_b', 'grass_floor_flowers', 'grass_floor_path',
+      'obstacle_fence', 'obstacle_bush', 'obstacle_stump', 'obstacle_tree',
+    ].forEach(key => this.load.image(key, `assets/tiles/zone-1/${key}.png`));
 
     // 적 방향 스프라이트 (8방향) + 액션 스프라이트
     const DIRS = ['n','ne','e','se','s','sw','w','nw'];

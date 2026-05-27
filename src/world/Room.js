@@ -35,9 +35,11 @@ export default class Room {
     Object.entries(this.data.doors).forEach(([dir, nid]) => {
       if (nid === null || this._doorBlocks[dir]) return;
       const a = this._doorArea(dir);
-      const block = this.scene.add.rectangle(a.cx, a.cy, a.w, a.h, DOOR_LOCKED);
+      // 벽과 동일한 fence 텍스처로 채워 zone 톤과 자연스럽게 이어지게 한다.
+      const block = this.scene.add.tileSprite(a.cx, a.cy, a.w, a.h, 'obstacle_fence');
       block.setDepth(3);
-      this.wallGroup.add(block);  // StaticGroup이 직접 body 생성
+      this.scene.physics.add.existing(block, true);
+      this.wallGroup.add(block);
       this._doorBlocks[dir] = block;
     });
   }
@@ -75,23 +77,21 @@ export default class Room {
 
   _buildFloor() {
     const T = 40;
-    // 가중치: tile_floor 45%, tile_floor_b 40%, tile_crack 10%, tile_moss 5%
+    // 가중치: grass_floor 50%, grass_floor_b 35%, grass_floor_flowers 10%, grass_floor_path 5%
     const POOL = [
-      'tile_floor','tile_floor','tile_floor','tile_floor','tile_floor',
-      'tile_floor','tile_floor','tile_floor','tile_floor',
-      'tile_floor_b','tile_floor_b','tile_floor_b','tile_floor_b',
-      'tile_floor_b','tile_floor_b','tile_floor_b','tile_floor_b',
-      'tile_crack','tile_crack',
-      'tile_moss',
+      'grass_floor','grass_floor','grass_floor','grass_floor','grass_floor',
+      'grass_floor','grass_floor','grass_floor','grass_floor','grass_floor',
+      'grass_floor_b','grass_floor_b','grass_floor_b','grass_floor_b',
+      'grass_floor_b','grass_floor_b','grass_floor_b',
+      'grass_floor_flowers','grass_floor_flowers',
+      'grass_floor_path',
     ];
+    // zone-1 타일은 좌·상단이 의도적으로 어두운 음영이므로 회전·플립을 적용하면
+    // 인접 타일의 어두운 가장자리가 마주쳐 검은 격자선이 도드라진다. 그대로 둔다.
     for (let row = 0; row * T < ROOM_H; row++) {
       for (let col = 0; col * T < ROOM_W; col++) {
         const key = POOL[Math.floor(Math.random() * POOL.length)];
         const img = this.scene.add.image(col * T + T / 2, row * T + T / 2, key).setDepth(0);
-        // 같은 텍스처라도 회전·플립으로 8가지 변형 → 격자감 분산
-        img.setAngle(Math.floor(Math.random() * 4) * 90);
-        if (Math.random() < 0.5) img.setFlipX(true);
-        if (Math.random() < 0.5) img.setFlipY(true);
         this._gfx.push(img);
       }
     }
@@ -101,7 +101,7 @@ export default class Room {
     const { doors } = this.data;
     const add = (x1, y1, x2, y2) => {
       const w = x2 - x1, h = y2 - y1;
-      const sprite = this.scene.add.tileSprite(x1 + w / 2, y1 + h / 2, w, h, 'tile_wall');
+      const sprite = this.scene.add.tileSprite(x1 + w / 2, y1 + h / 2, w, h, 'obstacle_fence');
       sprite.setDepth(2);
       this.scene.physics.add.existing(sprite, true);
       this.wallGroup.add(sprite);
@@ -139,27 +139,43 @@ export default class Room {
       this.data.obstacleLayout = [];
       return;
     }
+
+    // zone-1 장애물 종류: tree(40×56) / bush(24×24) / stump(24×20)
+    // 같은 텍스처를 tileSprite로 겹쳐 쌓는 대신, 종류·스케일을 무작위로 골라 다양성 확보.
+    const TYPES = {
+      tree:  { key: 'obstacle_tree',  w: 40, h: 56, minS: 0.9, maxS: 1.3, weight: 2 },
+      bush:  { key: 'obstacle_bush',  w: 24, h: 24, minS: 0.9, maxS: 1.5, weight: 3 },
+      stump: { key: 'obstacle_stump', w: 24, h: 20, minS: 0.9, maxS: 1.4, weight: 2 },
+    };
+    const POOL = [];
+    Object.entries(TYPES).forEach(([t, def]) => {
+      for (let i = 0; i < def.weight; i++) POOL.push(t);
+    });
+
     if (!this.data.obstacleLayout) {
-      const count = 1 + Math.floor(Math.random() * 3);
-      const minX  = WALL_T + 50;
-      const minY  = WALL_T + 50;
-      const maxX  = ROOM_W - WALL_T - 50;
-      const maxY  = ROOM_H - WALL_T - 50;
+      const margin = 40;
+      const count  = 2 + Math.floor(Math.random() * 3);  // 2~4
       this.data.obstacleLayout = [];
       for (let i = 0; i < count; i++) {
-        const w = 36 + Math.floor(Math.random() * 44);
-        const h = 36 + Math.floor(Math.random() * 44);
-        const x = minX + Math.random() * (maxX - minX - w) + w / 2;
-        const y = minY + Math.random() * (maxY - minY - h) + h / 2;
-        this.data.obstacleLayout.push({ x, y, w, h });
+        const type  = POOL[Math.floor(Math.random() * POOL.length)];
+        const def   = TYPES[type];
+        const scale = def.minS + Math.random() * (def.maxS - def.minS);
+        const dw = def.w * scale, dh = def.h * scale;
+        const minX = WALL_T + margin + dw / 2;
+        const maxX = ROOM_W - WALL_T - margin - dw / 2;
+        const minY = WALL_T + margin + dh / 2;
+        const maxY = ROOM_H - WALL_T - margin - dh / 2;
+        const x = minX + Math.random() * (maxX - minX);
+        const y = minY + Math.random() * (maxY - minY);
+        this.data.obstacleLayout.push({ x, y, type, scale });
       }
     }
 
-    this.data.obstacleLayout.forEach(({ x, y, w, h }) => {
-      const obs = this.scene.add.tileSprite(x, y, w, h, 'tile_obstacle');
-      obs.setDepth(2);
-      // tileSprite를 staticGroup에 그냥 add하면 텍스처 프레임(24×24) 크기로 body 생성됨.
-      // 명시적으로 정적 body를 만들어 displayWidth/Height에 맞춤.
+    this.data.obstacleLayout.forEach(({ x, y, type, scale, w, h }) => {
+      // 구 포맷({x,y,w,h}) 호환: type이 없으면 bush 로 폴백
+      const def = TYPES[type] || TYPES.bush;
+      const s   = scale ?? (w && h ? Math.max(w / def.w, h / def.h) : 1);
+      const obs = this.scene.add.image(x, y, def.key).setDepth(2).setScale(s);
       this.scene.physics.add.existing(obs, true);
       this.obstacleGroup.add(obs);
       this._gfx.push(obs);
