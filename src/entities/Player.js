@@ -27,6 +27,8 @@
  *   trapSizeMult     1      트랩 크기 배율
  *   coreDropMult     1      드롭 코어량 배율 (영구 해금 '코어 수집기')
  *   hpPerRoomClear   0      방 클리어 시 회복량 (영구 해금 '전투 적응')
+ *   shopSlotBonus    0      상점 슬롯 추가 수 (영구 해금 '상인의 호의' — 기본 3 + 보너스)
+ *   damageReduction  0      받는 피해 감산 비율 (영구 해금 '두꺼운 가죽 I' — amount × (1-reduction), 최소 1)
  */
 import { showDamageNumber } from '../utils/DamageNumbers';
 import { applyUnlocksToPlayer } from '../data/MetaProgress';
@@ -69,6 +71,8 @@ export default class Player {
     this.trapSizeMult     = 1;
     this.coreDropMult     = 1;   // 코어 수집기 해금 시 적용 (EnemyManager.dropCores 참조)
     this.hpPerRoomClear   = 0;   // 전투 적응 해금 시 적용 (RoomManager._onRoomCleared 참조)
+    this.shopSlotBonus    = 0;   // 상인의 호의 해금 시 +1 (DungeonGenerator._generateShopSlots 참조)
+    this.damageReduction  = 0;   // 두꺼운 가죽 I 해금 시 +0.05 (takeDamage 에서 amount × (1-reduction))
     this.inventory        = [];
     this._dir            = 'bottom';
 
@@ -111,6 +115,9 @@ export default class Player {
   takeDamage(amount, knockback = null) {
     if (this._invincible) return false;
 
+    if (amount > 0 && this.damageReduction > 0) {
+      amount = Math.max(1, Math.round(amount * (1 - this.damageReduction)));
+    }
     this.hp = Math.max(0, this.hp - amount);
     this._invincible = true;
     if (amount > 0) showDamageNumber(this.scene, this.x, this.y - DISPLAY_H / 2, amount, '#ff5555');

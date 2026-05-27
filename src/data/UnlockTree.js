@@ -14,66 +14,66 @@ export const BRANCH_LABELS  = { attack: '공격', survival: '생존', special: '
 export const UNLOCK_NODES = {
   // ── 공격 계열 ──────────────────────────────────────
   claw_boost_1: {
-    branch: 'attack', tier: 1, prereq: null, cost: 20,
+    branch: 'attack', tier: 1, prereq: null, cost: 40,
     name: '발톱 강화 I', desc: '근거리 데미지 +5%',
     apply: (p) => { p.meleeDamageMult += 0.05; },
   },
   wave_expand: {
-    branch: 'attack', tier: 2, prereq: 'claw_boost_1', cost: 40,
+    branch: 'attack', tier: 2, prereq: 'claw_boost_1', cost: 80,
     name: '파동 확장', desc: '근거리 반경 +15%',
     apply: (p) => { p.meleeRadiusMult += 0.15; },
   },
-  pierce_carve: {
-    branch: 'attack', tier: 3, prereq: 'wave_expand', cost: 80,
-    name: '관통 각인', desc: '3단계 적 2명 관통 (후속)',
-    apply: null, // TODO: AttackManager 관통 처리
+  charge_accel: {
+    branch: 'attack', tier: 3, prereq: 'wave_expand', cost: 160,
+    name: '충전 가속', desc: '근거리 충전 속도 +20%',
+    apply: (p) => { p.chargeSpeedMult += 0.20; },
   },
   rage_threshold: {
-    branch: 'attack', tier: 4, prereq: 'pierce_carve', cost: 150,
+    branch: 'attack', tier: 4, prereq: 'charge_accel', cost: 300,
     name: '임계 분노', desc: '치명타율 +8% (기본 15 → 23%)',
     apply: (p) => { p.critRate += 0.08; },
   },
 
   // ── 생존 계열 ──────────────────────────────────────
   tough_body_1: {
-    branch: 'survival', tier: 1, prereq: null, cost: 20,
+    branch: 'survival', tier: 1, prereq: null, cost: 40,
     name: '강인한 몸 I', desc: '시작 HP +10',
     apply: (p) => { p.maxHp += 10; p.hp += 10; },
   },
-  evade_instinct: {
-    branch: 'survival', tier: 2, prereq: 'tough_body_1', cost: 40,
-    name: '회피 본능', desc: '대시 무적 +0.1초 (후속)',
-    apply: null, // TODO: 대시 시스템 도입 후
+  thick_hide_1: {
+    branch: 'survival', tier: 2, prereq: 'tough_body_1', cost: 80,
+    name: '두꺼운 가죽 I', desc: '받는 피해 -5%',
+    apply: (p) => { p.damageReduction = (p.damageReduction ?? 0) + 0.05; },
   },
   combat_adapt: {
-    branch: 'survival', tier: 3, prereq: 'evade_instinct', cost: 80,
+    branch: 'survival', tier: 3, prereq: 'thick_hide_1', cost: 160,
     name: '전투 적응', desc: '방 클리어 시 HP +5',
     apply: (p) => { p.hpPerRoomClear = (p.hpPerRoomClear ?? 0) + 5; },
   },
   last_struggle: {
-    branch: 'survival', tier: 4, prereq: 'combat_adapt', cost: 200,
+    branch: 'survival', tier: 4, prereq: 'combat_adapt', cost: 400,
     name: '최후의 발버둥', desc: '1회 사망 무효 (후속)',
     apply: null, // TODO: 사망 시 복원 로직
   },
 
   // ── 특수 계열 ──────────────────────────────────────
-  keen_sense: {
-    branch: 'special', tier: 1, prereq: null, cost: 25,
-    name: '예민한 감각', desc: '이벤트방 선택지 +1 (후속)',
-    apply: null, // TODO: 이벤트방 도입 후
+  merchant_favor: {
+    branch: 'special', tier: 1, prereq: null, cost: 50,
+    name: '상인의 호의', desc: '상점 슬롯 +1 (3 → 4)',
+    apply: (p) => { p.shopSlotBonus = (p.shopSlotBonus ?? 0) + 1; },
   },
   core_collector: {
-    branch: 'special', tier: 2, prereq: 'keen_sense', cost: 45,
+    branch: 'special', tier: 2, prereq: 'merchant_favor', cost: 90,
     name: '코어 수집기', desc: '드롭 코어량 ×1.15',
     apply: (p) => { p.coreDropMult = (p.coreDropMult ?? 1) * 1.15; },
   },
   memory_frag: {
-    branch: 'special', tier: 3, prereq: 'core_collector', cost: 90,
+    branch: 'special', tier: 3, prereq: 'core_collector', cost: 180,
     name: '기억 단편화', desc: '시작 시 추가 아이템 (후속)',
     apply: null, // TODO: 시작 시 보너스 패시브 1개
   },
   voss_protocol: {
-    branch: 'special', tier: 4, prereq: 'memory_frag', cost: 180,
+    branch: 'special', tier: 4, prereq: 'memory_frag', cost: 360,
     name: 'VOSS 프로토콜', desc: '레전드 드롭률 +3% (후속)',
     apply: null, // TODO: 등급 시스템 도입 후
   },

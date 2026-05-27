@@ -626,7 +626,7 @@ export default class UIScene extends Phaser.Scene {
   // ── 상점 오버레이 ────────────────────────────────────
 
   _buildShopOverlay() {
-    const panelW = 320, panelH = 460;
+    const panelW = 320, panelH = 460; // 기본값(3슬롯 가정) — openShop 에서 슬롯 수에 맞춰 재조정
     const panelX = GAME_W / 2, panelY = GAME_H / 2;
 
     // 어두운 배경 — 외부 영역 탭 시 닫기
@@ -635,11 +635,11 @@ export default class UIScene extends Phaser.Scene {
     backdrop.on('pointerdown', () => this.closeShop());
 
     // 패널 — 인터랙티브로 만들어 패널 내부 클릭이 backdrop 까지 도달하지 못하게 흡수
-    const panel = this.add.rectangle(panelX, panelY, panelW, panelH, 0x18120c)
+    this._shopPanel = this.add.rectangle(panelX, panelY, panelW, panelH, 0x18120c)
       .setStrokeStyle(2, 0xddaa44, 0.9).setDepth(101).setInteractive();
 
-    // 상단 타이틀 + GRIM 라벨
-    const title = this.add.text(panelX - panelW / 2 + 20, panelY - panelH / 2 + 22, 'GRIM 상점', {
+    // 상단 타이틀 + GRIM 라벨 — y 는 openShop 에서 재배치
+    this._shopTitle = this.add.text(panelX - panelW / 2 + 20, panelY - panelH / 2 + 22, 'GRIM 상점', {
       fontSize: '16px', color: '#ffcc66', fontFamily: 'monospace', fontStyle: 'bold',
     }).setOrigin(0, 0.5).setDepth(102);
 
@@ -649,18 +649,18 @@ export default class UIScene extends Phaser.Scene {
     }).setOrigin(1, 0.5).setDepth(102);
 
     // 닫기 버튼
-    const closeBtn = this.add.text(panelX + panelW / 2 - 16, panelY - panelH / 2 + 22, '✕', {
+    this._shopCloseBtn = this.add.text(panelX + panelW / 2 - 16, panelY - panelH / 2 + 22, '✕', {
       fontSize: '16px', color: '#aa8866', fontFamily: 'monospace',
     }).setOrigin(0.5).setDepth(102).setInteractive({ cursor: 'pointer' });
-    closeBtn.on('pointerdown', () => this.closeShop());
-    closeBtn.on('pointerover', () => closeBtn.setColor('#ffffff'));
-    closeBtn.on('pointerout',  () => closeBtn.setColor('#aa8866'));
+    this._shopCloseBtn.on('pointerdown', () => this.closeShop());
+    this._shopCloseBtn.on('pointerover', () => this._shopCloseBtn.setColor('#ffffff'));
+    this._shopCloseBtn.on('pointerout',  () => this._shopCloseBtn.setColor('#aa8866'));
 
     // 타이틀 하단 구분선
-    const titleLine = this.add.rectangle(panelX, panelY - panelH / 2 + 42, panelW - 24, 1, 0x553322)
+    this._shopTitleLine = this.add.rectangle(panelX, panelY - panelH / 2 + 42, panelW - 24, 1, 0x553322)
       .setDepth(102);
 
-    this._shopStaticEls = [backdrop, panel, title, this._shopCoreText, closeBtn, titleLine];
+    this._shopStaticEls = [backdrop, this._shopPanel, this._shopTitle, this._shopCoreText, this._shopCloseBtn, this._shopTitleLine];
     this._shopStaticEls.forEach(el => el.setVisible(false));
 
     this._shopPanelX = panelX;
@@ -669,8 +669,27 @@ export default class UIScene extends Phaser.Scene {
     this._shopPanelH = panelH;
   }
 
+  /** 슬롯 수에 따라 패널 높이를 재계산하고 상단 앵커 요소들을 재배치 — openShop 직전에 호출 */
+  _resizeShopPanelForSlots(slotCount) {
+    const cardH = 110, gap = 8;
+    const headerH = 60;  // 타이틀/구분선/카드 첫 머리까지의 여백
+    const footerH = 30;  // 마지막 카드 ~ 패널 하단 여백
+    const panelH = headerH + slotCount * cardH + (slotCount - 1) * gap + footerH;
+    if (panelH === this._shopPanelH) return;
+    this._shopPanelH = panelH;
+
+    const panelX = this._shopPanelX, panelY = this._shopPanelY, panelW = this._shopPanelW;
+    this._shopPanel.setSize(panelW, panelH);
+    const topY = panelY - panelH / 2;
+    this._shopTitle.setY(topY + 22);
+    this._shopCoreText.setY(topY + 22);
+    this._shopCloseBtn.setY(topY + 22);
+    this._shopTitleLine.setY(topY + 42);
+  }
+
   openShop(slots) {
     if (this._shopOpen || !slots) return;
+    this._resizeShopPanelForSlots(slots.length);
     // 슬롯은 던전 생성 시점에 baked 되므로, 그 사이 보스/다른 상점에서 같은 패시브를 획득했을 수 있다.
     // 상점 오픈 시점에 보유 패시브와 충돌하는 'item' 슬롯을 다시 추첨한다.
     this._dedupeItemSlots(slots);

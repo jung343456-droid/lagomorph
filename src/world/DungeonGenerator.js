@@ -64,16 +64,19 @@ function _entryToSlot(entry, excludeItemIds) {
 }
 
 /**
- * 3개 슬롯 무작위 추첨.
+ * 슬롯 무작위 추첨 (기본 3개 + 영구 해금 보너스).
  *  - 슬롯 간 같은 id 중복 금지 (heal_1 과 heal_1 같이 들어가지 않음)
  *  - ownedItemIds: 플레이어가 이미 보유한 패시브 id 목록 — 해당 패시브는 'item' 슬롯에서 제외
+ *  - extraSlots: '상인의 호의' 등 영구 해금으로 부여되는 추가 슬롯 수
  */
-function _generateShopSlots(ownedItemIds = []) {
+function _generateShopSlots(ownedItemIds = [], extraSlots = 0) {
+  const targetCount = 3 + Math.max(0, extraSlots);
   const slots = [];
   const usedKey = new Set();
   const excludeItems = new Set(ownedItemIds); // 보유 패시브 + 이미 이 상점에 들어간 패시브
   let attempts = 0;
-  while (slots.length < 3 && attempts < 40) {
+  const maxAttempts = targetCount * 14; // 3슬롯 기준 40회 유지 비율
+  while (slots.length < targetCount && attempts < maxAttempts) {
     attempts++;
     const entry = _pickShopEntry();
     const slot  = _entryToSlot(entry, excludeItems);
@@ -89,9 +92,10 @@ function _generateShopSlots(ownedItemIds = []) {
  * 랜덤 워크로 9~12개 방을 배치하고 인접 연결.
  * floorNum 이 2 또는 4 일 때 일반 전투방 하나를 상점방으로 치환.
  * ownedItemIds: 상점 패시브 슬롯 추첨에서 제외할 보유 아이템 id 목록.
+ * extraShopSlots: 영구 해금 '상인의 호의' 등으로 기본 3슬롯에 더할 추가 슬롯 수.
  * Phaser 의존 없는 순수 데이터 함수.
  */
-export function generateDungeon(floorNum = 1, targetCount, ownedItemIds = []) {
+export function generateDungeon(floorNum = 1, targetCount, ownedItemIds = [], extraShopSlots = 0) {
   targetCount ??= 9 + Math.floor(Math.random() * 4); // 9-12
 
   const grid  = new Map(); // "col,row" → roomData
@@ -177,7 +181,7 @@ export function generateDungeon(floorNum = 1, targetCount, ownedItemIds = []) {
       const pool = cand.slice(0, half);
       const picked = pool[Math.floor(Math.random() * pool.length)];
       picked.r.type = 'shop';
-      picked.r.shopSlots = _generateShopSlots(ownedItemIds);
+      picked.r.shopSlots = _generateShopSlots(ownedItemIds, extraShopSlots);
     }
   }
 

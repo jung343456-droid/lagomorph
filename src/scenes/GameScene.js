@@ -32,7 +32,9 @@ export default class GameScene extends Phaser.Scene {
     // 던전 생성 → 첫 방 진입
     this.roomManager = new RoomManager(this, this.player, this.enemyManager);
     this.roomManager.setFloor(this.currentFloor);
-    this.roomManager.init(generateDungeon(this.currentFloor, undefined, this._ownedItemIds()));
+    this.roomManager.init(generateDungeon(
+      this.currentFloor, undefined, this._ownedItemIds(), this.player.shopSlotBonus ?? 0,
+    ));
 
     // 상점방 NPC (현재 방이 'shop' 일 때만 살아 있음)
     this._shopkeeper = null;
@@ -297,7 +299,9 @@ export default class GameScene extends Phaser.Scene {
       if (this._shopkeeper) { this._shopkeeper.dispose(); this._shopkeeper = null; }
       this.enemyManager.clearAll();
       this.roomManager.setFloor(this.currentFloor);
-      this.roomManager.init(generateDungeon(this.currentFloor, undefined, this._ownedItemIds()));
+      this.roomManager.init(generateDungeon(
+        this.currentFloor, undefined, this._ownedItemIds(), this.player.shopSlotBonus ?? 0,
+      ));
       this.events.emit('floor-changed', this.currentFloor);
       cam.fadeIn(500, 0, 0, 0);
       cam.once('camerafadeincomplete', () => this._showFloorBanner(this.currentFloor));
