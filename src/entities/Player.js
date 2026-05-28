@@ -1,6 +1,6 @@
 /**
  * 플레이어 (VOSS-7 / soma) — 조작 캐릭터
- * 기본 HP 200 / 기본 속도 200
+ * 기본 HP 100 / 기본 속도 200
  *
  * 이동: 가상 조이스틱 또는 WASD, 8방향 스프라이트 자동 전환
  * 피격: 무적 시간 동안 깜빡임(alpha 0.35), 이후 재피격 가능
@@ -46,11 +46,12 @@ export default class Player {
     this.scene  = scene;
     this.baseSpeed = 200;
     this.speed     = 200;
-    this.hp        = 200;
-    this.maxHp  = 200;
+    this.hp        = 100;
+    this.maxHp  = 100;
 
     this._invincible     = false;
     this._knockbackTimer = 0;
+    this._slowTimer      = 0;     // 구역 2 거미줄 — applySlow(dur) 로 갱신, > 0 동안 이동속도 ×0.4
     this.facingDir       = { x: 0, y: 1 };
     this.lastDamageSource = null; // 마지막으로 피해 입힌 적 식별자 (사망 결과창 표시용)
 
@@ -105,16 +106,23 @@ export default class Player {
 
   update({ x, y }, delta) {
     const dt = delta / 1000;
+    if (this._slowTimer > 0) this._slowTimer = Math.max(0, this._slowTimer - dt);
     if (this._knockbackTimer > 0) {
       this._knockbackTimer = Math.max(0, this._knockbackTimer - dt);
       return;
     }
-    this.gameObject.body.setVelocity(x * this.speed, y * this.speed);
+    const slowMult = this._slowTimer > 0 ? 0.4 : 1;
+    this.gameObject.body.setVelocity(x * this.speed * slowMult, y * this.speed * slowMult);
     if (x !== 0 || y !== 0) {
       this.facingDir.x = x;
       this.facingDir.y = y;
       this._setDir(this._vecToDir(x, y));
     }
+  }
+
+  /** 거미줄 등 슬로우 효과 — 매 프레임 갱신되며 만료되면 자동 해제 */
+  applySlow(duration) {
+    if (duration > this._slowTimer) this._slowTimer = duration;
   }
 
   /** @returns {boolean} true = 사망 */

@@ -43,6 +43,9 @@ export default class HubScene extends Phaser.Scene {
   create() {
     // 이벤트 잔존 방지 (scene.start 로 재진입 시)
     ['unlock-menu-requested', 'hub-start-run'].forEach(e => this.events.off(e));
+    // 인스턴스 프로퍼티 잔존 방지 — 이전 런에서 _startRun 으로 true 세팅된 상태가
+    // 남으면 update() 가드에 걸려 컨트롤 입력이 전부 무시된다.
+    this._starting = false;
 
     // 단일 방 — 문 없음, 장애물 없음. Room 이 데이터에 의존하므로 더미 형태로 전달.
     this._roomData = {

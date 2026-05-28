@@ -54,6 +54,31 @@ export default class Room {
     this._drawOpenDoorHints();
   }
 
+  /**
+   * 드롭 좌표가 장애물 안인지 확인하고, 안이면 8방향으로 점진적으로 밀어내 가장 가까운 빈 위치를 반환.
+   * 못 찾으면 입력값 그대로 (드롭은 발생, 다만 줍기 어려울 수 있음).
+   */
+  findSafeDropPos(x, y) {
+    const obstacles = this.obstacleGroup.getChildren();
+    const blocked = (px, py) => obstacles.some(o => {
+      if (!o.body) return false;
+      const b = o.body;
+      return px >= b.x && px <= b.x + b.width
+          && py >= b.y && py <= b.y + b.height;
+    });
+    if (!blocked(x, y)) return { x, y };
+    const STEP = 12, MAX_R = 96;
+    for (let r = STEP; r <= MAX_R; r += STEP) {
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        const nx = x + Math.cos(a) * r;
+        const ny = y + Math.sin(a) * r;
+        if (!blocked(nx, ny)) return { x: nx, y: ny };
+      }
+    }
+    return { x, y };
+  }
+
   destroyObstacle(go) {
     if (!go?.active) return;
     if (this.data.obstacleLayout) {
@@ -134,8 +159,10 @@ export default class Room {
   }
 
   _buildObstacles() {
-    // 상점방: 장애물 없음 (NPC·구매 동선 방해 방지)
-    if (this.data.type === 'shop') {
+    // 상점방·시작방: 장애물 없음
+    //  - 상점: NPC·구매 동선 방해 방지
+    //  - 시작방: 플레이어 등장 지점(중앙·문 근처)에 장애물이 겹쳐 stuck 되는 사고 방지
+    if (this.data.type === 'shop' || this.data.type === 'start') {
       this.data.obstacleLayout = [];
       return;
     }

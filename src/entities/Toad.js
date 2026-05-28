@@ -1,0 +1,376 @@
+/**
+ * 두꺼비 (Toad) — 독 원거리병 (구역 2)
+ * HP 32 / 속도 65 / 데미지 7(접촉) + 5/s 독 DoT(3초) / 코어 3
+ *
+ * 패턴:
+ *   idle      → kite(240px 이내 탐지)
+ *   kite      → 100px 이내 접근 시 후퇴, 그 외에는 정지
+ *               2.5초마다 spit (HP 30% 이하: 1.5초)
+ *   spit_wind → 0.4초 예고
+ *   spit      → 0.5초 비행 후 착탄 → 60px 반경 독 웅덩이(지속 3초)
+ *   stun      → 피격 시 0.3초 경직 + 넉백 (i-frame)
+ *
+ * 독 웅덩이: 플레이어 overlap 시 1초당 5 피해 DoT
+ *           두꺼비 1마리당 활성 2개 (초과 시 가장 오래된 것 소멸)
+ *
+ * 시각: 독초록 틴트 (placeholder: squirrel 스프라이트 재사용)
+ * speedMult: Wolf 오라(180px 이내) 적용 시 후퇴 속도 ×1.2
+ */
+const DETECT_R     = 240;
+const CLOSE_DIST   = 100;
+const RETREAT_SPEED = 65;
+const SPIT_CD      = 2.5;
+const SPIT_CD_RAGE = 1.5;
+const SPIT_WINDUP  = 0.4;
+const SPIT_FLIGHT  = 0.5;
+const SPIT_SPEED   = 180;
+const PUDDLE_RADIUS = 60;
+const PUDDLE_DUR   = 3.0;
+const PUDDLE_MAX   = 2;
+const PUDDLE_DMG   = 5;       // 초당 데미지
+const PUDDLE_TICK  = 1.0;     // 초당 1회 적용
+const TOAD_W       = 22;
+const TOAD_H       = 20;
+const TOAD_DW      = 36;
+const TOAD_DH      = 32;
+const TINT         = 0x559933;
+const PUDDLE_TINT  = 0x88dd33;
+
+function calcDir(vx, vy) {
+  if (Math.abs(vx) < 1 && Math.abs(vy) < 1) return null;
+  const a = Math.atan2(vy, vx) * 180 / Math.PI;
+  if (a >  -22.5 && a <=   22.5) return 'e';
+  if (a >   22.5 && a <=   67.5) return 'se';
+  if (a >   67.5 && a <=  112.5) return 's';
+  if (a >  112.5 && a <=  157.5) return 'sw';
+  if (a >  157.5 || a <= -157.5) return 'w';
+  if (a > -157.5 && a <= -112.5) return 'nw';
+  if (a > -112.5 && a <=  -67.5) return 'n';
+  return 'ne';
+}
+
+// 상태: idle | kite | spit_windup | spit | stun
+export default class Toad {
+  constructor(scene, x, y) {
+    this.scene = scene;
+
+    this.hp     = 32;
+    this.maxHp  = 32;
+    this.speed  = RETREAT_SPEED;
+    this.damage = 7;
+    this.displayName = '두꺼비';
+
+    this.state      = 'idle';
+    this._prevState = 'idle';
+    this.stunTimer  = 0;
+    this.attackCooldown = 0;
+
+    this.alive     = true;
+    this.destroyed = false;
+    this.coreDrops = 3;
+    this.speedMult = 1.0;
+
+    this._stateTimer = 0;
+    this._spitCd     = SPIT_CD * (0.5 + Math.random() * 0.5);
+    this._spitTargetX = 0;
+    this._spitTargetY = 0;
+    this._spitProjGfx = null;
+    this._puddles    = [];   // [{ gfx, timer, x, y, tickTimer }]
+
+    this._knockbackTimer    = 0;
+    this._knockbackDuration = 0;
+    this._knockbackVx = 0;
+    this._knockbackVy = 0;
+
+    this._lastDir = 's';
+    this._curKey  = 'toad-idle';
+
+    this.gameObject = scene.add.image(x, y, 'toad-idle').setDisplaySize(TOAD_DW, TOAD_DH);
+    scene.physics.add.existing(this.gameObject);
+    this._applyBodySize();
+    this.gameObject.body.setCollideWorldBounds(true);
+    this.gameObject.setDepth(9);
+    this.gameObject.setTint(TINT);
+
+    this._buildHpBar();
+  }
+
+  // ── public ──────────────────────────────────────────
+
+  update(delta, player) {
+    if (!this.alive) {
+      this._tickPuddles(delta / 1000, player);
+      return;
+    }
+    const dt = delta / 1000;
+    this.attackCooldown = Math.max(0, this.attackCooldown - dt);
+
+    const dx   = player.x - this.gameObject.x;
+    const dy   = player.y - this.gameObject.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    switch (this.state) {
+      case 'idle':
+        this.gameObject.body.setVelocity(0, 0);
+        if (dist < DETECT_R) this.state = 'kite';
+        break;
+
+      case 'kite':
+        if (dist >= DETECT_R) { this.state = 'idle'; this.gameObject.body.setVelocity(0, 0); break; }
+        if (dist < CLOSE_DIST) {
+          const len = dist > 0 ? dist : 1;
+          this.gameObject.body.setVelocity(
+            (-dx / len) * RETREAT_SPEED * this.speedMult,
+            (-dy / len) * RETREAT_SPEED * this.speedMult,
+          );
+        } else {
+          this.gameObject.body.setVelocity(0, 0);
+        }
+        this._spitCd -= dt;
+        if (this._spitCd <= 0) {
+          this._spitTargetX = player.x;
+          this._spitTargetY = player.y;
+          this.state = 'spit_windup';
+          this._stateTimer = SPIT_WINDUP;
+          this.gameObject.body.setVelocity(0, 0);
+        }
+        break;
+
+      case 'spit_windup':
+        this.gameObject.body.setVelocity(0, 0);
+        this._stateTimer -= dt;
+        if (this._stateTimer <= 0) {
+          this._startSpit();
+        }
+        break;
+
+      case 'spit':
+        this.gameObject.body.setVelocity(0, 0);
+        this._stateTimer -= dt;
+        if (this._spitProjGfx?.active) {
+          // 보간 — start 위치에서 target 위치로 비행
+          const t = 1 - this._stateTimer / SPIT_FLIGHT;
+          const sx = this._spitStartX + (this._spitTargetX - this._spitStartX) * t;
+          const sy = this._spitStartY + (this._spitTargetY - this._spitStartY) * t;
+          // 포물선 — 중간에 약간 올라갔다가 내려감
+          const arc = Math.sin(t * Math.PI) * 16;
+          this._spitProjGfx.setPosition(sx, sy - arc);
+        }
+        if (this._stateTimer <= 0) {
+          if (this._spitProjGfx?.active) this._spitProjGfx.destroy();
+          this._spitProjGfx = null;
+          this._spawnPuddle(this._spitTargetX, this._spitTargetY);
+          this._spitCd = this.hp / this.maxHp <= 0.3 ? SPIT_CD_RAGE : SPIT_CD;
+          this.state = 'kite';
+        }
+        break;
+
+      case 'stun':
+        this.stunTimer -= dt;
+        if (this._knockbackTimer > 0) {
+          this._knockbackTimer -= dt;
+          const t = Math.max(0, this._knockbackTimer) / this._knockbackDuration;
+          this.gameObject.body.setVelocity(this._knockbackVx * t, this._knockbackVy * t);
+        } else {
+          this.gameObject.body.setVelocity(0, 0);
+        }
+        if (this.stunTimer <= 0) {
+          this.gameObject.clearTint();
+          this.gameObject.setTint(TINT);
+          this.state = this._prevState;
+        }
+        break;
+    }
+
+    this._tickPuddles(dt, player);
+    this._updateSprite();
+    this._syncHpBar();
+  }
+
+  takeDamage(amount, knockback = null) {
+    if (!this.alive || this.state === 'stun') return false;
+    this.hp -= amount;
+    if (this.hp <= 0) { this._die(); return true; }
+    if (knockback) {
+      const { dx, dy, force, duration } = knockback;
+      this._knockbackTimer    = duration;
+      this._knockbackDuration = duration;
+      this._knockbackVx = dx * force;
+      this._knockbackVy = dy * force;
+    }
+    this._prevState = (this.state === 'spit' || this.state === 'spit_windup') ? 'kite' : this.state;
+    if (this._spitProjGfx?.active) { this._spitProjGfx.destroy(); this._spitProjGfx = null; }
+    this.state      = 'stun';
+    this.stunTimer  = 0.3;
+    this._blinkHit();
+    return false;
+  }
+
+  poisonHp(amount) {
+    if (!this.alive) return false;
+    this.hp = Math.max(0, this.hp - amount);
+    if (this.hp <= 0) { this._die(); return true; }
+    return false;
+  }
+
+  dispose() {
+    if (this.destroyed) return;
+    if (this._blinkEvent) { this._blinkEvent.remove(); this._blinkEvent = null; }
+    if (this._spitProjGfx?.active) this._spitProjGfx.destroy();
+    if (this._hpBg?.active)   this._hpBg.destroy();
+    if (this._hpFill?.active) this._hpFill.destroy();
+    this._puddles.forEach(p => { if (p.gfx?.active) p.gfx.destroy(); });
+    this._puddles = [];
+    this.alive = false;
+    this.gameObject.destroy();
+    this.destroyed = true;
+  }
+
+  get x() { return this.gameObject.x; }
+  get y() { return this.gameObject.y; }
+
+  // ── private ─────────────────────────────────────────
+
+  _startSpit() {
+    this.state = 'spit';
+    this._stateTimer = SPIT_FLIGHT;
+    this._spitStartX = this.gameObject.x;
+    this._spitStartY = this.gameObject.y;
+    // 투사체 그래픽
+    const gfx = this.scene.add.graphics().setDepth(8);
+    gfx.fillStyle(PUDDLE_TINT, 0.9);
+    gfx.fillCircle(0, 0, 6);
+    gfx.lineStyle(1, 0x336611, 1);
+    gfx.strokeCircle(0, 0, 6);
+    gfx.setPosition(this._spitStartX, this._spitStartY);
+    this._spitProjGfx = gfx;
+  }
+
+  _spawnPuddle(x, y) {
+    const gfx = this.scene.add.graphics().setDepth(7);
+    gfx.fillStyle(PUDDLE_TINT, 0.35);
+    gfx.fillCircle(x, y, PUDDLE_RADIUS);
+    gfx.lineStyle(2, PUDDLE_TINT, 0.7);
+    gfx.strokeCircle(x, y, PUDDLE_RADIUS);
+    // 거품 표시 (3~5개)
+    gfx.fillStyle(0xffffff, 0.6);
+    for (let i = 0; i < 4; i++) {
+      const ang = Math.random() * Math.PI * 2;
+      const r = Math.random() * PUDDLE_RADIUS * 0.6;
+      gfx.fillCircle(x + Math.cos(ang) * r, y + Math.sin(ang) * r, 2);
+    }
+    this._puddles.push({ gfx, timer: PUDDLE_DUR, x, y, tickTimer: PUDDLE_TICK });
+    while (this._puddles.length > PUDDLE_MAX) {
+      const old = this._puddles.shift();
+      if (old.gfx?.active) old.gfx.destroy();
+    }
+  }
+
+  _tickPuddles(dt, player) {
+    this._puddles = this._puddles.filter(p => {
+      p.timer -= dt;
+      if (p.timer <= 0) {
+        if (p.gfx?.active) p.gfx.destroy();
+        return false;
+      }
+      if (p.timer < 0.8 && p.gfx?.active) p.gfx.setAlpha(p.timer / 0.8);
+
+      // 플레이어 overlap → DoT 적용 (1초 단위 틱)
+      const dx = player.x - p.x;
+      const dy = player.y - p.y;
+      if (dx * dx + dy * dy < PUDDLE_RADIUS * PUDDLE_RADIUS) {
+        p.tickTimer -= dt;
+        if (p.tickTimer <= 0) {
+          p.tickTimer = PUDDLE_TICK;
+          // 직접 데미지 적용 (인접 invincible 프레임은 player.takeDamage 가 처리)
+          player.lastDamageSource = '독 웅덩이';
+          const dead = player.takeDamage(PUDDLE_DMG, null);
+          if (dead) this.scene.events.emit('player-dead');
+        }
+      }
+      return true;
+    });
+  }
+
+  _updateSprite() {
+    if (this.state === 'stun') return;
+    let key;
+    if (this.state === 'spit' || this.state === 'spit_windup') {
+      key = 'toad-spit';
+    } else if (this.state === 'idle' || (this.state === 'kite' && Math.abs(this.gameObject.body.velocity.x) < 1 && Math.abs(this.gameObject.body.velocity.y) < 1)) {
+      key = 'toad-idle';
+    } else {
+      const dir = calcDir(this.gameObject.body.velocity.x, this.gameObject.body.velocity.y);
+      if (dir) this._lastDir = dir;
+      key = `toad-${this._lastDir}`;
+    }
+    if (this._curKey !== key) {
+      this._curKey = key;
+      this.gameObject.setTexture(key).setDisplaySize(TOAD_DW, TOAD_DH);
+      this._applyBodySize();
+      this.gameObject.setTint(TINT);
+    }
+  }
+
+  _applyBodySize() {
+    const sx = this.gameObject.scaleX || 1;
+    const sy = this.gameObject.scaleY || 1;
+    this.gameObject.body.setSize(TOAD_W / sx, TOAD_H / sy, true);
+  }
+
+  _buildHpBar() {
+    const { x, y } = this.gameObject;
+    this._hpBg   = this.scene.add.rectangle(x, y - 22, TOAD_DW, 3, 0x333333).setDepth(11);
+    this._hpFill = this.scene.add.rectangle(x - TOAD_DW / 2, y - 22, TOAD_DW, 3, 0x44dd44)
+      .setOrigin(0, 0.5).setDepth(11);
+  }
+
+  _syncHpBar() {
+    const { x, y } = this.gameObject;
+    this._hpBg.setPosition(x, y - 22);
+    this._hpFill.setPosition(x - TOAD_DW / 2, y - 22);
+    this._hpFill.width = TOAD_DW * Math.max(0, this.hp / this.maxHp);
+  }
+
+  _blinkHit() {
+    if (this._blinkEvent) this._blinkEvent.remove();
+    let flip = 0;
+    this.gameObject.setTintFill(0xffffff);
+    this._blinkEvent = this.scene.time.addEvent({
+      delay: 80, repeat: 4,
+      callback: () => {
+        if (this.destroyed) return;
+        flip++;
+        if (flip % 2 === 0) this.gameObject.setTintFill(0xffffff);
+        else { this.gameObject.clearTint(); this.gameObject.setTint(TINT); }
+      },
+    });
+  }
+
+  _die() {
+    this.alive = false;
+    this.gameObject.body.setEnable(false);
+    if (this._blinkEvent) { this._blinkEvent.remove(); this._blinkEvent = null; }
+    if (this._spitProjGfx?.active) this._spitProjGfx.destroy();
+    this._hpBg.destroy();
+    this._hpFill.destroy();
+    // 독 웅덩이 페이드아웃 후 정리
+    this._puddles.forEach(p => {
+      if (!p.gfx?.active) return;
+      this.scene.tweens.add({
+        targets: p.gfx, alpha: 0,
+        duration: 350, ease: 'Quad.Out',
+        onComplete: () => { if (p.gfx?.active) p.gfx.destroy(); },
+      });
+    });
+    this._puddles = [];
+    const sx = this.gameObject.scaleX * 1.8;
+    const sy = this.gameObject.scaleY * 1.8;
+    this.scene.tweens.add({
+      targets: this.gameObject,
+      alpha: 0, scaleX: sx, scaleY: sy,
+      duration: 260, ease: 'Quad.Out',
+      onComplete: () => { this.gameObject.destroy(); this.destroyed = true; },
+    });
+  }
+}

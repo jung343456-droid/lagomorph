@@ -6,6 +6,13 @@ import Hedgehog from '../entities/Hedgehog';
 import Squirrel from '../entities/Squirrel';
 import Fang     from '../entities/Fang';
 import Wolf     from '../entities/Wolf';
+import Bat      from '../entities/Bat';
+import Boar     from '../entities/Boar';
+import Spider   from '../entities/Spider';
+import Bear     from '../entities/Bear';
+import Toad     from '../entities/Toad';
+import BlackBear from '../entities/BlackBear';
+import OwlKing  from '../entities/OwlKing';
 import Core     from '../entities/Core';
 import RareItem, { PICKUP_R as RARE_PICKUP_R, MAGNET_SPEED as RARE_MAGNET_SPEED, COLLECT_R as RARE_COLLECT_R } from '../entities/RareItem';
 import { ROOM_W, ROOM_H, WALL_T } from '../world/Room';
@@ -20,9 +27,15 @@ const PLAYER_KNOCKBACK_FORCE = 220; // 적 접촉 시 플레이어 넉백 강도
 const PLAYER_KNOCKBACK_DUR   = 0.18; // 적 접촉 시 플레이어 넉백 지속 시간 (초)
 const PLAYER_AVG_HALF        = 23;  // 플레이어 히트박스 평균 반경 (BODY_W=48, BODY_H=46 → (24+23)/2)
 
-const ENEMY_CLASSES = { fox: Fox, rat: Rat, weasel: Weasel, hedgehog: Hedgehog, squirrel: Squirrel };
+const ENEMY_CLASSES = {
+  // 구역 1
+  fox: Fox, rat: Rat, weasel: Weasel, hedgehog: Hedgehog, squirrel: Squirrel,
+  // 구역 2
+  bat: Bat, boar: Boar, spider: Spider, bear: Bear, toad: Toad,
+};
 
 // 층별 스폰 풀 — 층이 내려갈수록 적 종류가 점진적으로 추가됨.
+//   1~5: 구역 1 (풀숲) / 6~10: 구역 2 (더 깊은 숲)
 const FLOOR_SPAWN_TABLES = {
   1: [
     { type: 'rat',      weight: 3 },
@@ -53,7 +66,39 @@ const FLOOR_SPAWN_TABLES = {
     { type: 'squirrel', weight: 2 },
     { type: 'hedgehog', weight: 2 },
   ],
+  6: [
+    { type: 'bat',      weight: 3 },
+    { type: 'boar',     weight: 2 },
+  ],
+  7: [
+    { type: 'bat',      weight: 3 },
+    { type: 'boar',     weight: 2 },
+    { type: 'spider',   weight: 2 },
+  ],
+  8: [
+    { type: 'bat',      weight: 2 },
+    { type: 'boar',     weight: 2 },
+    { type: 'spider',   weight: 2 },
+    { type: 'toad',     weight: 2 },
+  ],
+  9: [
+    { type: 'bat',      weight: 2 },
+    { type: 'boar',     weight: 2 },
+    { type: 'spider',   weight: 2 },
+    { type: 'toad',     weight: 2 },
+    { type: 'bear',     weight: 1 },
+  ],
+  10: [
+    { type: 'bat',      weight: 1 },
+    { type: 'boar',     weight: 2 },
+    { type: 'spider',   weight: 2 },
+    { type: 'toad',     weight: 2 },
+    { type: 'bear',     weight: 2 },
+  ],
 };
+
+// 3마리 묶음 스폰되는 타입 — Rat(들쥐), Bat(박쥐)
+const PACK_TYPES = new Set(['rat', 'bat']);
 
 export default class EnemyManager {
   constructor(scene, player) {
@@ -286,11 +331,11 @@ export default class EnemyManager {
       const x    = pad + Math.random() * (ROOM_W - pad * 2);
       const y    = pad + Math.random() * (ROOM_H - pad * 2);
       const type = this._pickType(roomTable);
-      if (type === 'rat') {
-        // 3마리 묶음 스폰
+      if (PACK_TYPES.has(type)) {
+        // 3마리 묶음 스폰 (rat, bat)
         for (let j = 0; j < 3; j++) {
           const angle = (j / 3) * Math.PI * 2;
-          this.spawnEnemy('rat', x + Math.cos(angle) * 18, y + Math.sin(angle) * 18);
+          this.spawnEnemy(type, x + Math.cos(angle) * 18, y + Math.sin(angle) * 18);
         }
       } else {
         this.spawnEnemy(type, x, y);
@@ -308,37 +353,55 @@ export default class EnemyManager {
     return enemy;
   }
 
-  /** 층 3 중간보스방: Wolf 2마리만 (수행원은 Wolf 자체 howl로 등장) */
+  /** 중간보스방:
+   *   층 3 (구역 1): Wolf 2마리 (수행원은 Wolf 자체 howl 소환)
+   *   층 8 (구역 2): BlackBear 1마리 (포효 시 멧돼지 2 소환)
+   */
   spawnMidBoss(x, y) {
     this._clearAll();
     this._hadEnemies = true;
-    [-70, 70].forEach(off => {
-      const wolf = new Wolf(this.scene, x + off, y);
-      wolf.gameObject.body.setMaxVelocity(350, 350);
-      wolf.gameObject.body.setCollideWorldBounds(true);
-      this.enemies.push(wolf);
-      this.enemyGroup.add(wolf.gameObject);
-    });
+    if (this.floorNum === 8) {
+      const bb = new BlackBear(this.scene, x, y);
+      bb.gameObject.body.setMaxVelocity(350, 350);
+      bb.gameObject.body.setCollideWorldBounds(true);
+      this.enemies.push(bb);
+      this.enemyGroup.add(bb.gameObject);
+      this.boss = bb;
+      this.scene.events.emit('boss-spawned', bb);
+    } else {
+      [-70, 70].forEach(off => {
+        const wolf = new Wolf(this.scene, x + off, y);
+        wolf.gameObject.body.setMaxVelocity(350, 350);
+        wolf.gameObject.body.setCollideWorldBounds(true);
+        this.enemies.push(wolf);
+        this.enemyGroup.add(wolf.gameObject);
+      });
+    }
   }
 
   /** 현재 층 갱신 — _pickType()이 참조하는 풀이 바뀜 */
   setFloor(n) { this.floorNum = n; }
 
-  /** 보스방 진입 시 호출 */
+  /** 보스방 진입 시 호출:
+   *   층 5  (구역 1): FANG
+   *   층 10 (구역 2): OWL KING
+   */
   spawnBoss(x, y) {
     this._clearAll();
     this._hadEnemies = true;
-    const fang = new Fang(this.scene, x, y);
-    fang.gameObject.body.setMaxVelocity(450, 450);
-    fang.gameObject.body.setCollideWorldBounds(true);
-    this.enemies.push(fang);
-    this.enemyGroup.add(fang.gameObject);
-    this.boss = fang;
-    this.scene.events.emit('boss-spawned', fang);
-    return fang;
+    const BossCls = this.floorNum === 10 ? OwlKing : Fang;
+    const boss = new BossCls(this.scene, x, y);
+    boss.gameObject.body.setMaxVelocity(500, 500);
+    boss.gameObject.body.setCollideWorldBounds(true);
+    this.enemies.push(boss);
+    this.enemyGroup.add(boss.gameObject);
+    this.boss = boss;
+    this.scene.events.emit('boss-spawned', boss);
+    return boss;
   }
 
   dropRareItem(x, y) {
+    ({ x, y } = this.scene.roomManager?.findSafeDropPos(x, y) ?? { x, y });
     this.rareItems.push(new RareItem(this.scene, x, y));
     this.scene.events.emit('rare-item-dropped');
   }
@@ -557,6 +620,7 @@ export default class EnemyManager {
   }
 
   dropCores(x, y, count) {
+    ({ x, y } = this.scene.roomManager?.findSafeDropPos(x, y) ?? { x, y });
     // 영구 해금 '코어 수집기' (×1.15) — 소수점은 반올림, 최소 1개는 보장
     const mult = this.player?.coreDropMult ?? 1;
     const finalCount = Math.max(1, Math.round(count * mult));

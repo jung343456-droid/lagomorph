@@ -64,6 +64,60 @@ export default class BootScene extends Phaser.Scene {
       actions.forEach(a => this.load.image(`${name}-${a}`, `assets/enemies/${name}/${name}-${a}.png`));
     });
     this.load.image('squirrel-acorn', 'assets/enemies/squirrel/squirrel-acorn.png');
+
+    // 구역 2 적 — 실 에셋 준비 전 placeholder 로 구역 1 스프라이트를 별도 키로 재로드.
+    //   추후 assets/enemies/{bat,boar,spider,bear,toad,blackbear,owlking}/ 디렉토리가 추가되면
+    //   아래 PLACEHOLDER_MAP 의 매핑을 제거하고 실제 경로로 교체하면 된다.
+    const PLACEHOLDER_MAP = [
+      { name: 'bat',       proxy: 'rat',      actions: ['idle', 'swoop'] },
+      { name: 'boar',      proxy: 'fox',      actions: ['idle', 'ready', 'charge'] },
+      { name: 'spider',    proxy: 'squirrel', actions: ['idle', 'throw'] },
+      { name: 'bear',      proxy: 'hedgehog', actions: ['idle', 'swipe', 'rage'] },
+      { name: 'toad',      proxy: 'squirrel', actions: ['idle', 'spit'] },
+      { name: 'blackbear', proxy: 'wolf',     actions: ['idle', 'slam', 'roar'] },
+      { name: 'owlking',   proxy: 'fang',     actions: ['idle', 'dive', 'screech', 'whirl', 'rage'] },
+    ];
+    PLACEHOLDER_MAP.forEach(({ name, proxy, actions }) => {
+      DIRS.forEach(d => {
+        // proxy 가 actions 에 'idle' 만 있고 8방향 키만 있는 경우(예: rat 은 rat-{dir}.png 가 존재)
+        this.load.image(`${name}-${d}`, `assets/enemies/${proxy}/${proxy}-${d}.png`);
+      });
+      actions.forEach(a => {
+        // proxy 에 동일 액션 키가 있으면 그대로, 없으면 idle 로 fallback
+        const proxyHas = {
+          fox:      ['idle', 'chase'],
+          rat:      ['idle', 'rush'],
+          weasel:   ['idle', 'approach', 'dash'],
+          hedgehog: ['idle', 'spike'],
+          squirrel: ['idle', 'throw'],
+          wolf:     ['chase', 'howl', 'aura'],
+          fang:     ['chase', 'dash', 'stomp', 'rage'],
+        }[proxy] ?? ['idle'];
+        // 액션 매핑 — 비슷한 의미 키가 있으면 그것 사용
+        const ACT_MAP = {
+          'bat-swoop':         'rush',
+          'boar-ready':        'idle',
+          'boar-charge':       'chase',
+          'spider-throw':      'throw',
+          'bear-swipe':        'spike',
+          'bear-rage':         'spike',
+          'toad-spit':         'throw',
+          'blackbear-slam':    'howl',
+          'blackbear-roar':    'howl',
+          'owlking-dive':      'dash',
+          'owlking-screech':   'chase',
+          'owlking-whirl':     'stomp',
+          'owlking-rage':      'rage',
+        };
+        const target = ACT_MAP[`${name}-${a}`] ?? (proxyHas.includes(a) ? a : 'idle');
+        // proxy 의 idle 키가 없는 경우(wolf, fang) 'chase' 로 fallback
+        const fallbackIdle = proxyHas.includes('idle') ? 'idle' : 'chase';
+        const finalAct = proxyHas.includes(target) ? target : fallbackIdle;
+        this.load.image(`${name}-${a}`, `assets/enemies/${proxy}/${proxy}-${finalAct}.png`);
+      });
+    });
+    // 부엉이왕 깃털 투사체 — placeholder 로 다람쥐 도토리 재사용
+    this.load.image('owlking-feather', 'assets/enemies/squirrel/squirrel-acorn.png');
   }
 
   create() {

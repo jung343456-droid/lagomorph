@@ -177,8 +177,8 @@ export function generateDungeon(
   bfsDist.forEach((d, id) => { if (d > maxD) { maxD = d; bossId = id; } });
   rooms[bossId].type = 'boss';
 
-  // 짝수층(2·4)에 상점방 1개 — 보스·시작·이미 지정된 방 제외, 시작방 가까운 쪽 우선
-  if (floorNum === 2 || floorNum === 4) {
+  // 상점방 1개 — 구역 1: 2·4층 / 구역 2: 7·9층 (보스/중간보스 직전 비-보스 층)
+  if (floorNum === 2 || floorNum === 4 || floorNum === 7 || floorNum === 9) {
     const cand = rooms
       .filter(r => r.type === 'combat')
       .map(r => ({ r, d: bfsDist.get(r.id) ?? Infinity }))

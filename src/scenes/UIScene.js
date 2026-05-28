@@ -42,8 +42,8 @@ const BAG_H  = 24;
 const BOSS_BAR_W = 300;
 const BOSS_BAR_H = 18;
 
-// 구역 메타 — 현재 구역 1(1~5층)만 구현됨. 구역 2/3 추가 시 분기 보강.
-const ZONE_NAMES = { 1: '야생', 2: '실험체', 3: '인간' };
+// 구역 메타 — 구역 1: 1~5층(풀숲), 구역 2: 6~10층(더 깊은 숲)
+const ZONE_NAMES = { 1: '풀숲', 2: '깊은 숲', 3: '인간' };
 function zoneOf(floor) { return floor <= 5 ? 1 : floor <= 10 ? 2 : 3; }
 
 export default class UIScene extends Phaser.Scene {
@@ -499,7 +499,7 @@ export default class UIScene extends Phaser.Scene {
     // 좌측 / 우측 컬럼 항목 정의. enhanced=true 면 청록 강조.
     const trapCost = Math.max(1, 3 - player.trapCostBonus);
     const stats = [
-      { label: '체력',         value: `${player.hp}/${player.maxHp}`,                enhanced: player.maxHp > 200 },
+      { label: '체력',         value: `${player.hp}/${player.maxHp}`,                enhanced: player.maxHp > 100 },
       { label: '이동속도',     value: `${Math.round(player.baseSpeed)}`,             enhanced: player.baseSpeed > 200 },
       { label: '근거리 피해',  value: mult(player.meleeDamageMult),                  enhanced: player.meleeDamageMult > 1 },
       { label: '근거리 반경',  value: mult(player.meleeRadiusMult),                  enhanced: player.meleeRadiusMult > 1 },
@@ -879,7 +879,7 @@ export default class UIScene extends Phaser.Scene {
     const y  = GAME_H - 52;
     this._bossBarContainer = this.add.container(0, 0).setVisible(false);
 
-    const label = this.add.text(cx, y - 16, 'FANG', {
+    this._bossLabel = this.add.text(cx, y - 16, 'BOSS', {
       fontSize: '13px', color: '#ff4444', fontFamily: 'monospace', fontStyle: 'bold',
     }).setOrigin(0.5, 0.5);
 
@@ -890,12 +890,15 @@ export default class UIScene extends Phaser.Scene {
     const border = this.add.rectangle(cx, y, BOSS_BAR_W, BOSS_BAR_H)
       .setStrokeStyle(2, 0xff4444, 0.8).setFillStyle(0x000000, 0);
 
-    this._bossBarContainer.add([label, bg, this._bossHpFill, border]);
+    this._bossBarContainer.add([this._bossLabel, bg, this._bossHpFill, border]);
   }
 
   _updateBossHPBar(boss) {
     if (!boss || !boss.alive) { this._bossBarContainer.setVisible(false); return; }
     this._bossBarContainer.setVisible(true);
+    if (boss.displayName && this._bossLabel.text !== boss.displayName) {
+      this._bossLabel.setText(boss.displayName);
+    }
     const r = Phaser.Math.Clamp(boss.hp / boss.maxHp, 0, 1);
     this._bossHpFill.width = BOSS_BAR_W * r;
     this._bossHpFill.setFillStyle(r > 0.5 ? 0xff2222 : 0xff6600);

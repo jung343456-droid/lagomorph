@@ -29,6 +29,11 @@ export default class RoomManager {
     this.enemyManager.setFloor(n);
   }
 
+  /** 드롭 위치가 장애물 안이면 인근 빈 위치로 보정 — Room 위임 */
+  findSafeDropPos(x, y) {
+    return this._room?.findSafeDropPos(x, y) ?? { x, y };
+  }
+
   /** DungeonGenerator 결과를 받아 첫 방 진입 */
   init(dungeonData) {
     this.dungeonData = dungeonData;
@@ -46,9 +51,12 @@ export default class RoomManager {
 
   // ── private ─────────────────────────────────────────
 
-  /** 일반 전투방 적 수: 층1=2~3, 층2=3~4, 층3=3~4, 층4=4~5, 층5=4~5 */
+  /** 일반 전투방 적 수:
+   *   구역 1 — 층1=2~3, 층2=3~4, 층3=3~4, 층4=4~5, 층5=4~5
+   *   구역 2 — 층6=3~4, 층7=3~4, 층8=4~5, 층9=4~5, 층10=4~5
+   */
   _normalRoomCount() {
-    const baseByFloor = { 1: 2, 2: 3, 3: 3, 4: 4, 5: 4 };
+    const baseByFloor = { 1: 2, 2: 3, 3: 3, 4: 4, 5: 4, 6: 3, 7: 3, 8: 4, 9: 4, 10: 4 };
     const base = baseByFloor[this.floorNum] ?? 3;
     return base + Math.floor(Math.random() * 2);
   }
@@ -77,10 +85,13 @@ export default class RoomManager {
       this.scene.physics.add.collider(wg, this.enemyManager.enemyGroup),
       this.scene.physics.add.collider(og, this.player.gameObject),
       this.scene.physics.add.collider(og, this.enemyManager.enemyGroup, (obs, enemyGo) => {
-        const boss = this.enemyManager.boss;
-        if (!boss || enemyGo !== boss.gameObject) return;
-        if (boss.state !== 'dash' && boss.state !== 'combo_dash') return;
-        boss._hitObstacle = true;
+        // 보스 FANG dash + Boar charge 시 장애물 파괴 → 돌격 지속
+        const enemy = this.enemyManager.enemies.find(e => e.gameObject === enemyGo);
+        if (!enemy) return;
+        const isBossDash = enemy.isBoss && (enemy.state === 'dash' || enemy.state === 'combo_dash');
+        const isBoarCharge = enemy.displayName === '멧돼지' && enemy.state === 'charge';
+        if (!isBossDash && !isBoarCharge) return;
+        enemy._hitObstacle = true;
         this._room.destroyObstacle(obs);
       }),
     );
@@ -118,13 +129,16 @@ export default class RoomManager {
     } else if (roomData.type === 'boss') {
       this._room.lockDoors();
       if (this.floorNum === 5) {
-        // 층 5: FANG 최종 보스
+        // 층 5: FANG (구역 1 최종)
         this.enemyManager.spawnBoss(ROOM_W / 2, ROOM_H / 3);
-      } else if (this.floorNum === 3) {
-        // 층 3: Wolf 2마리 중간 보스
+      } else if (this.floorNum === 10) {
+        // 층 10: OWL KING (구역 2 최종)
+        this.enemyManager.spawnBoss(ROOM_W / 2, ROOM_H / 3);
+      } else if (this.floorNum === 3 || this.floorNum === 8) {
+        // 층 3: Wolf 2마리 / 층 8: BlackBear — 중간 보스
         this.enemyManager.spawnMidBoss(ROOM_W / 2, ROOM_H / 3);
       } else {
-        // 층 1·2·4: 보스 없음 — 일반 적 +2~3마리 (출구방, 항상 3종)
+        // 층 1·2·4·6·7·9: 보스 없음 — 일반 적 +2~3마리 (출구방, 항상 3종)
         this.enemyManager.spawnForRoom(this._exitRoomCount(), true);
       }
     } else {

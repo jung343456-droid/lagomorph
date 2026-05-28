@@ -56,7 +56,11 @@ export default class GameScene extends Phaser.Scene {
     // 런 시작 시점의 메타 코어 잔량 — 종료 화면에서 "이번 런 적립" 차분 표시용
     this._runStartMeta    = getMetaCores();
 
-    // 보스 클리어: 랜덤 아이템 드롭(보유 패시브 + 미수집 월드 아이템 제외) + 계단 표시(층1~4) / 구역 클리어(층5)
+    // 보스 클리어: 랜덤 아이템 드롭(보유 패시브 + 미수집 월드 아이템 제외) + 계단 표시 / 구역 클리어
+    //   1~4·6~9: 일반 보스방 클리어 → 계단
+    //   3 / 8 : 중간보스(Wolf×2 / BlackBear×1) — 레어 아이템 추가 드롭
+    //   5    : 구역 1 보스(FANG) 클리어 → 계단(다음 구역 진입)
+    //   10   : 구역 2 보스(OWL KING) 클리어 → ZONE 2 CLEAR
     this.events.on('boss-cleared', ({ x, y, floor, roomId }) => {
       const excluded = new Set([
         ...this._ownedItemIds(),
@@ -65,14 +69,17 @@ export default class GameScene extends Phaser.Scene {
       const dropable = Object.keys(ITEM_DEFS).filter(id => !excluded.has(id));
       if (dropable.length > 0) {
         const id = dropable[Math.floor(Math.random() * dropable.length)];
-        this._passiveItems.push(new PassiveItem(this, x, y, id));
+        const safe = this.roomManager?.findSafeDropPos(x, y) ?? { x, y };
+        this._passiveItems.push(new PassiveItem(this, safe.x, safe.y, id));
       }
-      if (floor < 5) {
-        // 중간보스(층 3 Wolf 2마리) 처치 보상: 30 회복 아이템 추가 드롭
-        if (floor === 3) this.enemyManager.dropRareItem(x - 40, y);
-        this.time.delayedCall(800, () => this._markStairs(roomId, x, y + 90));
+      if (floor === 10) {
+        this.time.delayedCall(1500, () => this._showZoneClear(2));
       } else {
-        this.time.delayedCall(1500, () => this._showZoneClear());
+        // 중간보스(층 3, 8): 회복 레어 아이템 추가 드롭
+        if (floor === 3 || floor === 8) this.enemyManager.dropRareItem(x - 40, y);
+        this.time.delayedCall(800, () => this._markStairs(roomId, x, y + 90));
+        // 구역 경계 통과 시 차용 텍스트 — 5층 → 6층 = 구역 1 → 2 진입
+        if (floor === 5) this.time.delayedCall(1200, () => this._showZoneTransition(2));
       }
     });
 
@@ -123,6 +130,13 @@ export default class GameScene extends Phaser.Scene {
       this.roomManager._enterRoom(bossRoom, null);
     });
 
+    // 디버그: 숫자 3 → 6층 즉시 점프 (구역 2 시작)
+    this.input.keyboard.on('keydown-THREE', () => {
+      if (this.currentFloor === 6) return;
+      this.currentFloor = 5;  // _advanceFloor() 가 +1 하여 6 도달
+      this._advanceFloor();
+    });
+
     this.events.once('player-dead', () => {
       this.time.delayedCall(400, () => this._showGameOver());
     });
@@ -137,11 +151,11 @@ export default class GameScene extends Phaser.Scene {
     });
   }
 
-  _showZoneClear() {
+  _showZoneClear(zone = 1) {
     this._buildRunSummary({
-      title:      'ZONE 1 CLEAR',
+      title:      `ZONE ${zone} CLEAR`,
       titleColor: '#4ecca3',
-      subtitle:   '구역 1 클리어!',
+      subtitle:   `구역 ${zone} 클리어!`,
       showCause:  false,
     });
   }
@@ -183,7 +197,8 @@ export default class GameScene extends Phaser.Scene {
     }
 
     // 사망 위치
-    push(this.add.text(GAME_W / 2, y, `구역 1  ·  ${this.currentFloor}층`, {
+    const zoneN = this.currentFloor <= 5 ? 1 : this.currentFloor <= 10 ? 2 : 3;
+    push(this.add.text(GAME_W / 2, y, `구역 ${zoneN}  ·  ${this.currentFloor}층`, {
       fontSize: '13px', color: '#cccccc', fontFamily: 'monospace',
     }).setOrigin(0.5).setScrollFactor(0).setDepth(101));
     y += 22;
@@ -250,8 +265,9 @@ export default class GameScene extends Phaser.Scene {
       y += Math.ceil(inv.length / 2) * rowH;
     }
 
-    // 허브로 돌아가기 버튼 (화면 하단 고정)
-    const btnY = GAME_H - 80;
+    // 허브로 돌아가기 버튼 (카메라 뷰포트(GAME_H - HUD_H = 756) 안 하단에 고정)
+    //   ScrollFactor(0) 요소는 글로벌 0~756 안에 있어야 화면에 표시됨 — 그 외는 viewport 밖으로 잘림.
+    const btnY = GAME_H - HUD_H - 60;
     const btn = this.add.rectangle(GAME_W / 2, btnY, 220, 46, 0x222222)
       .setStrokeStyle(2, 0x4ecca3).setScrollFactor(0).setDepth(101)
       .setInteractive({ cursor: 'pointer' });
@@ -299,6 +315,8 @@ export default class GameScene extends Phaser.Scene {
   }
 
   _advanceFloor() {
+    // 10층 이후로는 계단 트리거 자체가 발생하지 않지만 방어용 가드
+    if (this.currentFloor >= 10) return;
     this._disposeStairs();
     this._stairsRoomId    = null;
     this._stairsPos       = null;
@@ -364,6 +382,25 @@ export default class GameScene extends Phaser.Scene {
     if (this._stairs.prompt?.active) this._stairs.prompt.destroy();
     this._stairs = null;
     this._stairsNear = false;
+  }
+
+  /** 구역 경계 통과 안내 — 5층 보스 처치 후 계단 등장 시점에 잠깐 표시 */
+  _showZoneTransition(nextZone) {
+    const txt = this.add.text(ROOM_W / 2, ROOM_H / 2 - 60, `ZONE ${nextZone} 진입`, {
+      fontSize: '22px', color: '#4ecca3', fontFamily: 'monospace', fontStyle: 'bold',
+      stroke: '#000000', strokeThickness: 4,
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(90).setAlpha(0);
+    this.tweens.add({
+      targets: txt, alpha: 1, duration: 350, ease: 'Quad.Out',
+      onComplete: () => {
+        this.time.delayedCall(1400, () => {
+          this.tweens.add({
+            targets: txt, alpha: 0, duration: 400, ease: 'Quad.In',
+            onComplete: () => { if (txt.active) txt.destroy(); },
+          });
+        });
+      },
+    });
   }
 
   _showFloorBanner(floor) {
