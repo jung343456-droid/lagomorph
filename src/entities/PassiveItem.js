@@ -68,7 +68,7 @@ export const ITEM_DEFS = {
   },
   thunder_claws: {
     name:  '감전 발톱',
-    desc:  '명중 시 반경 70px 내 적에게 연쇄 8 피해',
+    desc:  '명중 시 반경 150px 내 적에게 연쇄 (입힌 피해의 50%, 데미지 2 이상 유지 시 최대 10회)',
     color: 0xddff22,
     apply: (player) => { player.hasThunder = true; },
   },

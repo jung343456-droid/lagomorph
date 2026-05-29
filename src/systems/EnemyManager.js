@@ -509,7 +509,6 @@ export default class EnemyManager {
         if (this.player.hasPoison && Math.random() < 0.3) this._applyPoison(e);
         if (this.player.hasFire && Math.random() < 0.3) this._applyBurn(e);
         if (this.player.hasIce && Math.random() < 0.3) this._applyFreeze(e);
-        if (this.player.hasThunder) directHit.push(e);
       }
 
       const ddx = e.x - playerX;
@@ -525,6 +524,7 @@ export default class EnemyManager {
         duration: KNOCKBACK_DUR,
       });
       if (!isSpike) showDamageNumber(this.scene, e.x, e.y - e.gameObject.height / 2, appliedDmg, '#ffffff', isCrit);
+      if (!isSpike && this.player.hasThunder) directHit.push({ enemy: e, damage: appliedDmg });
       // 피의 향연 — 치명타 명중 시 HP 회복 (실제 데미지가 들어간 경우만, spike 반사는 제외)
       if (isCrit && !isSpike && this.player.critHealAmount > 0) {
         this.player.heal(this.player.critHealAmount);
@@ -545,19 +545,25 @@ export default class EnemyManager {
   }
 
   _applyThunderChain(directHit) {
-    const CHAIN_R    = 150;
-    const CHAIN_DMGS = [8, 6, 4];
+    const CHAIN_R        = 150;
+    const CHAIN_MAX_HOPS = 10;  // 최대 연쇄 횟수 (무한 루프 방지)
+    const CHAIN_MIN_DMG  = 2;   // 다음 연쇄에 들어갈 데미지 하한 — 미만이면 중단
+    const CHAIN_MULT     = 0.5; // 직전 소스에 들어간 데미지의 50% 가 연쇄 데미지
 
-    const chained  = new Set(directHit);
-    let   frontier = directHit.filter(e => e.alive);
+    const chained  = new Set(directHit.map(d => d.enemy));
+    let   frontier = directHit
+      .filter(d => d.enemy.alive)
+      .map(d => ({ enemy: d.enemy, damage: d.damage }));
 
-    for (let hop = 0; hop < CHAIN_DMGS.length; hop++) {
+    for (let hop = 0; hop < CHAIN_MAX_HOPS; hop++) {
       if (frontier.length === 0) break;
-      const dmg = CHAIN_DMGS[hop];
       const nextFrontier = [];
 
-      frontier.forEach(src => {
+      frontier.forEach(({ enemy: src, damage: srcDmg }) => {
         if (!src.alive) return;
+        const dmg = Math.round(srcDmg * CHAIN_MULT);
+        if (dmg < CHAIN_MIN_DMG) return; // 감쇠 끝 — 더 이상 전파 안 함
+
         let nearest = null, minD = CHAIN_R;
         this.enemies.forEach(other => {
           if (chained.has(other) || !other.alive) return;
@@ -576,7 +582,7 @@ export default class EnemyManager {
           if (this.player.hasHuntersEye) this.player._pendingCrit = true;
         }
         chained.add(nearest);
-        nextFrontier.push(nearest);
+        nextFrontier.push({ enemy: nearest, damage: dmg });
       });
 
       frontier = nextFrontier;

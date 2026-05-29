@@ -18,7 +18,7 @@
  *   hasPoison        false  근거리 명중 시 30% 확률 독 부여
  *   hasFire          false  근거리 명중 시 30% 확률 화상 부여
  *   hasIce           false  근거리 명중 시 30% 확률 빙결
- *   hasThunder       false  근거리 명중 시 70px 연쇄 8피해
+ *   hasThunder       false  근거리 명중 시 150px 반경 연쇄, hop마다 직전 데미지의 50% (≥2 유지, 최대 10hop)
  *   healOnKill       0      적 처치 시 HP 회복량
  *   hasFireDisguise   false  불꽃 위장 — 트랩 스플래시 + 30% 화상
  *   hasIceDisguise    false  냉동 위장 — 트랩 스플래시 + 30% 빙결

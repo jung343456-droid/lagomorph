@@ -22,7 +22,7 @@
 | `swift_feet` | 질주 발 | 초록 `0x00ee66` | 이동속도 ×1.30 | `player.speed *= 1.3; player.baseSpeed *= 1.3` |
 | `tough_hide` | 강인한 가죽 | 빨강 `0xff4455` | 최대 HP +50, 즉시 50 회복 | `player.maxHp += 50; player.heal(50)` |
 | `quick_claws` | 민첩한 발톱 | 노랑 `0xffee00` | 근거리 충전 속도 ×1.5 | `player.chargeSpeedMult *= 1.5` |
-| `thunder_claws` | 감전 발톱 | 황녹 `0xddff22` | 명중 시 반경 70px 내 다른 적에게 연쇄 8 피해 | `player.hasThunder = true` |
+| `thunder_claws` | 감전 발톱 | 황녹 `0xddff22` | 명중 시 반경 150px 내 다른 적에게 연쇄 (hop마다 직전 데미지의 50%, 데미지 ≥2 유지 시 최대 10hop) | `player.hasThunder = true` |
 | `hunter_instinct` | 사냥꾼의 본능 | 분홍 `0xff6688` | 적 처치 시 HP 5 회복 | `player.healOnKill += 5` |
 | `fire_disguise` | 불꽃 위장 | 주황 `0xff5522` | 설치물 명중 시 반경 40px 스플래시 15 + 30% 확률 화상 | `player.hasFireDisguise = true` |
 | `ice_disguise` | 냉동 위장 | 하늘 `0x66ccff` | 설치물 명중 시 반경 40px 스플래시 15 + 30% 확률 빙결 | `player.hasIceDisguise = true` |
