@@ -5,10 +5,14 @@
  * 패턴:
  *   idle       → reposition(200px 이내 탐지)
  *   reposition → 플레이어 측면으로 횡이동, 정면 회피
- *   web_throw  → 3초마다 플레이어 위치+α에 거미줄 패치(반경 55px, 4초 지속) 투척
+ *                플레이어가 거미줄 패치 안에 있으면 attack 상태로 전환
+ *   web_throw  → 3초마다 플레이어 위치+α에 거미줄 패치(반경 60px, 7초 지속) 투척
+ *   attack     → 플레이어를 향해 직진 접근 (접촉 데미지로 처벌)
+ *                플레이어가 모든 거미줄에서 벗어나면 reposition 복귀
  *   stun       → 피격 시 0.3초 경직 + 넉백 (i-frame)
  *
  * 거미줄: 플레이어 위에 있을 때 이동속도 ×0.4 슬로우 (Player._slowTimer 갱신)
+ *         거미 본체는 거미줄 영향 없음 (slow는 player에게만 적용)
  *         거미 1마리당 활성 2개 (초과 시 가장 오래된 거미줄 소멸)
  *         거미 사망 시 거미줄도 dispose
  *
@@ -18,8 +22,8 @@
 const DETECT_R    = 200;
 const KITE_SPEED  = 90;
 const WEB_CD      = 3.0;
-const WEB_RADIUS  = 55;
-const WEB_DUR     = 4.0;
+const WEB_RADIUS  = 60;
+const WEB_DUR     = 7.0;
 const WEB_MAX     = 2;
 const LATERAL_FLIP = 1.5;
 const SPIDER_W    = 22;
@@ -110,6 +114,7 @@ export default class Spider {
 
       case 'reposition':
         if (dist >= DETECT_R) { this.state = 'idle'; this.gameObject.body.setVelocity(0, 0); break; }
+        if (this._playerOnWeb(player)) { this.state = 'attack'; break; }
         this._updateReposition(dx, dy, dist, dt);
         this._webCd -= dt;
         if (this._webCd <= 0) {
@@ -117,6 +122,11 @@ export default class Spider {
           this._webCd = WEB_CD;
           this._throwFlash = 0.3;
         }
+        break;
+
+      case 'attack':
+        if (!this._playerOnWeb(player)) { this.state = 'reposition'; break; }
+        this._chasePlayer(dx, dy, dist);
         break;
 
       case 'stun':
@@ -182,6 +192,22 @@ export default class Spider {
   get y() { return this.gameObject.y; }
 
   // ── private ─────────────────────────────────────────
+
+  _playerOnWeb(player) {
+    for (const w of this._webs) {
+      const dx = player.x - w.x;
+      const dy = player.y - w.y;
+      if (dx * dx + dy * dy < WEB_RADIUS * WEB_RADIUS) return true;
+    }
+    return false;
+  }
+
+  _chasePlayer(dx, dy, dist) {
+    const len = dist > 0 ? dist : 1;
+    const vx = (dx / len) * KITE_SPEED * this.speedMult;
+    const vy = (dy / len) * KITE_SPEED * this.speedMult;
+    this.gameObject.body.setVelocity(vx, vy);
+  }
 
   _updateReposition(dx, dy, dist, dt) {
     const len = dist > 0 ? dist : 1;

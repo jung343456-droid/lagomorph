@@ -28,3 +28,32 @@ export function showDamageNumber(scene, x, y, amount, color = '#ffffff', isCrit 
     onComplete: () => txt.destroy(),
   });
 }
+
+/**
+ * 회복 시 +숫자 팝업 — 데미지 숫자와 동일 스타일, 녹색 + '+' prefix.
+ * @param {Phaser.Scene} scene
+ * @param {number} x
+ * @param {number} y      - 숫자가 나타날 y (보통 스프라이트 상단)
+ * @param {number} amount - 실제 회복량 (0 이하면 무시)
+ */
+export function showHealNumber(scene, x, y, amount) {
+  if (!amount || amount <= 0) return;
+  const ox  = (Math.random() - 0.5) * 18;
+  const txt = scene.add.text(x + ox, y, '+' + Math.ceil(amount), {
+    fontSize:        '15px',
+    color:           '#66ff88',
+    fontFamily:      'monospace',
+    fontStyle:       'bold',
+    stroke:          '#000000',
+    strokeThickness: 3,
+  }).setOrigin(0.5, 1).setDepth(70);
+
+  scene.tweens.add({
+    targets:  txt,
+    y:        y - 40,
+    alpha:    0,
+    duration: 850,
+    ease:     'Quad.Out',
+    onComplete: () => txt.destroy(),
+  });
+}

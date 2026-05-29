@@ -5,8 +5,9 @@
  * 인지 범위: 방 어디서든 즉시 추적·공격 (DETECT_R 없음)
  * 이동속도: 1페이즈 180px/s / 2페이즈 220px/s (≈+22%, 플레이어 200 기준)
  * 1페이즈 (HP 100~50%) — 패턴 풀: dash×2 + dash_combo + stomp + roar (돌진계 60%):
- *   dash         → 플레이어 방향 440px/s · 0.45초 돌진, 벽 충돌 시 1.5초 스턴
- *                  장애물 충돌 시 장애물 파괴 후 돌진 지속
+ *   dash         → 플레이어 방향 440px/s 직진, 벽 충돌까지 최대 사거리 이동
+ *                  장애물 충돌 시 장애물 파괴 후 돌진 지속, 벽 충돌 시 220px/s 자기 반동(0.2초 감쇠) + 1.5초 스턴
+ *                  안전상 MAX 2.5초 캡 (room diagonal 통과 분)
  *   dash_combo   → 3연속 돌진 (각 dash 사이 재조준)
  *   stomp        → 0.6초 예고 후 반경 150px AoE (데미지 20 + 넉백)
  *   roar         → 반경 200px 내 플레이어 0.5초 기절 (데미지 없음)
@@ -24,8 +25,10 @@ const FANG_DH           = 88;
 
 const BASE_CHASE_SPEED  = 180;
 const DASH_SPEED        = 440;
-const DASH_DURATION     = 0.45;
+const DASH_DURATION_MAX     = 2.5;  // 벽/막힘까지 직진하기 위한 안전 캡 (room diagonal 통과)
 const WALL_STUN_DUR     = 1.5;
+const WALL_BOUNCE_FORCE = 220;  // 벽 충돌 시 자기 반동 초속
+const WALL_BOUNCE_DUR   = 0.2;  // 반동 감쇠 시간
 const HIT_STUN_DUR      = 0.3;
 
 const STOMP_WINDUP      = 0.6;
@@ -86,6 +89,9 @@ export default class Fang {
     this._dashDir       = { x: 0, y: 1 };
     this._dashTimer     = 0;
     this._wallStunTimer = 0;
+    this._bounceTimer   = 0;
+    this._bounceVx      = 0;
+    this._bounceVy      = 0;
 
     this._comboRemaining = 0;
     this._comboDelay     = 0;
@@ -139,7 +145,7 @@ export default class Fang {
       case 'dash':
         this._dashTimer -= dt;
         this.gameObject.body.setVelocity(this._dashDir.x * DASH_SPEED, this._dashDir.y * DASH_SPEED);
-        if (this._dashTimer < DASH_DURATION - 0.08 && this._isWallBlocked()) {
+        if (this._dashTimer < DASH_DURATION_MAX - 0.08 && this._isWallBlocked()) {
           this._startWallStun(); break;
         }
         if (this._dashTimer <= 0) this._endPattern();
@@ -148,7 +154,7 @@ export default class Fang {
       case 'combo_dash':
         this._dashTimer -= dt;
         this.gameObject.body.setVelocity(this._dashDir.x * DASH_SPEED, this._dashDir.y * DASH_SPEED);
-        if (this._dashTimer < DASH_DURATION - 0.08 && this._isWallBlocked()) {
+        if (this._dashTimer < DASH_DURATION_MAX - 0.08 && this._isWallBlocked()) {
           this._comboRemaining = 0; this._startWallStun(); break;
         }
         if (this._dashTimer <= 0) {
@@ -162,7 +168,13 @@ export default class Fang {
         break;
 
       case 'wallstun':
-        this.gameObject.body.setVelocity(0, 0);
+        if (this._bounceTimer > 0) {
+          this._bounceTimer -= dt;
+          const t = Math.max(0, this._bounceTimer) / WALL_BOUNCE_DUR;
+          this.gameObject.body.setVelocity(this._bounceVx * t, this._bounceVy * t);
+        } else {
+          this.gameObject.body.setVelocity(0, 0);
+        }
         this._wallStunTimer -= dt;
         if (this._wallStunTimer <= 0) this._endPattern();
         break;
@@ -261,7 +273,7 @@ export default class Fang {
     const dy  = player.y - this.gameObject.y;
     const len = Math.sqrt(dx * dx + dy * dy) || 1;
     this._dashDir = { x: dx / len, y: dy / len };
-    this._dashTimer = DASH_DURATION;
+    this._dashTimer = DASH_DURATION_MAX;
   }
 
   _startNextPattern(dx, dy, dist, player) {
@@ -276,7 +288,7 @@ export default class Fang {
     switch (pick) {
       case 'dash':
         this._dashDir = { x: dx / len, y: dy / len };
-        this._dashTimer = DASH_DURATION;
+        this._dashTimer = DASH_DURATION_MAX;
         this.state = 'dash';
         break;
 
@@ -310,7 +322,10 @@ export default class Fang {
   _startWallStun() {
     this.state = 'wallstun';
     this._wallStunTimer = WALL_STUN_DUR;
-    this.gameObject.body.setVelocity(0, 0);
+    // 돌진 반대 방향으로 반동
+    this._bounceTimer = WALL_BOUNCE_DUR;
+    this._bounceVx = -this._dashDir.x * WALL_BOUNCE_FORCE;
+    this._bounceVy = -this._dashDir.y * WALL_BOUNCE_FORCE;
     this.gameObject.setTint(0x666666);
     this.scene.cameras.main.shake(300, 0.015);
   }

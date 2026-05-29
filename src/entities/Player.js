@@ -25,6 +25,7 @@
  *   hasPoisonDisguise false  독성 위장 — 트랩 스플래시 + 30% 중독
  *   trapCostBonus    0      트랩 코어 소모 감소
  *   trapSizeMult     1      트랩 크기 배율
+ *   healItemMult     1.0    회복 아이템(상점 heal/heal_pct + 보스 RareItem) 효과 배율 — 대식가 +0.1
  *   coreDropMult     1      드롭 코어량 배율 (영구 해금 '코어 수집기')
  *   hpPerRoomClear   0      방 클리어 시 회복량 (영구 해금 '전투 적응')
  *   shopSlotBonus    0      상점 슬롯 추가 수 (영구 해금 '상인의 호의' — 기본 3 + 보너스)
@@ -33,7 +34,7 @@
  *   extraStartItems  0      시작 방 추가 아이템 수 (영구 해금 '기억 단편화' — 기본 1 + 보너스)
  *   shopPriceMult    1      상점 가격 배율 (영구 해금 '상인의 신용' — ×0.9, DungeonGenerator._generateShopSlots 참조)
  */
-import { showDamageNumber } from '../utils/DamageNumbers';
+import { showDamageNumber, showHealNumber } from '../utils/DamageNumbers';
 import { applyUnlocksToPlayer } from '../data/MetaProgress';
 
 const DISPLAY_W = 55; // 스프라이트 표시 너비 (px) — 히트박스와 동일
@@ -73,6 +74,7 @@ export default class Player {
     this.hasPoisonDisguise = false;
     this.trapCostBonus    = 0;
     this.trapSizeMult     = 1;
+    this.healItemMult     = 1.0; // 회복 아이템(상점 heal/heal_pct + 보스 RareItem) 효과 배율 — 대식가 +0.1
     this.coreDropMult     = 1;   // 코어 수집기 해금 시 적용 (EnemyManager.dropCores 참조)
     this.hpPerRoomClear   = 0;   // 전투 적응 해금 시 적용 (RoomManager._onRoomCleared 참조)
     this.shopSlotBonus    = 0;   // 상인의 호의 해금 시 +1 (DungeonGenerator._generateShopSlots 참조)
@@ -210,7 +212,11 @@ export default class Player {
   }
 
   heal(amount) {
+    if (!amount || amount <= 0) return;
+    const before = this.hp;
     this.hp = Math.min(this.maxHp, this.hp + amount);
+    const actual = this.hp - before;
+    if (actual > 0) showHealNumber(this.scene, this.x, this.y - DISPLAY_H / 2, actual);
   }
 
   /**

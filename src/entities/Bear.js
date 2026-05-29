@@ -1,29 +1,30 @@
 /**
  * 곰 (Bear) — 중량 탱커 (구역 2)
- * HP 110 / 속도 75 / 데미지 22(휘두르기) / 코어 6
+ * HP 110 / 속도 110 / 데미지 22(휘두르기) / 코어 6
  *
  * 패턴:
  *   idle          → chase(220px 이내 탐지)
- *   chase         → 75px/s 추격 (격노 시 130px/s)
- *   swipe_windup  → 80px 이내 접근 시 0.5초 예고
- *   swipe         → 0.2초간 120px 반경 정면 180° 부채꼴 피해 (등 뒤 안전)
+ *   chase         → 110px/s 추격 (격노 시 150px/s)
+ *   swipe_windup  → 80px 이내 접근 시 0.2초 예고
+ *   swipe         → 0.2초간 120px 반경 정면 180° 부채꼴 피해 (등 뒤 안전), 시각 잔상 +0.1초
  *   cooldown      → 1.8초 정지 (격노 시 1.0초)
  *   stun          → 피격 시 0.3초 경직 + 넉백 (i-frame)
  *
- * 격노: HP 30% 이하 진입 시 속도 ×1.73, swipe 쿨다운 ×0.56, 적색 틴트
+ * 격노: HP 30% 이하 진입 시 속도 ×1.36 (110→150), swipe 쿨다운 ×0.56, 적색 틴트
  * 시각: 짙은 갈색 틴트 (placeholder: hedgehog 스프라이트 재사용)
  * speedMult: Wolf 오라(180px 이내) 적용 시 추격 속도 ×1.2 (격노 시 추가 적용)
  */
 const DETECT_R       = 220;
-const CHASE_SPEED    = 75;
-const RAGE_SPEED     = 130;
+const CHASE_SPEED    = 110;
+const RAGE_SPEED     = 150;
 const SWIPE_RANGE    = 80;
 const SWIPE_RADIUS   = 120;
 const SWIPE_DMG      = 22;
 const SWIPE_PUSH     = 350;
 const SWIPE_PUSH_DUR = 0.25;
-const SWIPE_WINDUP   = 0.5;
+const SWIPE_WINDUP   = 0.2;
 const SWIPE_DUR      = 0.2;
+const SWIPE_AFTERIMAGE = 0.1;  // 시각 잔상 — 피해 판정은 SWIPE_DUR 끝에 종료
 const SWIPE_CD       = 1.8;
 const SWIPE_CD_RAGE  = 1.0;
 const RAGE_HP_RATIO  = 0.3;
@@ -247,7 +248,7 @@ export default class Bear {
     const angle = Math.atan2(this._swipeDir.y, this._swipeDir.x);
     const state = { a: 0.6 };
     this.scene.tweens.add({
-      targets: state, a: 0, duration: SWIPE_DUR * 1000, ease: 'Quad.Out',
+      targets: state, a: 0, duration: (SWIPE_DUR + SWIPE_AFTERIMAGE) * 1000, ease: 'Quad.Out',
       onUpdate: () => {
         gfx.clear();
         gfx.fillStyle(SWIPE_COLOR, state.a * 0.3);

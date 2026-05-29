@@ -1,11 +1,11 @@
 /**
  * 박쥐 (Bat) — 공중 군집 정찰병 (구역 2)
- * HP 10 / 속도 130 / 데미지 6 / 코어 드롭 1
+ * HP 10 / 속도 160 / 데미지 6 / 코어 드롭 1
  * 스폰: 3마리 묶음 (들쥐와 동일)
  *
  * 패턴:
- *   idle    → orbit(260px 이내 탐지)
- *   orbit   → 130~160px 거리에서 좌우 흔들리며 선회 (직진하지 않음)
+ *   idle    → orbit(390px 이내 탐지)
+ *   orbit   → 200~240px 거리에서 좌우 흔들리며 선회 (직진하지 않음)
  *   swoop   → 4초마다 가장 가까운 1마리가 0.4초간 직선 강하
  *   recover → 0.6초 정지 후 orbit 복귀
  *   stun    → 피격 시 0.3초 경직 + 넉백 (i-frame)
@@ -13,9 +13,9 @@
  * 시각: 어두운 보라 틴트 (placeholder: rat 스프라이트 재사용)
  * speedMult: Wolf 오라(180px 이내) 적용 시 ×1.2
  */
-const DETECT_R     = 260;
-const PREFER_DIST  = 145;
-const ORBIT_SPEED  = 130;
+const DETECT_R     = 390;
+const PREFER_DIST  = 220;
+const ORBIT_SPEED  = 160;
 const SWOOP_SPEED  = 220;
 const SWOOP_DUR    = 0.4;
 const RECOVER_DUR  = 0.6;

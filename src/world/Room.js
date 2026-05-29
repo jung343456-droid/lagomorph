@@ -179,9 +179,24 @@ export default class Room {
       for (let i = 0; i < def.weight; i++) POOL.push(t);
     });
 
+    // 문 통로 keep-out 영역 — 활성화된 출입구 안쪽에 장애물이 들어가지 않도록
+    const DOOR_PAD   = 12;   // 통로 좌우 여유 (문 폭 80 → 104px 통과 폭)
+    const DOOR_CLEAR = 90;   // 통로 진입 깊이
+    const keepouts = [];
+    const { doors } = this.data;
+    if (doors.up !== null)    keepouts.push({ x: DOOR_HX - DOOR_PAD, y: 0,                    w: DOOR_W + 2 * DOOR_PAD, h: DOOR_CLEAR });
+    if (doors.down !== null)  keepouts.push({ x: DOOR_HX - DOOR_PAD, y: ROOM_H - DOOR_CLEAR,  w: DOOR_W + 2 * DOOR_PAD, h: DOOR_CLEAR });
+    if (doors.left !== null)  keepouts.push({ x: 0,                  y: DOOR_VY - DOOR_PAD,   w: DOOR_CLEAR,            h: DOOR_W + 2 * DOOR_PAD });
+    if (doors.right !== null) keepouts.push({ x: ROOM_W - DOOR_CLEAR, y: DOOR_VY - DOOR_PAD,  w: DOOR_CLEAR,            h: DOOR_W + 2 * DOOR_PAD });
+    const blocksDoor = (x, y, dw, dh) => {
+      const ox1 = x - dw / 2, oy1 = y - dh / 2, ox2 = x + dw / 2, oy2 = y + dh / 2;
+      return keepouts.some(k => ox1 < k.x + k.w && ox2 > k.x && oy1 < k.y + k.h && oy2 > k.y);
+    };
+
     if (!this.data.obstacleLayout) {
       const margin = 40;
       const count  = 2 + Math.floor(Math.random() * 3);  // 2~4
+      const MAX_TRY = 30;
       this.data.obstacleLayout = [];
       for (let i = 0; i < count; i++) {
         const type  = POOL[Math.floor(Math.random() * POOL.length)];
@@ -192,10 +207,23 @@ export default class Room {
         const maxX = ROOM_W - WALL_T - margin - dw / 2;
         const minY = WALL_T + margin + dh / 2;
         const maxY = ROOM_H - WALL_T - margin - dh / 2;
-        const x = minX + Math.random() * (maxX - minX);
-        const y = minY + Math.random() * (maxY - minY);
-        this.data.obstacleLayout.push({ x, y, type, scale });
+        let placed = false;
+        for (let t = 0; t < MAX_TRY && !placed; t++) {
+          const x = minX + Math.random() * (maxX - minX);
+          const y = minY + Math.random() * (maxY - minY);
+          if (blocksDoor(x, y, dw, dh)) continue;
+          this.data.obstacleLayout.push({ x, y, type, scale });
+          placed = true;
+        }
+        // MAX_TRY 안에 자리를 못 찾으면 이 장애물은 스킵 (개수가 1~2개 적어질 수 있음)
       }
+    } else {
+      // 기존 저장된 레이아웃에서도 문 통로 막는 장애물은 제거 (구버전 호환)
+      this.data.obstacleLayout = this.data.obstacleLayout.filter(o => {
+        const def = TYPES[o.type] || TYPES.bush;
+        const s   = o.scale ?? (o.w && o.h ? Math.max(o.w / def.w, o.h / def.h) : 1);
+        return !blocksDoor(o.x, o.y, def.w * s, def.h * s);
+      });
     }
 
     this.data.obstacleLayout.forEach(({ x, y, type, scale, w, h }) => {

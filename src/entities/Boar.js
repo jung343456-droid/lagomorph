@@ -5,7 +5,7 @@
  * 패턴:
  *   idle     → approach(250px 이내 탐지)
  *   approach → 80px/s로 천천히 다가옴
- *   ready    → 200px 이내 진입 시 0.5초 예고(앞발 긁기)
+ *   ready    → 200px 이내 진입 시 0.2초 예고(앞발 긁기)
  *   charge   → 270px/s 직선 1.0초 돌진, 장애물(boulder) 파괴 + 돌진 지속,
  *              벽 충돌 시 1.0초 자기 스턴
  *   recover  → 0.8초 정지 후 approach 복귀
@@ -18,7 +18,7 @@ const DETECT_R       = 250;
 const READY_DIST     = 200;
 const APPROACH_SPEED = 80;
 const CHARGE_SPEED   = 270;
-const READY_DUR      = 0.5;
+const READY_DUR      = 0.2;
 const CHARGE_DUR     = 1.0;
 const RECOVER_DUR    = 0.8;
 const WALL_STUN_DUR  = 1.0;

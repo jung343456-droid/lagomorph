@@ -831,8 +831,9 @@ export default class UIScene extends Phaser.Scene {
   }
 
   _applyShopSlot(slot, player) {
-    if (slot.kind === 'heal')      { player.heal(slot.amount); return; }
-    if (slot.kind === 'heal_pct')  { player.heal(Math.floor(player.maxHp * slot.ratio)); return; }
+    // 대식가(big_trap) — healItemMult 로 회복량 ×1.1
+    if (slot.kind === 'heal')      { player.heal(Math.max(1, Math.round(slot.amount * player.healItemMult))); return; }
+    if (slot.kind === 'heal_pct')  { player.heal(Math.floor(player.maxHp * slot.ratio * player.healItemMult)); return; }
     if (slot.kind === 'heal_full') { player.heal(player.maxHp); return; }
     if (slot.kind === 'item') {
       // 생성 시점에 이미 선정된 패시브 적용 (slot.id 고정)

@@ -1,16 +1,16 @@
 /**
  * 두꺼비 (Toad) — 독 원거리병 (구역 2)
- * HP 32 / 속도 65 / 데미지 7(접촉) + 5/s 독 DoT(3초) / 코어 3
+ * HP 32 / 속도 65 / 데미지 7(접촉) + 5 독 DoT(진입 즉시 1회, 이후 0.5초마다, 웅덩이 4초 지속) / 코어 3
  *
  * 패턴:
  *   idle      → kite(240px 이내 탐지)
  *   kite      → 100px 이내 접근 시 후퇴, 그 외에는 정지
  *               2.5초마다 spit (HP 30% 이하: 1.5초)
  *   spit_wind → 0.4초 예고
- *   spit      → 0.5초 비행 후 착탄 → 60px 반경 독 웅덩이(지속 3초)
+ *   spit      → 0.33초 비행 후 착탄 → 66px 반경 독 웅덩이(지속 4초)
  *   stun      → 피격 시 0.3초 경직 + 넉백 (i-frame)
  *
- * 독 웅덩이: 플레이어 overlap 시 1초당 5 피해 DoT
+ * 독 웅덩이: 플레이어가 범위에 진입한 순간 즉시 5 피해, 이후 0.5초마다 5 피해
  *           두꺼비 1마리당 활성 2개 (초과 시 가장 오래된 것 소멸)
  *
  * 시각: 독초록 틴트 (placeholder: squirrel 스프라이트 재사용)
@@ -22,13 +22,13 @@ const RETREAT_SPEED = 65;
 const SPIT_CD      = 2.5;
 const SPIT_CD_RAGE = 1.5;
 const SPIT_WINDUP  = 0.4;
-const SPIT_FLIGHT  = 0.5;
-const SPIT_SPEED   = 180;
-const PUDDLE_RADIUS = 60;
-const PUDDLE_DUR   = 3.0;
+const SPIT_FLIGHT  = 0.333;
+const SPIT_SPEED   = 270;
+const PUDDLE_RADIUS = 66;
+const PUDDLE_DUR   = 4.0;
 const PUDDLE_MAX   = 2;
-const PUDDLE_DMG   = 5;       // 초당 데미지
-const PUDDLE_TICK  = 1.0;     // 초당 1회 적용
+const PUDDLE_DMG   = 5;       // 틱당 데미지
+const PUDDLE_TICK  = 0.5;     // 0.5초마다 적용 (진입 시 즉시 1회)
 const TOAD_W       = 22;
 const TOAD_H       = 20;
 const TOAD_DW      = 36;
@@ -259,7 +259,7 @@ export default class Toad {
       const r = Math.random() * PUDDLE_RADIUS * 0.6;
       gfx.fillCircle(x + Math.cos(ang) * r, y + Math.sin(ang) * r, 2);
     }
-    this._puddles.push({ gfx, timer: PUDDLE_DUR, x, y, tickTimer: PUDDLE_TICK });
+    this._puddles.push({ gfx, timer: PUDDLE_DUR, x, y, tickTimer: PUDDLE_TICK, wasInside: false });
     while (this._puddles.length > PUDDLE_MAX) {
       const old = this._puddles.shift();
       if (old.gfx?.active) old.gfx.destroy();
@@ -275,18 +275,22 @@ export default class Toad {
       }
       if (p.timer < 0.8 && p.gfx?.active) p.gfx.setAlpha(p.timer / 0.8);
 
-      // 플레이어 overlap → DoT 적용 (1초 단위 틱)
+      // 플레이어 overlap → 진입 즉시 1회 + 0.5초마다 DoT
       const dx = player.x - p.x;
       const dy = player.y - p.y;
-      if (dx * dx + dy * dy < PUDDLE_RADIUS * PUDDLE_RADIUS) {
-        p.tickTimer -= dt;
-        if (p.tickTimer <= 0) {
+      const inside = dx * dx + dy * dy < PUDDLE_RADIUS * PUDDLE_RADIUS;
+      if (inside) {
+        if (!p.wasInside || (p.tickTimer -= dt) <= 0) {
           p.tickTimer = PUDDLE_TICK;
+          p.wasInside = true;
           // 직접 데미지 적용 (인접 invincible 프레임은 player.takeDamage 가 처리)
           player.lastDamageSource = '독 웅덩이';
           const dead = player.takeDamage(PUDDLE_DMG, null);
           if (dead) this.scene.events.emit('player-dead');
         }
+      } else {
+        p.wasInside = false;
+        p.tickTimer = PUDDLE_TICK;
       }
       return true;
     });

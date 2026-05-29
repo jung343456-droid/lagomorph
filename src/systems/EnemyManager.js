@@ -306,7 +306,8 @@ export default class EnemyManager {
       if (item.magnetized || d < RARE_PICKUP_R) {
         if (!item.magnetized) item.startMagnet();
         if (d < RARE_COLLECT_R) {
-          this.player.heal(item.healAmount);
+          // 대식가(big_trap) — healItemMult 로 회복량 ×1.1
+          this.player.heal(Math.max(1, Math.round(item.healAmount * this.player.healItemMult)));
           item.collect();
           return false;
         }

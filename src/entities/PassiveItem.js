@@ -104,9 +104,12 @@ export const ITEM_DEFS = {
   },
   big_trap: {
     name:  '대식가',
-    desc:  '트랩 크기 ×2 (22 → 44px)',
+    desc:  '트랩 크기 ×2 (22 → 44px), 회복 아이템 효과 +10%',
     color: 0x885500,
-    apply: (player) => { player.trapSizeMult *= 2; },
+    apply: (player) => {
+      player.trapSizeMult *= 2;
+      player.healItemMult += 0.1;
+    },
   },
   cruel_claws: {
     name:  '잔혹한 발톱',
