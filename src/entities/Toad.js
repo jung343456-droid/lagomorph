@@ -7,13 +7,13 @@
  *   kite      → 100px 이내 접근 시 후퇴, 그 외에는 정지
  *               2.5초마다 spit (HP 30% 이하: 1.5초)
  *   spit_wind → 0.4초 예고
- *   spit      → 0.33초 비행 후 착탄 → 66px 반경 독 웅덩이(지속 4초)
+ *   spit      → 0.33초 비행 후 착탄 → 60px 반경 독 웅덩이(지속 4초)
  *   stun      → 피격 시 0.3초 경직 + 넉백 (i-frame)
  *
  * 독 웅덩이: 플레이어가 범위에 진입한 순간 즉시 5 피해, 이후 0.5초마다 5 피해
  *           두꺼비 1마리당 활성 2개 (초과 시 가장 오래된 것 소멸)
  *
- * 시각: 독초록 틴트 (placeholder: squirrel 스프라이트 재사용)
+ * 시각: toad 스프라이트 + 독초록 틴트, 독 웅덩이는 toad-puddle 텍스처 사용
  * speedMult: Wolf 오라(180px 이내) 적용 시 후퇴 속도 ×1.2
  */
 const DETECT_R     = 240;
@@ -24,7 +24,8 @@ const SPIT_CD_RAGE = 1.5;
 const SPIT_WINDUP  = 0.4;
 const SPIT_FLIGHT  = 0.333;
 const SPIT_SPEED   = 270;
-const PUDDLE_RADIUS = 66;
+const PUDDLE_RADIUS = 60;   // DoT 판정 반경 — toad-puddle 프레임(120px)의 반(설계 의도)
+const PUDDLE_IMG_SIZE = 120; // toad-puddle 텍스처 네이티브 프레임 (1:1 렌더)
 const PUDDLE_DUR   = 4.0;
 const PUDDLE_MAX   = 2;
 const PUDDLE_DMG   = 5;       // 틱당 데미지
@@ -247,18 +248,9 @@ export default class Toad {
   }
 
   _spawnPuddle(x, y) {
-    const gfx = this.scene.add.graphics().setDepth(7);
-    gfx.fillStyle(PUDDLE_TINT, 0.35);
-    gfx.fillCircle(x, y, PUDDLE_RADIUS);
-    gfx.lineStyle(2, PUDDLE_TINT, 0.7);
-    gfx.strokeCircle(x, y, PUDDLE_RADIUS);
-    // 거품 표시 (3~5개)
-    gfx.fillStyle(0xffffff, 0.6);
-    for (let i = 0; i < 4; i++) {
-      const ang = Math.random() * Math.PI * 2;
-      const r = Math.random() * PUDDLE_RADIUS * 0.6;
-      gfx.fillCircle(x + Math.cos(ang) * r, y + Math.sin(ang) * r, 2);
-    }
+    const gfx = this.scene.add.image(x, y, 'toad-puddle')
+      .setDisplaySize(PUDDLE_IMG_SIZE, PUDDLE_IMG_SIZE)
+      .setDepth(7);
     this._puddles.push({ gfx, timer: PUDDLE_DUR, x, y, tickTimer: PUDDLE_TICK, wasInside: false });
     while (this._puddles.length > PUDDLE_MAX) {
       const old = this._puddles.shift();

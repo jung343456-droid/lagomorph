@@ -6,7 +6,7 @@
  *   idle       → reposition(200px 이내 탐지)
  *   reposition → 플레이어 측면으로 횡이동, 정면 회피
  *                플레이어가 거미줄 패치 안에 있으면 attack 상태로 전환
- *   web_throw  → 3초마다 플레이어 위치+α에 거미줄 패치(반경 60px, 7초 지속) 투척
+ *   web_throw  → 3초마다 플레이어 위치+α에 거미줄 패치(반경 55px, 7초 지속) 투척
  *   attack     → 플레이어를 향해 직진 접근 (접촉 데미지로 처벌)
  *                플레이어가 모든 거미줄에서 벗어나면 reposition 복귀
  *   stun       → 피격 시 0.3초 경직 + 넉백 (i-frame)
@@ -16,13 +16,14 @@
  *         거미 1마리당 활성 2개 (초과 시 가장 오래된 거미줄 소멸)
  *         거미 사망 시 거미줄도 dispose
  *
- * 시각: 검은 틴트 (placeholder: squirrel 스프라이트 재사용)
+ * 시각: spider 스프라이트 + 검은 틴트, 거미줄은 spider-web 텍스처 사용
  * speedMult: Wolf 오라(180px 이내) 적용 시 횡이동 속도 ×1.2
  */
 const DETECT_R    = 200;
 const KITE_SPEED  = 90;
 const WEB_CD      = 3.0;
-const WEB_RADIUS  = 60;
+const WEB_RADIUS  = 55;   // 슬로우 판정 반경 — spider-web 프레임(110px)의 반(설계 의도)
+const WEB_IMG_SIZE = 110; // spider-web 텍스처 네이티브 프레임 (1:1 렌더)
 const WEB_DUR     = 7.0;
 const WEB_MAX     = 2;
 const LATERAL_FLIP = 1.5;
@@ -31,7 +32,6 @@ const SPIDER_H    = 22;
 const SPIDER_DW   = 36;
 const SPIDER_DH   = 36;
 const TINT        = 0x333344;
-const WEB_TINT    = 0xddddee;
 
 function calcDir(vx, vy) {
   if (Math.abs(vx) < 1 && Math.abs(vy) < 1) return null;
@@ -237,17 +237,9 @@ export default class Spider {
     const wx = player.x + pvx * 0.15;
     const wy = player.y + pvy * 0.15;
 
-    const gfx = this.scene.add.graphics().setDepth(7);
-    gfx.fillStyle(WEB_TINT, 0.35);
-    gfx.fillCircle(wx, wy, WEB_RADIUS);
-    gfx.lineStyle(2, WEB_TINT, 0.7);
-    gfx.strokeCircle(wx, wy, WEB_RADIUS);
-    // 거미줄 모양 — 십자선
-    gfx.lineStyle(1, WEB_TINT, 0.6);
-    gfx.beginPath();
-    gfx.moveTo(wx - WEB_RADIUS, wy); gfx.lineTo(wx + WEB_RADIUS, wy);
-    gfx.moveTo(wx, wy - WEB_RADIUS); gfx.lineTo(wx, wy + WEB_RADIUS);
-    gfx.strokePath();
+    const gfx = this.scene.add.image(wx, wy, 'spider-web')
+      .setDisplaySize(WEB_IMG_SIZE, WEB_IMG_SIZE)
+      .setDepth(7);
 
     this._webs.push({ gfx, timer: WEB_DUR, x: wx, y: wy });
     while (this._webs.length > WEB_MAX) {
