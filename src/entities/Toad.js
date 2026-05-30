@@ -10,7 +10,7 @@
  *   spit      → 0.33초 비행 후 착탄 → 60px 반경 독 웅덩이(지속 4초)
  *   stun      → 피격 시 0.3초 경직 + 넉백 (i-frame)
  *
- * 독 웅덩이: 플레이어가 범위에 진입한 순간 즉시 5 피해, 이후 0.5초마다 5 피해
+ * 독 웅덩이: 플레이어가 범위에 진입한 순간 즉시 5 피해, 이후 0.5초마다 5 피해 — 방어력(armor/damageReduction) 관통
  *           두꺼비 1마리당 활성 2개 (초과 시 가장 오래된 것 소멸)
  *
  * 시각: toad 스프라이트 + 독초록 틴트, 독 웅덩이는 toad-puddle 텍스처 사용
@@ -276,8 +276,9 @@ export default class Toad {
           p.tickTimer = PUDDLE_TICK;
           p.wasInside = true;
           // 직접 데미지 적용 (인접 invincible 프레임은 player.takeDamage 가 처리)
+          // 독 피해는 방어력(armor/damageReduction) 관통
           player.lastDamageSource = '독 웅덩이';
-          const dead = player.takeDamage(PUDDLE_DMG, null);
+          const dead = player.takeDamage(PUDDLE_DMG, null, { bypassArmor: true });
           if (dead) this.scene.events.emit('player-dead');
         }
       } else {

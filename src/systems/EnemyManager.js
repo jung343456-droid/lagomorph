@@ -546,30 +546,39 @@ export default class EnemyManager {
 
   _applyThunderChain(directHit) {
     const CHAIN_R        = 150;
-    const CHAIN_MAX_HOPS = 10;  // 최대 연쇄 횟수 (무한 루프 방지)
-    const CHAIN_MIN_DMG  = 2;   // 다음 연쇄에 들어갈 데미지 하한 — 미만이면 중단
+    const CHAIN_MAX_HOPS = 20;  // 최대 연쇄 횟수 (무한 루프 방지)
+    const CHAIN_MIN_DMG  = 1;   // 다음 연쇄에 들어갈 데미지 하한 — 미만이면 중단
     const CHAIN_MULT     = 0.5; // 직전 소스에 들어간 데미지의 50% 가 연쇄 데미지
 
     const chained  = new Set(directHit.map(d => d.enemy));
-    let   frontier = directHit
-      .filter(d => d.enemy.alive)
-      .map(d => ({ enemy: d.enemy, damage: d.damage }));
+    // 첫 타에 죽은 적도 연쇄 원점으로 사용 — gameObject 가 사망 트윈 동안 살아있어 x/y 좌표 유효
+    let   frontier = directHit.map(d => ({ enemy: d.enemy, damage: d.damage }));
 
     for (let hop = 0; hop < CHAIN_MAX_HOPS; hop++) {
       if (frontier.length === 0) break;
       const nextFrontier = [];
 
       frontier.forEach(({ enemy: src, damage: srcDmg }) => {
-        if (!src.alive) return;
-        const dmg = Math.round(srcDmg * CHAIN_MULT);
+        if (src.destroyed) return; // gameObject 가 이미 파괴된 경우만 스킵 (좌표 접근 불가)
+        const dmg = Math.floor(srcDmg * CHAIN_MULT);
         if (dmg < CHAIN_MIN_DMG) return; // 감쇠 끝 — 더 이상 전파 안 함
 
+        // 1순위: 아직 맞지 않은 가장 가까운 적
         let nearest = null, minD = CHAIN_R;
         this.enemies.forEach(other => {
           if (chained.has(other) || !other.alive) return;
           const d = Phaser.Math.Distance.Between(src.x, src.y, other.x, other.y);
           if (d < minD) { minD = d; nearest = other; }
         });
+        // 2순위: 없으면 자신을 제외한 가장 가까운 적 (이미 맞은 적도 다시 튐)
+        if (!nearest) {
+          minD = CHAIN_R;
+          this.enemies.forEach(other => {
+            if (other === src || !other.alive) return;
+            const d = Phaser.Math.Distance.Between(src.x, src.y, other.x, other.y);
+            if (d < minD) { minD = d; nearest = other; }
+          });
+        }
         if (!nearest) return;
 
         this._drawLightningLine(src.x, src.y, nearest.x, nearest.y);

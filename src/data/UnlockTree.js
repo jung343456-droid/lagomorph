@@ -62,8 +62,8 @@ export const UNLOCK_NODES = {
   },
   combat_adapt: {
     branch: 'survival', tier: 3, prereq: 'thick_hide_1', cost: 160,
-    name: '전투 적응', desc: '방 클리어 시 HP +5',
-    apply: (p) => { p.hpPerRoomClear = (p.hpPerRoomClear ?? 0) + 5; },
+    name: '전투 적응', desc: '방 클리어 시 HP +4',
+    apply: (p) => { p.hpPerRoomClear = (p.hpPerRoomClear ?? 0) + 4; },
   },
   last_struggle: {
     branch: 'survival', tier: 4, prereq: 'combat_adapt', cost: 400,
@@ -77,8 +77,8 @@ export const UNLOCK_NODES = {
   },
   second_wind: {
     branch: 'survival', tier: 6, prereq: 'reinforced_hide', cost: 700,
-    name: '거듭난 숨결', desc: '방 클리어 시 HP +5 추가 (총 +10)',
-    apply: (p) => { p.hpPerRoomClear = (p.hpPerRoomClear ?? 0) + 5; },
+    name: '거듭난 숨결', desc: '방 클리어 시 HP +4 추가 (총 +8)',
+    apply: (p) => { p.hpPerRoomClear = (p.hpPerRoomClear ?? 0) + 4; },
   },
   phantom_guard: {
     branch: 'survival', tier: 7, prereq: 'second_wind', cost: 900,

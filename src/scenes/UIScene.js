@@ -500,6 +500,7 @@ export default class UIScene extends Phaser.Scene {
     const trapCost = Math.max(1, 3 - player.trapCostBonus);
     const stats = [
       { label: '체력',         value: `${player.hp}/${player.maxHp}`,                enhanced: player.maxHp > 100 },
+      { label: '방어력',       value: `${player.armor ?? 0}`,                        enhanced: (player.armor ?? 0) > 0 },
       { label: '이동속도',     value: `${Math.round(player.baseSpeed)}`,             enhanced: player.baseSpeed > 200 },
       { label: '근거리 피해',  value: mult(player.meleeDamageMult),                  enhanced: player.meleeDamageMult > 1 },
       { label: '근거리 반경',  value: mult(player.meleeRadiusMult),                  enhanced: player.meleeRadiusMult > 1 },

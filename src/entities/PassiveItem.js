@@ -144,9 +144,9 @@ export const ITEM_DEFS = {
   },
   blood_feast: {
     name:  '피의 향연',
-    desc:  '치명타 명중 시 HP +5',
+    desc:  '치명타 명중 시 HP +3',
     color: 0xaa0033,
-    apply: (player) => { player.critHealAmount += 5; },
+    apply: (player) => { player.critHealAmount += 3; },
   },
 };
 

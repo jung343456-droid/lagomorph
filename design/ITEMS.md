@@ -34,7 +34,7 @@
 | `precision_strike` | 정밀 일격 | 황금 `0xddcc22` | 치명타율 +10%, 치명타 피해 +50% | `player.critRate += 0.10; player.critMult += 0.5` |
 | `savage_strike` | 광폭한 일격 | 짙은빨강 `0x8b0000` | 치명타 피해 +100% (×1.5→×2.5) | `player.critMult += 1.0` |
 | `hunter_eye` | 사냥꾼의 눈 | 황색 `0xddaa00` | 적 처치 후 다음 1발 확정 치명 | `player.hasHuntersEye = true` |
-| `blood_feast` | 피의 향연 | 자홍 `0xaa0033` | 치명타 명중 시 HP +5 (근거리·트랩 직격·트랩 스플래시 모두) | `player.critHealAmount += 5` |
+| `blood_feast` | 피의 향연 | 자홍 `0xaa0033` | 치명타 명중 시 HP +3 (근거리·트랩 직격·트랩 스플래시 모두) | `player.critHealAmount += 3` |
 
 ---
 
