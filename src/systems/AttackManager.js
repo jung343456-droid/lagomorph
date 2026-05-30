@@ -264,8 +264,9 @@ export default class AttackManager {
   _startPlace() {
     const em   = this.scene.enemyManager;
     const cost = Math.max(1, POOP_COST - this.player.trapCostBonus);
+    const maxTraps = MAX_POOPS + (this.player.trapMaxBonus ?? 0);
     if (this._bCooldown > 0)            return;
-    if (this._poops.length >= MAX_POOPS) return;
+    if (this._poops.length >= maxTraps)  return;
     if (em.coreCount < cost)            return;
 
     em.coreCount -= cost;

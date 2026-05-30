@@ -4,7 +4,7 @@
 
 ## 핵심 컨셉
 - **재화는 메타 코어 1종** — 런 중 픽업한 코어만 영속 적립
-- **3계열 × 4단계 = 12노드** — 공격 / 생존 / 특수, 각 계열 tier 순서대로만 해금 가능 (선행 prereq)
+- **3계열 × 7단계 = 21노드** — 공격 / 생존 / 특수, 각 계열 tier 순서대로만 해금 가능 (선행 prereq). 카드 그리드는 `UnlockMenu` 의 스크롤뷰로 표시
 - **효과 적용 시점은 Player 생성 직후** — `applyUnlocksToPlayer()` 가 시작 스탯·플래그를 변경
 - **상태 표기**: ✅ = 효과까지 동작, 🔧 = 노드는 구매 가능하나 효과 미구현(후속 goal)
 
@@ -39,6 +39,9 @@
 | 2 | 파동 확장 | 근거리 반경 ×1.15 (`meleeRadiusMult +0.15`) | 80 | ✅ |
 | 3 | 충전 가속 | 근거리 충전 속도 ×1.20 (`chargeSpeedMult +0.20`) | 160 | ✅ |
 | 4 | 임계 분노 | 치명타율 +8% (15→23%) | 300 | ✅ |
+| 5 | 면도날 발톱 | 치명타 피해 +30% (`critMult += 0.3`, ×1.5→×1.8) | 500 | ✅ |
+| 6 | 덫꾼의 손 | 트랩 최대 동시 설치 5→6 (`trapMaxBonus +1`, AttackManager MAX_POOPS 합산) | 700 | ✅ |
+| 7 | 점화의 잔해 | 런 시작 시 코어 +10 (`startingCores +10`, GameScene.create 합산, 메타 적립 대상 아님) | 900 | ✅ |
 
 ### 생존 계열
 
@@ -48,6 +51,9 @@
 | 2 | 두꺼운 가죽 I | 받는 피해 -5% (`damageReduction += 0.05`, 최소 1 보장) | 80 | ✅ |
 | 3 | 전투 적응 | 방 클리어 시 HP +5 (`hpPerRoomClear`) | 160 | ✅ |
 | 4 | 최후의 발버둥 | 치명타 1회 흡수 + 최대 HP 30% 복원 (`extraLives +1`, 런당) | 400 | ✅ |
+| 5 | 강화 외피 | 시작 방어력 +1 (`armor +1`, 방탄조끼와 누적, ≤armor 공격 무효) | 500 | ✅ |
+| 6 | 거듭난 숨결 | 방 클리어 시 HP +5 추가 (`hpPerRoomClear += 5`, 전투 적응 누적 총 +10) | 700 | ✅ |
+| 7 | 잔영의 가호 | 피격 후 무적 시간 ×1.25 (`invulnDurationMult ×= 1.25`, 일반 분기 tween duration) | 900 | ✅ |
 
 ### 특수 계열
 
@@ -57,6 +63,9 @@
 | 2 | 코어 수집기 | 드롭 코어량 ×1.15 (`coreDropMult`) | 90 | ✅ |
 | 3 | 기억 단편화 | 시작 방 아이템 +1 (`extraStartItems +1`) | 180 | ✅ |
 | 4 | 상인의 신용 | 상점 모든 슬롯 가격 ×0.9, Math.floor (`shopPriceMult ×= 0.9`) | 360 | ✅ |
+| 5 | 상인의 계약 | 상점 슬롯 +1 (4 → 5) (`shopSlotBonus +1`, 상인의 호의 누적) | 500 | ✅ |
+| 6 | 흥정 II | 상점 모든 슬롯 가격 ×0.95 (`shopPriceMult ×= 0.95`, 상인의 신용 누적) | 700 | ✅ |
+| 7 | 황금손 | 드롭 코어량 ×1.10 (`coreDropMult ×= 1.10`, 코어 수집기 누적) | 900 | ✅ |
 
 > 변경 이력 (설계 정정):
 > - 공격 t3: 관통 각인 → **충전 가속** (3단계 관통 기능 폐기)
@@ -72,7 +81,11 @@
 |---|---|
 | 노드 정의(name·desc·cost·prereq·apply) | `src/data/UnlockTree.js` (`UNLOCK_NODES`) |
 | 메타 코어/해금 ID 영속 저장 + 적용 헬퍼 | `src/data/MetaProgress.js` (`applyUnlocksToPlayer`, `resetAllProgress`) |
-| 메뉴 UI 렌더링 | `src/ui/UnlockMenu.js` |
+| 메뉴 UI 렌더링 (스크롤뷰 — Container+GeometryMask+드래그/휠/인디케이터) | `src/ui/UnlockMenu.js` |
+| 트랩 최대 동시 설치 (덫꾼의 손) | `src/systems/AttackManager.js` `_startPlace` (MAX_POOPS + trapMaxBonus) |
+| 런 시작 코어 (점화의 잔해) | `src/scenes/GameScene.js` `create` (Player 생성 직후 `enemyManager.coreCount += startingCores`) |
+| 강화 외피 (armor) | `src/entities/Player.js` `takeDamage` (평탄 감산, ≤armor 공격 무효) |
+| 잔영의 가호 (invulnDurationMult) | `src/entities/Player.js` `takeDamage` 일반 분기 무적 tween duration |
 | 진입 트리거 NPC | `src/entities/Shopkeeper.js` (HubScene 인스턴스, GRIM) |
 | 최후의 발버둥 발동 로직 | `src/entities/Player.js` (`takeDamage` 치명 흡수 분기) |
 | 기억 단편화 적용 | `src/scenes/GameScene.js` (`_spawnStartRoomItem` 루프) |

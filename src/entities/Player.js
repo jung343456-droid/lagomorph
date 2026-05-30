@@ -26,13 +26,17 @@
  *   trapCostBonus    0      트랩 코어 소모 감소
  *   trapSizeMult     1      트랩 크기 배율
  *   healItemMult     1.0    회복 아이템(상점 heal/heal_pct + 보스 RareItem) 효과 배율 — 대식가 +0.1
- *   coreDropMult     1      드롭 코어량 배율 (영구 해금 '코어 수집기')
- *   hpPerRoomClear   0      방 클리어 시 회복량 (영구 해금 '전투 적응')
- *   shopSlotBonus    0      상점 슬롯 추가 수 (영구 해금 '상인의 호의' — 기본 3 + 보너스)
+ *   coreDropMult     1      드롭 코어량 배율 (영구 해금 '코어 수집기' ×1.15, '황금손' ×1.10)
+ *   hpPerRoomClear   0      방 클리어 시 회복량 (영구 해금 '전투 적응' +5, '거듭난 숨결' +5)
+ *   shopSlotBonus    0      상점 슬롯 추가 수 (영구 해금 '상인의 호의' / '상인의 계약' — 기본 3 + 보너스)
+ *   armor            0      받는 피해 평탄 감산 (방탄조끼 +2, 영구 해금 '강화 외피' +1) — amount = max(0, amount - armor), 0 이면 피격 자체 무효
  *   damageReduction  0      받는 피해 감산 비율 (영구 해금 '두꺼운 가죽 I' — amount × (1-reduction), 최소 1)
  *   extraLives       0      런당 사망 무효 횟수 (영구 해금 '최후의 발버둥' — 치명타 흡수 후 maxHp×30% 복원)
  *   extraStartItems  0      시작 방 추가 아이템 수 (영구 해금 '기억 단편화' — 기본 1 + 보너스)
- *   shopPriceMult    1      상점 가격 배율 (영구 해금 '상인의 신용' — ×0.9, DungeonGenerator._generateShopSlots 참조)
+ *   shopPriceMult    1      상점 가격 배율 (영구 해금 '상인의 신용' ×0.9, '흥정 II' ×0.95, DungeonGenerator._generateShopSlots 참조)
+ *   trapMaxBonus     0      트랩 최대 동시 설치 추가 수 (영구 해금 '덫꾼의 손' +1) — AttackManager MAX_POOPS + bonus
+ *   startingCores    0      런 시작 코어 추가 (영구 해금 '점화의 잔해' +10) — GameScene.create 에서 enemyManager.coreCount 에 합산
+ *   invulnDurationMult 1    피격 후 무적 깜빡임 지속 배율 (영구 해금 '잔영의 가호' ×1.25) — takeDamage 일반 분기 tween duration 에 적용
  */
 import { showDamageNumber, showHealNumber } from '../utils/DamageNumbers';
 import { applyUnlocksToPlayer } from '../data/MetaProgress';
@@ -78,7 +82,11 @@ export default class Player {
     this.coreDropMult     = 1;   // 코어 수집기 해금 시 적용 (EnemyManager.dropCores 참조)
     this.hpPerRoomClear   = 0;   // 전투 적응 해금 시 적용 (RoomManager._onRoomCleared 참조)
     this.shopSlotBonus    = 0;   // 상인의 호의 해금 시 +1 (DungeonGenerator._generateShopSlots 참조)
+    this.armor            = 0;   // 방탄조끼 +2 / 강화 외피 +1 (takeDamage 에서 amount - armor, 0 이면 피격 무효)
     this.damageReduction  = 0;   // 두꺼운 가죽 I 해금 시 +0.05 (takeDamage 에서 amount × (1-reduction))
+    this.trapMaxBonus     = 0;   // 덫꾼의 손 +1 (AttackManager MAX_POOPS + bonus)
+    this.startingCores    = 0;   // 점화의 잔해 +10 (GameScene.create 에서 enemyManager.coreCount 에 합산)
+    this.invulnDurationMult = 1; // 잔영의 가호 ×1.25 (takeDamage 일반 분기 tween duration 에 적용)
     this.extraLives       = 0;   // 최후의 발버둥 해금 시 +1 (takeDamage 치명 흡수)
     this.extraStartItems  = 0;   // 기억 단편화 해금 시 +1 (GameScene._spawnStartRoomItem 참조)
     this.shopPriceMult    = 1;   // 상인의 신용 해금 시 ×0.9 (DungeonGenerator._generateShopSlots 참조)
@@ -131,6 +139,12 @@ export default class Player {
   takeDamage(amount, knockback = null) {
     if (this._invincible) return false;
 
+    // 방탄조끼 — 평탄 감산. armor 이하 공격은 통째로 무시 (무적/넉백/숫자 모두 스킵).
+    if (amount > 0 && this.armor > 0) {
+      amount -= this.armor;
+      if (amount <= 0) return false;
+    }
+
     if (amount > 0 && this.damageReduction > 0) {
       amount = Math.max(1, Math.round(amount * (1 - this.damageReduction)));
     }
@@ -177,7 +191,7 @@ export default class Player {
     this.scene.tweens.add({
       targets:  this.gameObject,
       alpha:    0.35,
-      duration: 80,
+      duration: Math.round(80 * (this.invulnDurationMult ?? 1)),
       yoyo:     true,
       repeat:   2,
       onComplete: () => {

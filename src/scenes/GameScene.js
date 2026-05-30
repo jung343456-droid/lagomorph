@@ -27,6 +27,11 @@ export default class GameScene extends Phaser.Scene {
     this.enemyManager  = new EnemyManager(this, this.player);
     this.attackManager = new AttackManager(this, this.player);
 
+    // 점화의 잔해 — 런 시작 시 코어 추가 (메타 적립 대상 아님)
+    if (this.player.startingCores > 0) {
+      this.enemyManager.coreCount += this.player.startingCores;
+    }
+
     this.currentFloor = 1;
 
     // 던전 생성 → 첫 방 진입

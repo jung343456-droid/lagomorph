@@ -21,6 +21,7 @@
 | `ice_claws` | 얼음 발톱 | 하늘 `0x88ddff` | 근거리 공격 명중 시 30% 확률로 3초 빙결 (이동 불가) | `player.hasIce = true` |
 | `swift_feet` | 질주 발 | 초록 `0x00ee66` | 이동속도 ×1.30 | `player.speed *= 1.3; player.baseSpeed *= 1.3` |
 | `tough_hide` | 강인한 가죽 | 빨강 `0xff4455` | 최대 HP +50, 즉시 50 회복 | `player.maxHp += 50; player.heal(50)` |
+| `bulletproof_vest` | 방탄조끼 | 강철 `0x445566` | 방어력 +2 — 받는 피해 -2, 방어력 이하 공격은 통째로 무효 (무적/넉백/숫자 모두 스킵) | `player.armor += 2` |
 | `quick_claws` | 민첩한 발톱 | 노랑 `0xffee00` | 근거리 충전 속도 ×1.5 | `player.chargeSpeedMult *= 1.5` |
 | `thunder_claws` | 감전 발톱 | 황녹 `0xddff22` | 명중 시 반경 150px 내 다른 적에게 연쇄 (hop마다 직전 데미지의 50%, 데미지 ≥2 유지 시 최대 10hop) | `player.hasThunder = true` |
 | `hunter_instinct` | 사냥꾼의 본능 | 분홍 `0xff6688` | 적 처치 시 HP 5 회복 | `player.healOnKill += 5` |
@@ -55,6 +56,7 @@
 | `trapCostBonus` | `0` | 트랩 코어 소모 감소량 (실제 소모 = max(1, 3 - bonus)) |
 | `trapSizeMult` | `1` | 트랩 크기 배율 |
 | `healItemMult` | `1.0` | 회복 아이템(상점 heal/heal_pct + 보스 RareItem) 효과 배율. heal_full(전체 회복)은 미적용 |
+| `armor` | `0` | 받는 피해 평탄 감산. amount -= armor 후 ≤0 이면 피격 전체 무효 (HP 감소·무적·넉백·숫자 모두 스킵). 방탄조끼 +2 |
 | `critRate` | `0.15` | 치명타율 (0~1). `rollAttackDamage` 가 매 공격마다 굴림 |
 | `critMult` | `1.5` | 치명타 피해 배율 (damage × critMult) |
 | `hasHuntersEye` | `false` | 적 처치 시 `_pendingCrit = true` set → 다음 1발 확정 치명 |

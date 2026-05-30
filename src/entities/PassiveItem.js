@@ -1,12 +1,13 @@
 /**
- * 패시브 아이템 픽업 — 총 15종
+ * 패시브 아이템 픽업 — 총 21종
  * 수집 시 플레이어 스탯에 영구 적용 (런 내 유지), 획득 이력 localStorage 저장
  *
  * 근거리 강화: wide_claws(반경), sharp_claws(데미지), quick_claws(충전속도)
  * 근거리 상태이상: poison_claws(독), fire_claws(화상), ice_claws(빙결), thunder_claws(연쇄)
  * 치명타: cruel_claws(치명타율), precision_strike(둘 다), savage_strike(위력),
  *         hunter_eye(처치 후 확정), blood_feast(치명 회복)
- * 이동/생존: swift_feet(이동속도), tough_hide(최대HP), hunter_instinct(킬회복)
+ * 이동/생존: swift_feet(이동속도), tough_hide(최대HP), hunter_instinct(킬회복),
+ *           bulletproof_vest(방어력)
  * 트랩 위장(스플래시+상태이상): fire_disguise(화상), ice_disguise(빙결), poison_disguise(중독)
  * 트랩 강화: frugal_instinct(코어소모↓), big_trap(크기)
  *
@@ -59,6 +60,12 @@ export const ITEM_DEFS = {
     desc:  '최대 HP +50, 즉시 회복',
     color: 0xff4455,
     apply: (player) => { player.maxHp += 50; player.heal(50); },
+  },
+  bulletproof_vest: {
+    name:  '방탄조끼',
+    desc:  '방어력 +2 — 받는 피해 -2 (방어력 이하 공격은 무효)',
+    color: 0x445566,
+    apply: (player) => { player.armor += 2; },
   },
   quick_claws: {
     name:  '민첩한 발톱',

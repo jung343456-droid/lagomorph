@@ -1,11 +1,11 @@
 /**
- * 영구 해금 트리 — 3계열(공격/생존/특수) × 4단계 = 12노드.
+ * 영구 해금 트리 — 3계열(공격/생존/특수) × 7단계 = 21노드.
  * 각 단계 N 노드는 단계 N-1 노드의 prereq 를 갖는다 (선행 해금 필수).
  *
  * apply(player): Player 생성 직후 호출되어 시작 스탯/플래그에 반영.
- *   - null 인 노드는 후속 goal 에서 구현 (구조만 등록)
  *
  * 비용/효과 정의는 design/LAGOMORPH_FULL_GDD.md PART 6 표를 따른다.
+ * 카드 수가 화면을 넘기 때문에 UnlockMenu 는 그리드 영역을 스크롤뷰로 표시한다.
  */
 
 export const BRANCHES       = ['attack', 'survival', 'special'];
@@ -33,6 +33,21 @@ export const UNLOCK_NODES = {
     name: '임계 분노', desc: '치명타율 +8% (기본 15 → 23%)',
     apply: (p) => { p.critRate += 0.08; },
   },
+  razor_claws: {
+    branch: 'attack', tier: 5, prereq: 'rage_threshold', cost: 500,
+    name: '면도날 발톱', desc: '치명타 피해 +30% (×1.5 → ×1.8)',
+    apply: (p) => { p.critMult += 0.3; },
+  },
+  trap_master: {
+    branch: 'attack', tier: 6, prereq: 'razor_claws', cost: 700,
+    name: '덫꾼의 손', desc: '트랩 최대 동시 설치 5 → 6',
+    apply: (p) => { p.trapMaxBonus = (p.trapMaxBonus ?? 0) + 1; },
+  },
+  starting_ember: {
+    branch: 'attack', tier: 7, prereq: 'trap_master', cost: 900,
+    name: '점화의 잔해', desc: '런 시작 시 코어 +10 보유',
+    apply: (p) => { p.startingCores = (p.startingCores ?? 0) + 10; },
+  },
 
   // ── 생존 계열 ──────────────────────────────────────
   tough_body_1: {
@@ -55,6 +70,21 @@ export const UNLOCK_NODES = {
     name: '최후의 발버둥', desc: '1회 사망 무효 (HP 30% 복원, 런당)',
     apply: (p) => { p.extraLives = (p.extraLives ?? 0) + 1; },
   },
+  reinforced_hide: {
+    branch: 'survival', tier: 5, prereq: 'last_struggle', cost: 500,
+    name: '강화 외피', desc: '시작 방어력 +1 (방탄조끼와 누적)',
+    apply: (p) => { p.armor = (p.armor ?? 0) + 1; },
+  },
+  second_wind: {
+    branch: 'survival', tier: 6, prereq: 'reinforced_hide', cost: 700,
+    name: '거듭난 숨결', desc: '방 클리어 시 HP +5 추가 (총 +10)',
+    apply: (p) => { p.hpPerRoomClear = (p.hpPerRoomClear ?? 0) + 5; },
+  },
+  phantom_guard: {
+    branch: 'survival', tier: 7, prereq: 'second_wind', cost: 900,
+    name: '잔영의 가호', desc: '피격 후 무적 시간 +25%',
+    apply: (p) => { p.invulnDurationMult = (p.invulnDurationMult ?? 1) * 1.25; },
+  },
 
   // ── 특수 계열 ──────────────────────────────────────
   merchant_favor: {
@@ -76,6 +106,21 @@ export const UNLOCK_NODES = {
     branch: 'special', tier: 4, prereq: 'memory_frag', cost: 360,
     name: '상인의 신용', desc: '상점 가격 -10% (모든 슬롯)',
     apply: (p) => { p.shopPriceMult = (p.shopPriceMult ?? 1) * 0.9; },
+  },
+  merchant_pact: {
+    branch: 'special', tier: 5, prereq: 'merchant_credit', cost: 500,
+    name: '상인의 계약', desc: '상점 슬롯 +1 (3 → 4 → 5, merchant_favor 누적)',
+    apply: (p) => { p.shopSlotBonus = (p.shopSlotBonus ?? 0) + 1; },
+  },
+  bargain_2: {
+    branch: 'special', tier: 6, prereq: 'merchant_pact', cost: 700,
+    name: '흥정 II', desc: '상점 가격 추가 -5% (×0.9 → ×0.855)',
+    apply: (p) => { p.shopPriceMult = (p.shopPriceMult ?? 1) * 0.95; },
+  },
+  golden_touch: {
+    branch: 'special', tier: 7, prereq: 'bargain_2', cost: 900,
+    name: '황금손', desc: '드롭 코어량 추가 ×1.10 (core_collector 누적)',
+    apply: (p) => { p.coreDropMult = (p.coreDropMult ?? 1) * 1.10; },
   },
 };
 
