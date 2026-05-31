@@ -2,10 +2,11 @@
 
 ## 프로젝트 개요
 
-Phaser 3.60 탑다운 로그라이크. 모바일(390×844 portrait) 우선, Capacitor 패키징 예정.
+Phaser 3.60 탑다운 로그라이크. 모바일(390×844 portrait) 우선, Capacitor 패키징.
 플레이어는 강화 토끼 VOSS-7(코드명 soma). 설계 문서: `design/LAGOMORPH_FULL_GDD.md`
 
 개발 서버: `npm run dev` → `http://localhost:5173`
+모바일 패키징(Capacitor): `MOBILE.md` 참조 — 웹은 `base=/lagomorph/`, 모바일은 `--mode mobile`(`base=./`)로 빌드 분기. `android/`는 gitignore되어 레포에 없으며 `npx cap add android`로 재생성한다.
 
 ---
 

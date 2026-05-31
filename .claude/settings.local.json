@@ -33,7 +33,9 @@
       "PowerShell($r = Invoke-WebRequest -Uri \"http://localhost:5173/\" -UseBasicParsing -TimeoutSec 5; $r.Content)",
       "Bash(rtk npx *)",
       "Bash(taskkill /F /FI \"WINDOWTITLE eq npm*\" /T)",
-      "Bash(rtk ps *)"
+      "Bash(rtk ps *)",
+      "Bash(npm i *)",
+      "Bash(rtk grep *)"
     ]
   }
 }
