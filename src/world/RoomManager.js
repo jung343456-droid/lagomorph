@@ -24,6 +24,10 @@ export default class RoomManager {
     scene.events.on('all-enemies-dead', this._onRoomCleared, this);
   }
 
+  destroy() {
+    this.scene.events.off('all-enemies-dead', this._onRoomCleared, this);
+  }
+
   setFloor(n) {
     this.floorNum = n;
     this.enemyManager.setFloor(n);

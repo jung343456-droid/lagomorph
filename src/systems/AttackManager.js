@@ -320,8 +320,8 @@ export default class AttackManager {
     if (dead) {
       em.dropCores(enemy.x, enemy.y, enemy.coreDrops ?? 3);
       if (enemy.isBoss) { em.dropRareItem(enemy.x, enemy.y); em.boss = null; }
-      // 사냥꾼의 눈 — 트랩 처치도 동일 트리거
-      if (this.player.hasHuntersEye) this.player._pendingCrit = true;
+      if (this.player.healOnKill > 0) this.player.heal(this.player.healOnKill);
+      if (this.player.hasHuntersEye) { this.player._pendingCrit = true; this.player._pendingCritTimer = 3; }
     }
 
     // 위장 트랩: 직접 명중한 적에게 상태이상 시도 (spike·사망 제외)
@@ -354,7 +354,8 @@ export default class AttackManager {
         if (splashDead) {
           em.dropCores(other.x, other.y, other.coreDrops ?? 3);
           if (other.isBoss) { em.dropRareItem(other.x, other.y); em.boss = null; }
-          if (this.player.hasHuntersEye) this.player._pendingCrit = true;
+          if (this.player.healOnKill > 0) this.player.heal(this.player.healOnKill);
+          if (this.player.hasHuntersEye) { this.player._pendingCrit = true; this.player._pendingCritTimer = 3; }
         } else if (other.state !== 'spike') {
           this._applyDisguiseStatus(other, em);
         }

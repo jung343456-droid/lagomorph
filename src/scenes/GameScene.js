@@ -19,8 +19,9 @@ export default class GameScene extends Phaser.Scene {
   create() {
     // scene.restart() 시 Phaser 3.60 은 이 씬의 이벤트 리스너를 자동 정리하지 않는다.
     // 이 씬에서 등록한 사용자 이벤트들을 명시적으로 비워야 listener 중복 등록을 막을 수 있다.
-    ['boss-cleared', 'floor-exit-ready', 'room-entered', 'shop-open-requested', 'floor-changed']
+    ['boss-cleared', 'floor-exit-ready', 'room-entered', 'shop-open-requested', 'floor-changed', 'all-enemies-dead']
       .forEach(e => this.events.off(e));
+    if (this.roomManager) this.roomManager.destroy();
 
     this.player        = new Player(this, ROOM_W / 2, ROOM_H / 2);
     this.input$        = new InputManager(this);

@@ -106,6 +106,15 @@ export default class UIScene extends Phaser.Scene {
       },
       this,
     );
+
+    // UIScene은 GameScene이 첫 방을 진입한 뒤에 launch되므로
+    // 1층 시작 시 room-entered 이벤트를 놓친다 — roomManager에서 직접 초기화
+    const rm = this.scene.get('GameScene').roomManager;
+    if (rm?.dungeonData && rm?.currentRoomData) {
+      this._currentDungeonData = rm.dungeonData;
+      this._currentRoomId      = rm.currentRoomData.id;
+      this._refreshMinimap(rm.dungeonData, rm.currentRoomData.id);
+    }
   }
 
   update() {
@@ -203,12 +212,13 @@ export default class UIScene extends Phaser.Scene {
     const totalH = gridRows * MM_CH;
     const ox = MM_OX;
     const oy = MM_OY;
+    const mapReveal = this.gameScene?.player?.hasMapReveal ?? false;
 
     this._mmBg = this.add
       .rectangle(ox - MM_PAD, oy - MM_PAD, totalW + MM_PAD * 2, totalH + MM_PAD * 2, 0x000000, 0.65)
       .setOrigin(0, 0);
 
-    rooms.filter(r => r.visited).forEach(r => {
+    rooms.filter(r => r.visited || mapReveal).forEach(r => {
       const cx = ox + r.col * MM_CW + MM_CW / 2;
       const cy = oy + r.row * MM_CH + MM_CH / 2;
       const color = r.id === currentId ? 0x4ecca3
@@ -333,6 +343,7 @@ export default class UIScene extends Phaser.Scene {
     const totalH = gridRows * MM_LARGE_CH;
     const ox = this._mmOverlayCenterX - totalW / 2;
     const oy = this._mmOverlayCenterY - totalH / 2;
+    const mapReveal = this.gameScene?.player?.hasMapReveal ?? false;
 
     const bg = this.add.rectangle(
       ox - MM_LARGE_PAD, oy - MM_LARGE_PAD,
@@ -341,7 +352,7 @@ export default class UIScene extends Phaser.Scene {
     ).setOrigin(0, 0).setDepth(102);
     this._mmLargeCells.push(bg);
 
-    rooms.filter(r => r.visited).forEach(r => {
+    rooms.filter(r => r.visited || mapReveal).forEach(r => {
       const cx = ox + r.col * MM_LARGE_CW + MM_LARGE_CW / 2;
       const cy = oy + r.row * MM_LARGE_CH + MM_LARGE_CH / 2;
       const isCurrent = r.id === this._currentRoomId;

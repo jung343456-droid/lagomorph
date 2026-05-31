@@ -247,7 +247,7 @@ export default class Room {
     const arrowChar = { up: '▲', down: '▼', left: '◀', right: '▶' };
 
     hints.forEach(({ dir, x, y }) => {
-      if (this.data.doors[dir] === null) return;
+      if (this.data.doors[dir] == null) return;
       const t = this.scene.add.text(x, y, arrowChar[dir], {
         fontSize: '12px', color: '#4ecca3', fontFamily: 'monospace',
       }).setOrigin(0.5).setDepth(5);

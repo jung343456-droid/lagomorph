@@ -12,7 +12,7 @@
  *   meleeDamageMult  1.0   근거리 데미지 배율
  *   critRate         0.15  치명타율 (rollAttackDamage 에서 사용)
  *   critMult         1.5   치명타 피해 배율
- *   hasHuntersEye    false 적 처치 후 다음 1발 확정 치명 (사냥꾼의 눈)
+ *   hasHuntersEye    false 적 처치 후 3초 내 다음 1발 확정 치명 (사냥꾼의 눈)
  *   critHealAmount   0     치명타 명중 시 회복량 (피의 향연)
  *   chargeSpeedMult  1.0   근거리 충전 속도 배율
  *   hasPoison        false  근거리 명중 시 30% 확률 독 부여
@@ -37,6 +37,7 @@
  *   trapMaxBonus     0      트랩 최대 동시 설치 추가 수 (영구 해금 '덫꾼의 손' +1) — AttackManager MAX_POOPS + bonus
  *   startingCores    0      런 시작 코어 추가 (영구 해금 '점화의 잔해' +10) — GameScene.create 에서 enemyManager.coreCount 에 합산
  *   invulnDurationMult 1    피격 후 무적 깜빡임 지속 배율 (영구 해금 '잔영의 가호' ×1.25) — takeDamage 일반 분기 tween duration 에 적용
+ *   hasMapReveal     false 현재 층 전체 방을 지도에 표시 (던전의 감각)
  */
 import { showDamageNumber, showHealNumber } from '../utils/DamageNumbers';
 import { applyUnlocksToPlayer } from '../data/MetaProgress';
@@ -64,9 +65,10 @@ export default class Player {
     this.meleeDamageMult  = 1.0;
     this.critRate         = 0.15;  // 기본 치명타율 15%
     this.critMult         = 1.5;   // 치명타 피해 ×1.5
-    this.hasHuntersEye    = false; // 사냥꾼의 눈 — 적 처치 후 다음 한 발 확정 치명
+    this.hasHuntersEye    = false; // 사냥꾼의 눈 — 적 처치 후 3초 내 다음 한 발 확정 치명
     this.critHealAmount   = 0;     // 피의 향연 — 치명타 명중 시 회복량
     this._pendingCrit     = false; // 다음 rollAttackDamage 1 회를 강제 치명타로
+    this._pendingCritTimer = 0;    // 사냥꾼의 눈 창 타이머 (초) — 0 이하이면 만료
     this.hasPoison        = false;
     this.hasFire          = false;
     this.hasIce           = false;
@@ -87,6 +89,7 @@ export default class Player {
     this.trapMaxBonus     = 0;   // 덫꾼의 손 +1 (AttackManager MAX_POOPS + bonus)
     this.startingCores    = 0;   // 점화의 잔해 +10 (GameScene.create 에서 enemyManager.coreCount 에 합산)
     this.invulnDurationMult = 1; // 잔영의 가호 ×1.25 (takeDamage 일반 분기 tween duration 에 적용)
+    this.hasMapReveal     = false; // 던전의 감각 — 현재 층 전체 방을 지도에 표시
     this.extraLives       = 0;   // 최후의 발버둥 해금 시 +1 (takeDamage 치명 흡수)
     this.extraStartItems  = 0;   // 기억 단편화 해금 시 +1 (GameScene._spawnStartRoomItem 참조)
     this.shopPriceMult    = 1;   // 상인의 신용 해금 시 ×0.9 (DungeonGenerator._generateShopSlots 참조)
@@ -117,6 +120,10 @@ export default class Player {
   update({ x, y }, delta) {
     const dt = delta / 1000;
     if (this._slowTimer > 0) this._slowTimer = Math.max(0, this._slowTimer - dt);
+    if (this._pendingCrit && this._pendingCritTimer > 0) {
+      this._pendingCritTimer -= dt;
+      if (this._pendingCritTimer <= 0) this._pendingCrit = false;
+    }
     if (this._knockbackTimer > 0) {
       this._knockbackTimer = Math.max(0, this._knockbackTimer - dt);
       return;
@@ -186,9 +193,19 @@ export default class Player {
       return false;
     }
 
+    // 피해 0: 넉백만 적용, 무적·깜빡임 없음 (고슴도치 가시 반격 등)
+    if (amount <= 0) {
+      if (knockback) {
+        const { dx, dy, force, duration } = knockback;
+        this._knockbackTimer = duration;
+        this.gameObject.body.setVelocity(dx * force, dy * force);
+      }
+      return false;
+    }
+
     this.hp = Math.max(0, this.hp - amount);
     this._invincible = true;
-    if (amount > 0) showDamageNumber(this.scene, this.x, this.y - DISPLAY_H / 2, amount, '#ff5555');
+    showDamageNumber(this.scene, this.x, this.y - DISPLAY_H / 2, amount, '#ff5555');
 
     if (knockback) {
       const { dx, dy, force, duration } = knockback;
