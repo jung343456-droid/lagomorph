@@ -20,18 +20,18 @@ export const UNLOCK_NODES = {
   },
   wave_expand: {
     branch: 'attack', tier: 2, prereq: 'claw_boost_1', cost: 80,
-    name: '파동 확장', desc: '근거리 반경 +15%',
-    apply: (p) => { p.meleeRadiusMult += 0.15; },
+    name: '파동 확장', desc: '근거리 반경 +10%',
+    apply: (p) => { p.meleeRadiusMult += 0.10; },
   },
   charge_accel: {
     branch: 'attack', tier: 3, prereq: 'wave_expand', cost: 160,
-    name: '충전 가속', desc: '근거리 충전 속도 +20%',
-    apply: (p) => { p.chargeSpeedMult += 0.20; },
+    name: '충전 가속', desc: '근거리 충전 속도 +10%',
+    apply: (p) => { p.chargeSpeedMult += 0.10; },
   },
   rage_threshold: {
     branch: 'attack', tier: 4, prereq: 'charge_accel', cost: 300,
-    name: '임계 분노', desc: '치명타율 +8% (기본 15 → 23%)',
-    apply: (p) => { p.critRate += 0.08; },
+    name: '임계 분노', desc: '치명타율 +5% (기본 15 → 20%)',
+    apply: (p) => { p.critRate += 0.05; },
   },
   razor_claws: {
     branch: 'attack', tier: 5, prereq: 'rage_threshold', cost: 500,
@@ -62,8 +62,8 @@ export const UNLOCK_NODES = {
   },
   combat_adapt: {
     branch: 'survival', tier: 3, prereq: 'thick_hide_1', cost: 160,
-    name: '전투 적응', desc: '방 클리어 시 HP +4',
-    apply: (p) => { p.hpPerRoomClear = (p.hpPerRoomClear ?? 0) + 4; },
+    name: '전투 적응', desc: '방 클리어 시 HP +2',
+    apply: (p) => { p.hpPerRoomClear = (p.hpPerRoomClear ?? 0) + 2; },
   },
   last_struggle: {
     branch: 'survival', tier: 4, prereq: 'combat_adapt', cost: 400,
@@ -77,8 +77,8 @@ export const UNLOCK_NODES = {
   },
   second_wind: {
     branch: 'survival', tier: 6, prereq: 'reinforced_hide', cost: 700,
-    name: '거듭난 숨결', desc: '방 클리어 시 HP +4 추가 (총 +8)',
-    apply: (p) => { p.hpPerRoomClear = (p.hpPerRoomClear ?? 0) + 4; },
+    name: '거듭난 숨결', desc: '방 클리어 시 HP +2 추가 (총 +4)',
+    apply: (p) => { p.hpPerRoomClear = (p.hpPerRoomClear ?? 0) + 2; },
   },
   phantom_guard: {
     branch: 'survival', tier: 7, prereq: 'second_wind', cost: 900,

@@ -26,7 +26,7 @@
  *   trapSizeMult     1      트랩 크기 배율
  *   healItemMult     1.0    회복 아이템(상점 heal/heal_pct + 보스 RareItem) 효과 배율 — 대식가 +0.1
  *   coreDropMult     1      드롭 코어량 배율 (영구 해금 '코어 수집기' ×1.15, '황금손' ×1.10)
- *   hpPerRoomClear   0      방 클리어 시 회복량 (영구 해금 '전투 적응' +4, '거듭난 숨결' +4)
+ *   hpPerRoomClear   0      방 클리어 시 회복량 (영구 해금 '전투 적응' +2, '거듭난 숨결' +2)
  *   shopSlotBonus    0      상점 슬롯 추가 수 (영구 해금 '상인의 호의' / '상인의 계약' — 기본 3 + 보너스)
  *   armor            0      받는 피해 평탄 감산 (방탄조끼 +2, 영구 해금 '강화 외피' +1) — amount = max(0, amount - armor), 0 이면 피격 자체 무효. 독·화상 피해(bypassArmor) 는 관통.
  *   damageReduction  0      받는 피해 감산 비율 (영구 해금 '두꺼운 가죽 I' — amount × (1-reduction), 최소 1). 독·화상 피해(bypassArmor) 는 관통.
