@@ -63,6 +63,8 @@ export default class UIScene extends Phaser.Scene {
     this._bagOpen        = false;
     this._bagItemEls     = [];
     this._bagStaticEls   = [];
+    this._itemScrollOffset = 0;
+    this._itemMaskGfx    = null;
     this._shopOpen       = false;
     this._shopCardEls    = [];
     this._shopStaticEls  = [];
@@ -221,6 +223,7 @@ export default class UIScene extends Phaser.Scene {
     rooms.filter(r => r.visited || mapReveal).forEach(r => {
       const cx = ox + r.col * MM_CW + MM_CW / 2;
       const cy = oy + r.row * MM_CH + MM_CH / 2;
+      const unvisited = mapReveal && !r.visited;
       const color = r.id === currentId ? 0x4ecca3
         : r.type === 'start'  ? 0x888844
         : r.type === 'shop'   ? 0xddcc22
@@ -228,7 +231,9 @@ export default class UIScene extends Phaser.Scene {
         : r.cleared           ? 0x445566
         :                       0x664444;
 
-      this._mmCells.push(this.add.rectangle(cx, cy, MM_CW - 2, MM_CH - 2, color));
+      const cell = this.add.rectangle(cx, cy, MM_CW - 2, MM_CH - 2, color);
+      if (unvisited) cell.setAlpha(0.6);
+      this._mmCells.push(cell);
 
       const { doors } = r;
       [
@@ -238,7 +243,9 @@ export default class UIScene extends Phaser.Scene {
         { dir: 'right', mx: cx + MM_CW / 2 - 1, my: cy },
       ].forEach(({ dir, mx, my }) => {
         if (doors[dir] === null) return;
-        this._mmCells.push(this.add.rectangle(mx, my, 2, 2, 0xaaaaaa));
+        const dot = this.add.rectangle(mx, my, 2, 2, 0xaaaaaa);
+        if (unvisited) dot.setAlpha(0.6);
+        this._mmCells.push(dot);
       });
     });
   }
@@ -356,6 +363,7 @@ export default class UIScene extends Phaser.Scene {
       const cx = ox + r.col * MM_LARGE_CW + MM_LARGE_CW / 2;
       const cy = oy + r.row * MM_LARGE_CH + MM_LARGE_CH / 2;
       const isCurrent = r.id === this._currentRoomId;
+      const unvisited = mapReveal && !r.visited;
       const color = isCurrent           ? 0x4ecca3
         : r.type === 'start'  ? 0x888844
         : r.type === 'shop'   ? 0xddcc22
@@ -365,6 +373,7 @@ export default class UIScene extends Phaser.Scene {
 
       const cell = this.add.rectangle(cx, cy, MM_LARGE_CW - 4, MM_LARGE_CH - 4, color).setDepth(103);
       if (isCurrent) cell.setStrokeStyle(2, 0xffffff, 0.9);
+      if (unvisited) cell.setAlpha(0.6);
       this._mmLargeCells.push(cell);
 
       // 방 유형 라벨
@@ -373,11 +382,11 @@ export default class UIScene extends Phaser.Scene {
       else if (r.type === 'shop')  label = '$';
       else if (r.type === 'boss')  label = 'B';
       if (label) {
-        this._mmLargeCells.push(
-          this.add.text(cx, cy, label, {
-            fontSize: '13px', color: '#0a0a14', fontFamily: 'monospace', fontStyle: 'bold',
-          }).setOrigin(0.5).setDepth(104),
-        );
+        const lbl = this.add.text(cx, cy, label, {
+          fontSize: '13px', color: '#0a0a14', fontFamily: 'monospace', fontStyle: 'bold',
+        }).setOrigin(0.5).setDepth(104);
+        if (unvisited) lbl.setAlpha(0.6);
+        this._mmLargeCells.push(lbl);
       }
 
       // 문 연결 표시 (인접 셀까지 짧은 라인)
@@ -389,7 +398,9 @@ export default class UIScene extends Phaser.Scene {
         { dir: 'right', mx: cx + MM_LARGE_CW / 2 - 1, my: cy,                       w: 4, h: 4 },
       ].forEach(({ dir, mx, my, w, h }) => {
         if (doors[dir] === null) return;
-        this._mmLargeCells.push(this.add.rectangle(mx, my, w, h, 0xaaaaaa).setDepth(104));
+        const dot = this.add.rectangle(mx, my, w, h, 0xaaaaaa).setDepth(104);
+        if (unvisited) dot.setAlpha(0.6);
+        this._mmLargeCells.push(dot);
       });
     });
   }
@@ -460,10 +471,33 @@ export default class UIScene extends Phaser.Scene {
     this._panelH    = panelH;
     this._panelW    = panelW;
     this._panelX    = panelX;
+    this._bagPanel  = panel;
+
+    // Mouse wheel scroll
+    this.input.on('wheel', (_ptr, _objs, _dx, dy) => {
+      if (!this._bagOpen) return;
+      this._scrollItems(dy * 0.5);
+    });
+
+    // Touch/pointer drag-to-scroll on the panel
+    let dragStartY = null;
+    let dragStartScroll = 0;
+    panel.on('pointerdown', (ptr) => {
+      dragStartY     = ptr.y;
+      dragStartScroll = this._itemScrollOffset;
+    });
+    panel.on('pointermove', (ptr) => {
+      if (dragStartY === null) return;
+      this._itemScrollOffset = dragStartScroll + (dragStartY - ptr.y);
+      this._applyItemScroll();
+    });
+    panel.on('pointerup',  () => { dragStartY = null; });
+    panel.on('pointerout', () => { dragStartY = null; });
   }
 
   _openBag() {
     this._bagOpen = true;
+    this._itemScrollOffset = 0;
     this._bagStaticEls.forEach(el => el.setVisible(true));
     this._refreshBagContents();
     this.scene.get('GameScene').scene.pause();
@@ -474,12 +508,18 @@ export default class UIScene extends Phaser.Scene {
     this._bagStaticEls.forEach(el => el.setVisible(false));
     this._bagItemEls.forEach(el => { if (el.active) el.destroy(); });
     this._bagItemEls = [];
+    if (this._itemMaskGfx) { this._itemMaskGfx.destroy(); this._itemMaskGfx = null; }
+    this._itemContainer  = null;
+    this._scrollThumb    = null;
     this.scene.get('GameScene').scene.resume();
   }
 
   _refreshBagContents() {
     this._bagItemEls.forEach(el => { if (el.active) el.destroy(); });
     this._bagItemEls = [];
+    if (this._itemMaskGfx) { this._itemMaskGfx.destroy(); this._itemMaskGfx = null; }
+    this._itemContainer = null;
+    this._scrollThumb   = null;
 
     const player = this.gameScene?.player;
     if (!player) return;
@@ -594,20 +634,22 @@ export default class UIScene extends Phaser.Scene {
     return chipY + 18;
   }
 
-  /** 아이템 섹션 — 컴팩트 1열. 아이콘 + 이름 + 설명. */
+  /** 아이템 섹션 — 스크롤 가능한 1열 목록. 아이콘 + 이름 + 설명. */
   _drawItemSection(player, startY) {
-    const items = player.inventory ?? [];
-    const leftX = this._panelX - this._panelW / 2 + 18;
-    const headerLabel = `ITEMS (${items.length})`;
-    this._bagItemEls.push(this.add.text(leftX, startY + 6, headerLabel, {
+    const items    = player.inventory ?? [];
+    const leftX    = this._panelX - this._panelW / 2 + 18;
+    const panelBot = this._panelY + this._panelH / 2 - 16;
+
+    this._bagItemEls.push(this.add.text(leftX, startY + 6, `ITEMS (${items.length})`, {
       fontSize: '11px', color: '#6688aa', fontFamily: 'monospace', fontStyle: 'bold',
       letterSpacing: 2,
     }).setOrigin(0, 0.5).setDepth(102));
 
     const listStartY = startY + 22;
-    const iconX = leftX + 4;
-    const textX = iconX + 18;
-    const rowH  = 28;
+    const iconX  = leftX + 4;
+    const textX  = iconX + 18;
+    const rowH   = 28;
+    const visibleH = Math.max(rowH, panelBot - listStartY);
 
     if (items.length === 0) {
       this._bagItemEls.push(this.add.text(this._panelX, listStartY + 16, '보유 아이템 없음', {
@@ -616,23 +658,81 @@ export default class UIScene extends Phaser.Scene {
       return;
     }
 
+    const totalH   = items.length * rowH;
+    const maxScroll = Math.max(0, totalH - visibleH);
+    this._itemScrollOffset   = Math.max(0, Math.min(maxScroll, this._itemScrollOffset));
+    this._itemTotalH         = totalH;
+    this._itemVisibleH       = visibleH;
+    this._itemListStartY     = listStartY;
+    this._itemMaxScroll      = maxScroll;
+
+    // 스크롤 가능한 컨테이너 — 초기 y 는 스크롤 오프셋 적용
+    const container = this.add.container(0, -this._itemScrollOffset).setDepth(102);
+
     items.forEach((item, i) => {
       const rowY = listStartY + i * rowH + rowH / 2;
-      this._bagItemEls.push(
-        this.add.rectangle(iconX, rowY, 12, 12, item.color).setOrigin(0.5).setDepth(102),
+      container.add([
+        this.add.rectangle(iconX, rowY, 12, 12, item.color).setOrigin(0.5),
         this.add.text(textX, rowY - 6, item.name, {
           fontSize: '11px', color: '#ddeeff', fontFamily: 'monospace', fontStyle: 'bold',
-        }).setOrigin(0, 0.5).setDepth(102),
+        }).setOrigin(0, 0.5),
         this.add.text(textX, rowY + 7, item.desc ?? '', {
           fontSize: '9px', color: '#6677aa', fontFamily: 'monospace',
-        }).setOrigin(0, 0.5).setDepth(102),
-      );
+        }).setOrigin(0, 0.5),
+      ]);
       if (i < items.length - 1) {
-        this._bagItemEls.push(this.add.rectangle(
+        container.add(this.add.rectangle(
           this._panelX, rowY + rowH / 2, this._panelW - 36, 1, 0x1e2030,
-        ).setDepth(102));
+        ));
       }
     });
+
+    // 지오메트리 마스크로 가시 영역 클리핑
+    const maskGfx = this.make.graphics({ x: 0, y: 0, add: false });
+    maskGfx.fillStyle(0xffffff);
+    maskGfx.fillRect(
+      this._panelX - this._panelW / 2 + 2, listStartY,
+      this._panelW - 4, visibleH,
+    );
+    container.setMask(maskGfx.createGeometryMask());
+
+    this._itemMaskGfx   = maskGfx;
+    this._itemContainer = container;
+    this._bagItemEls.push(container);
+
+    // 스크롤바 (아이템이 넘칠 때만)
+    if (maxScroll > 0) {
+      const sbX    = this._panelX + this._panelW / 2 - 8;
+      const thumbH = Math.max(20, visibleH * visibleH / totalH);
+      const thumbY = listStartY + (this._itemScrollOffset / maxScroll) * (visibleH - thumbH);
+
+      const track = this.add.rectangle(sbX, listStartY + visibleH / 2, 3, visibleH, 0x1e2030).setDepth(103);
+      const thumb = this.add.rectangle(sbX, thumbY + thumbH / 2, 3, thumbH, 0x5577aa).setDepth(104);
+      this._scrollThumb    = thumb;
+      this._scrollTrack    = track;
+      this._bagItemEls.push(track, thumb);
+    }
+  }
+
+  _scrollItems(dy) {
+    if (!this._itemContainer?.active) return;
+    this._itemScrollOffset += dy;
+    this._applyItemScroll();
+  }
+
+  _applyItemScroll() {
+    const maxScroll = this._itemMaxScroll ?? 0;
+    this._itemScrollOffset = Math.max(0, Math.min(maxScroll, this._itemScrollOffset));
+    if (this._itemContainer?.active) {
+      this._itemContainer.y = -this._itemScrollOffset;
+    }
+    if (this._scrollThumb?.active && maxScroll > 0) {
+      const visibleH = this._itemVisibleH;
+      const totalH   = this._itemTotalH;
+      const thumbH   = Math.max(20, visibleH * visibleH / totalH);
+      const thumbY   = this._itemListStartY + (this._itemScrollOffset / maxScroll) * (visibleH - thumbH);
+      this._scrollThumb.setY(thumbY + thumbH / 2);
+    }
   }
 
   // ── 상점 오버레이 ────────────────────────────────────

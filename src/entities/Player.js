@@ -12,17 +12,16 @@
  *   meleeDamageMult  1.0   근거리 데미지 배율
  *   critRate         0.15  치명타율 (rollAttackDamage 에서 사용)
  *   critMult         1.5   치명타 피해 배율
- *   hasHuntersEye    false 적 처치 후 3초 내 다음 1발 확정 치명 (사냥꾼의 눈)
  *   critHealAmount   0     치명타 명중 시 회복량 (피의 향연)
  *   chargeSpeedMult  1.0   근거리 충전 속도 배율
- *   hasPoison        false  근거리 명중 시 30% 확률 독 부여
- *   hasFire          false  근거리 명중 시 30% 확률 화상 부여
- *   hasIce           false  근거리 명중 시 30% 확률 빙결
+ *   hasPoison        false  근거리 명중 시 20% 확률 독 부여
+ *   hasFire          false  근거리 명중 시 20% 확률 화상 부여
+ *   hasIce           false  근거리 명중 시 20% 확률 빙결
  *   hasThunder       false  근거리 명중 시 150px 반경 연쇄, hop마다 직전 데미지의 50% (≥2 유지, 최대 10hop)
  *   healOnKill       0      적 처치 시 HP 회복량
- *   hasFireDisguise   false  불꽃 위장 — 트랩 스플래시 + 30% 화상
- *   hasIceDisguise    false  냉동 위장 — 트랩 스플래시 + 30% 빙결
- *   hasPoisonDisguise false  독성 위장 — 트랩 스플래시 + 30% 중독
+ *   hasFireDisguise   false  불꽃 위장 — 트랩 스플래시 + 20% 화상
+ *   hasIceDisguise    false  냉동 위장 — 트랩 스플래시 + 20% 빙결
+ *   hasPoisonDisguise false  독성 위장 — 트랩 스플래시 + 20% 중독
  *   trapCostBonus    0      트랩 코어 소모 감소
  *   trapSizeMult     1      트랩 크기 배율
  *   healItemMult     1.0    회복 아이템(상점 heal/heal_pct + 보스 RareItem) 효과 배율 — 대식가 +0.1
@@ -65,10 +64,7 @@ export default class Player {
     this.meleeDamageMult  = 1.0;
     this.critRate         = 0.15;  // 기본 치명타율 15%
     this.critMult         = 1.5;   // 치명타 피해 ×1.5
-    this.hasHuntersEye    = false; // 사냥꾼의 눈 — 적 처치 후 3초 내 다음 한 발 확정 치명
     this.critHealAmount   = 0;     // 피의 향연 — 치명타 명중 시 회복량
-    this._pendingCrit     = false; // 다음 rollAttackDamage 1 회를 강제 치명타로
-    this._pendingCritTimer = 0;    // 사냥꾼의 눈 창 타이머 (초) — 0 이하이면 만료
     this.hasPoison        = false;
     this.hasFire          = false;
     this.hasIce           = false;
@@ -120,10 +116,6 @@ export default class Player {
   update({ x, y }, delta) {
     const dt = delta / 1000;
     if (this._slowTimer > 0) this._slowTimer = Math.max(0, this._slowTimer - dt);
-    if (this._pendingCrit && this._pendingCritTimer > 0) {
-      this._pendingCritTimer -= dt;
-      if (this._pendingCritTimer <= 0) this._pendingCrit = false;
-    }
     if (this._knockbackTimer > 0) {
       this._knockbackTimer = Math.max(0, this._knockbackTimer - dt);
       return;
@@ -261,17 +253,10 @@ export default class Player {
 
   /**
    * 치명타 굴림 — base 데미지에 critRate 확률로 critMult 배율 적용.
-   * `_pendingCrit` 이 true 면 확률 무시하고 확정 치명 (사냥꾼의 눈 보유 + 직전 처치 시 set).
    * @returns {{ damage:number, isCrit:boolean }} 적용할 정수 데미지와 치명타 여부
    */
   rollAttackDamage(base) {
-    let isCrit;
-    if (this._pendingCrit) {
-      isCrit = true;
-      this._pendingCrit = false;
-    } else {
-      isCrit = Math.random() < this.critRate;
-    }
+    const isCrit = Math.random() < this.critRate;
     const damage = isCrit ? Math.round(base * this.critMult) : base;
     return { damage, isCrit };
   }

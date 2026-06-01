@@ -1,22 +1,22 @@
 /**
  * 곰 (Bear) — 중량 탱커 (구역 2)
- * HP 110 / 속도 110 / 데미지 22(휘두르기) / 코어 6
+ * HP 176 / 속도 121 / 데미지 22(휘두르기) / 코어 6
  *
  * 패턴:
- *   idle          → chase(220px 이내 탐지)
- *   chase         → 110px/s 추격 (격노 시 150px/s)
+ *   idle          → chase(352px 이내 탐지)
+ *   chase         → 121px/s 추격 (격노 시 165px/s)
  *   swipe_windup  → 80px 이내 접근 시 0.2초 예고
  *   swipe         → 0.2초간 120px 반경 정면 180° 부채꼴 피해 (등 뒤 안전), 시각 잔상 +0.1초
  *   cooldown      → 1.8초 정지 (격노 시 1.0초)
  *   stun          → 피격 시 0.3초 경직 + 넉백 (i-frame)
  *
- * 격노: HP 30% 이하 진입 시 속도 ×1.36 (110→150), swipe 쿨다운 ×0.56, 적색 틴트
+ * 격노: HP 30% 이하 진입 시 속도 ×1.36 (121→165), swipe 쿨다운 ×0.56, 적색 틴트
  * 시각: 짙은 갈색 틴트 (placeholder: hedgehog 스프라이트 재사용)
  * speedMult: Wolf 오라(180px 이내) 적용 시 추격 속도 ×1.2 (격노 시 추가 적용)
  */
-const DETECT_R       = 220;
-const CHASE_SPEED    = 110;
-const RAGE_SPEED     = 150;
+const DETECT_R       = 352;
+const CHASE_SPEED    = 121;
+const RAGE_SPEED     = 165;
 const SWIPE_RANGE    = 80;
 const SWIPE_RADIUS   = 120;
 const SWIPE_DMG      = 22;
@@ -54,8 +54,8 @@ export default class Bear {
   constructor(scene, x, y) {
     this.scene = scene;
 
-    this.hp     = 110;
-    this.maxHp  = 110;
+    this.hp     = 176;
+    this.maxHp  = 176;
     this.speed  = CHASE_SPEED;
     this.damage = SWIPE_DMG;
     this.displayName = '곰';

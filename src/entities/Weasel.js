@@ -1,21 +1,21 @@
 /**
  * 족제비 (Weasel) — 기습형
- * HP 22 / 속도 160→280 / 데미지 9 / 코어 드롭 2
+ * HP 35 / 속도 176→308 / 데미지 9 / 코어 드롭 2
  *
  * 패턴:
- *   idle     → approach(220px 이내 탐지)
- *   approach → 160px/s로 접근, 70px 이내 진입 시 대시 방향 고정 → dash
- *   dash     → 280px/s 직선 돌진 0.4초 (방향 고정)
+ *   idle     → approach(352px 이내 탐지)
+ *   approach → 176px/s로 접근, 70px 이내 진입 시 대시 방향 고정 → dash
+ *   dash     → 308px/s 직선 돌진 0.4초 (방향 고정)
  *   cooldown → 0.8초 대기 (HP 20% 이하: 0.4초) → approach 반복
  *   stun     → 피격 시 0.3초 경직 + 넉백 (이 시간 동안 추가 피격 무시 = i-frame)
  *
  * 시각: 대시 중 weasel-dash 스프라이트 표시
  * speedMult: Wolf 오라(180px 이내) 적용 시 접근·후퇴 속도 ×1.2 (대시 속도는 고정)
  */
-const DETECT_R       = 220;
+const DETECT_R       = 352;
 const APPROACH_DIST  = 70;
-const APPROACH_SPEED = 160;
-const DASH_SPEED     = 280;
+const APPROACH_SPEED = 176;
+const DASH_SPEED     = 308;
 const DASH_DUR       = 0.4;
 const COOL_DUR       = 0.8;
 const COOL_DUR_RAGE  = 0.4;
@@ -42,9 +42,9 @@ export default class Weasel {
   constructor(scene, x, y) {
     this.scene = scene;
 
-    this.hp     = 22;
+    this.hp     = 35;
     this.displayName = '족제비';
-    this.maxHp  = 22;
+    this.maxHp  = 35;
     this.speed  = APPROACH_SPEED;
     this.damage = 9;
 

@@ -224,7 +224,6 @@ export default class EnemyManager {
           this.dropCores(enemy.x, enemy.y, enemy.coreDrops ?? 3);
           if (enemy.isBoss) { this.dropRareItem(enemy.x, enemy.y); this.boss = null; }
           if (this.player.healOnKill > 0) this.player.heal(this.player.healOnKill);
-          if (this.player.hasHuntersEye) { this.player._pendingCrit = true; this.player._pendingCritTimer = 3; }
         }
       }
     }
@@ -249,7 +248,6 @@ export default class EnemyManager {
           this.dropCores(enemy.x, enemy.y, enemy.coreDrops ?? 3);
           if (enemy.isBoss) { this.dropRareItem(enemy.x, enemy.y); this.boss = null; }
           if (this.player.healOnKill > 0) this.player.heal(this.player.healOnKill);
-          if (this.player.hasHuntersEye) { this.player._pendingCrit = true; this.player._pendingCritTimer = 3; }
         }
       }
     }
@@ -506,9 +504,9 @@ export default class EnemyManager {
       const isSpike = e.state === 'spike';
 
       if (!isSpike) {
-        if (this.player.hasPoison && Math.random() < 0.3) this._applyPoison(e);
-        if (this.player.hasFire && Math.random() < 0.3) this._applyBurn(e);
-        if (this.player.hasIce && Math.random() < 0.3) this._applyFreeze(e);
+        if (this.player.hasPoison && Math.random() < 0.2) this._applyPoison(e);
+        if (this.player.hasFire && Math.random() < 0.2) this._applyBurn(e);
+        if (this.player.hasIce && Math.random() < 0.2) this._applyFreeze(e);
       }
 
       const ddx = e.x - playerX;
@@ -536,8 +534,6 @@ export default class EnemyManager {
         this.dropCores(e.x, e.y, e.coreDrops ?? 3);
         if (e.isBoss) { this.dropRareItem(e.x, e.y); this.boss = null; }
         if (this.player.healOnKill > 0) this.player.heal(this.player.healOnKill);
-        // 사냥꾼의 눈 — 다음 1발 확정 치명
-        if (this.player.hasHuntersEye) { this.player._pendingCrit = true; this.player._pendingCritTimer = 3; }
       }
     });
 
@@ -588,7 +584,6 @@ export default class EnemyManager {
           this.dropCores(nearest.x, nearest.y, nearest.coreDrops ?? 3);
           if (nearest.isBoss) { this.dropRareItem(nearest.x, nearest.y); this.boss = null; }
           if (this.player.healOnKill > 0) this.player.heal(this.player.healOnKill);
-          if (this.player.hasHuntersEye) { this.player._pendingCrit = true; this.player._pendingCritTimer = 3; }
         }
         chained.add(nearest);
         nextFrontier.push({ enemy: nearest, damage: dmg });

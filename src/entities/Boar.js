@@ -1,12 +1,12 @@
 /**
  * 멧돼지 (Boar) — 중량 단일 돌격병 (구역 2)
- * HP 55 / 속도 80(approach) → 270(charge) / 데미지 18 / 코어 4
+ * HP 88 / 속도 88(approach) → 297(charge) / 데미지 18 / 코어 4
  *
  * 패턴:
- *   idle     → approach(250px 이내 탐지)
- *   approach → 80px/s로 천천히 다가옴
+ *   idle     → approach(400px 이내 탐지)
+ *   approach → 88px/s로 천천히 다가옴
  *   ready    → 200px 이내 진입 시 0.2초 예고(앞발 긁기)
- *   charge   → 270px/s 직선 1.0초 돌진, 장애물(boulder) 파괴 + 돌진 지속,
+ *   charge   → 297px/s 직선 1.0초 돌진, 장애물(boulder) 파괴 + 돌진 지속,
  *              벽 충돌 시 1.0초 자기 스턴
  *   recover  → 0.8초 정지 후 approach 복귀
  *   stun     → 피격 시 0.3초 경직 + 넉백 (i-frame)
@@ -14,10 +14,10 @@
  * 시각: 갈색 틴트 (placeholder: fox 스프라이트 재사용)
  * speedMult: Wolf 오라(180px 이내) 적용 시 approach·recover만 ×1.2 (charge는 고정)
  */
-const DETECT_R       = 250;
+const DETECT_R       = 400;
 const READY_DIST     = 200;
-const APPROACH_SPEED = 80;
-const CHARGE_SPEED   = 270;
+const APPROACH_SPEED = 88;
+const CHARGE_SPEED   = 297;
 const READY_DUR      = 0.2;
 const CHARGE_DUR     = 1.0;
 const RECOVER_DUR    = 0.8;
@@ -46,8 +46,8 @@ export default class Boar {
   constructor(scene, x, y) {
     this.scene = scene;
 
-    this.hp     = 55;
-    this.maxHp  = 55;
+    this.hp     = 88;
+    this.maxHp  = 88;
     this.speed  = APPROACH_SPEED;
     this.damage = 18;
     this.displayName = '멧돼지';

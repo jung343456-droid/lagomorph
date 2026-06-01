@@ -46,8 +46,15 @@ export default class InputManager {
 
   // ── public ───────────────────────────────────────────
 
+  /** 입력을 완전히 차단한다 (사망 후 호출). */
+  disable() {
+    this._disabled = true;
+    this._reset();
+  }
+
   /** 정규화 아날로그 방향 { x, y } — update() 마다 호출 */
   getDirection() {
+    if (this._disabled) return { x: 0, y: 0 };
     return this._active ? { x: this._dir.x, y: this._dir.y } : this._keyDir();
   }
 
@@ -90,6 +97,7 @@ export default class InputManager {
     const halfW = this.scene.scale.width / 2;
 
     this._onDown = (p) => {
+      if (this._disabled) return;
       if (this._pointerId !== null) return;   // 이미 활성화된 포인터 있음
       if (p.x > halfW) return;                // 우측 화면은 액션 영역
 

@@ -1,9 +1,9 @@
 /**
  * 두꺼비 (Toad) — 독 원거리병 (구역 2)
- * HP 32 / 속도 65 / 데미지 7(접촉) + 5 독 DoT(진입 즉시 1회, 이후 0.5초마다, 웅덩이 4초 지속) / 코어 3
+ * HP 51 / 속도 72 / 데미지 7(접촉) + 5 독 DoT(진입 즉시 1회, 이후 0.5초마다, 웅덩이 4초 지속) / 코어 3
  *
  * 패턴:
- *   idle      → kite(240px 이내 탐지)
+ *   idle      → kite(384px 이내 탐지)
  *   kite      → 100px 이내 접근 시 후퇴, 그 외에는 정지
  *               2.5초마다 spit (HP 30% 이하: 1.5초)
  *   spit_wind → 0.4초 예고
@@ -16,9 +16,9 @@
  * 시각: toad 스프라이트 + 독초록 틴트, 독 웅덩이는 toad-puddle 텍스처 사용
  * speedMult: Wolf 오라(180px 이내) 적용 시 후퇴 속도 ×1.2
  */
-const DETECT_R     = 240;
+const DETECT_R     = 384;
 const CLOSE_DIST   = 100;
-const RETREAT_SPEED = 65;
+const RETREAT_SPEED = 72;
 const SPIT_CD      = 2.5;
 const SPIT_CD_RAGE = 1.5;
 const SPIT_WINDUP  = 0.4;
@@ -55,8 +55,8 @@ export default class Toad {
   constructor(scene, x, y) {
     this.scene = scene;
 
-    this.hp     = 32;
-    this.maxHp  = 32;
+    this.hp     = 51;
+    this.maxHp  = 51;
     this.speed  = RETREAT_SPEED;
     this.damage = 7;
     this.displayName = '두꺼비';

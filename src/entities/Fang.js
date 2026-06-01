@@ -1,11 +1,11 @@
 /**
  * FANG — 구역 1 보스
- * HP 500 / 크기 64×64px
+ * HP 800 / 크기 64×64px
  *
  * 인지 범위: 방 어디서든 즉시 추적·공격 (DETECT_R 없음)
- * 이동속도: 1페이즈 180px/s / 2페이즈 220px/s (≈+22%, 플레이어 200 기준)
+ * 이동속도: 1페이즈 198px/s / 2페이즈 242px/s (≈+22%, 플레이어 200 기준)
  * 1페이즈 (HP 100~50%) — 패턴 풀: dash×2 + dash_combo + stomp + roar (돌진계 60%):
- *   dash         → 플레이어 방향 440px/s 직진, 벽 충돌까지 최대 사거리 이동
+ *   dash         → 플레이어 방향 484px/s 직진, 벽 충돌까지 최대 사거리 이동
  *                  장애물 충돌 시 장애물 파괴 후 돌진 지속, 벽 충돌 시 220px/s 자기 반동(0.2초 감쇠) + 1.5초 스턴
  *                  안전상 MAX 2.5초 캡 (room diagonal 통과 분)
  *   dash_combo   → 3연속 돌진 (각 dash 사이 재조준)
@@ -23,8 +23,8 @@ const FANG_H            = 50;
 const FANG_DW           = 88;
 const FANG_DH           = 88;
 
-const BASE_CHASE_SPEED  = 180;
-const DASH_SPEED        = 440;
+const BASE_CHASE_SPEED  = 198;
+const DASH_SPEED        = 484;
 const DASH_DURATION_MAX     = 2.5;  // 벽/막힘까지 직진하기 위한 안전 캡 (room diagonal 통과)
 const WALL_STUN_DUR     = 1.5;
 const WALL_BOUNCE_FORCE = 220;  // 벽 충돌 시 자기 반동 초속
@@ -43,7 +43,7 @@ const ROAR_DUR          = 0.8;
 
 const PATTERN_CD_MIN    = 1.5;
 const PATTERN_CD_MAX    = 2.5;
-const PHASE2_SPEED_MULT = 1.22;       // 180 × 1.22 ≈ 220
+const PHASE2_SPEED_MULT = 1.22;       // 198 × 1.22 ≈ 242
 const COMBO_COUNT_P1    = 3;          // 1페 콤보 돌진 횟수
 const COMBO_COUNT_P2    = 5;          // 2페 콤보 돌진 횟수
 const PHASE2_TINT       = 0xff6666;   // 2페이즈 스프라이트 틴트
@@ -66,8 +66,8 @@ export default class Fang {
   constructor(scene, x, y) {
     this.scene = scene;
 
-    this.hp     = 500;
-    this.maxHp  = 500;
+    this.hp     = 800;
+    this.maxHp  = 800;
     this.speed  = BASE_CHASE_SPEED;
     this.damage = 25;
     this.displayName = 'FANG';

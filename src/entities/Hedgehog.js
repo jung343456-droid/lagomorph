@@ -1,10 +1,10 @@
 /**
  * 고슴도치 (Hedgehog) — 방어형
- * HP 70 / 속도 55 / 데미지 16(접촉) / 코어 드롭 4
+ * HP 112 / 속도 61 / 데미지 16(접촉) / 코어 드롭 4
  *
  * 패턴:
- *   idle  → chase(180px 이내 탐지)
- *   chase → 55px/s로 플레이어 추격
+ *   idle  → chase(288px 이내 탐지)
+ *   chase → 61px/s로 플레이어 추격
  *   spike → 2초마다 발동, 1초간 가시 원형 AoE(반경 65px, 데미지 12 + 넉백)
  *           spike 중 무적 — 공격받으면 플레이어만 넉백(데미지 없음)
  *   stun  → 피격 시 0.3초 경직 + 넉백 (spike 중 발동 불가, 이 시간 동안 추가 피격 무시 = i-frame)
@@ -12,8 +12,8 @@
  * 시각: spike 중 hedgehog-spike 스프라이트 + AoE 원 페이드아웃
  * speedMult: Wolf 오라(180px 이내) 적용 시 추격 속도 ×1.2
  */
-const DETECT_R       = 180;
-const CHASE_SPEED    = 55;
+const DETECT_R       = 288;
+const CHASE_SPEED    = 61;
 const HEDGEHOG_W     = 24;   // 물리 body 크기 (canvas 26:24 비율 반영)
 const HEDGEHOG_H     = 22;
 const HEDGEHOG_DW    = 44;   // 표시 크기 (canvas 26:24 ≈ 1.08, 약간 넓게)
@@ -46,8 +46,8 @@ export default class Hedgehog {
   constructor(scene, x, y) {
     this.scene = scene;
 
-    this.hp     = 70;
-    this.maxHp  = 70;
+    this.hp     = 112;
+    this.maxHp  = 112;
     this.speed  = CHASE_SPEED;
     this.damage = 16;
     this.displayName = '고슴도치';

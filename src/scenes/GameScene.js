@@ -144,6 +144,8 @@ export default class GameScene extends Phaser.Scene {
     });
 
     this.events.once('player-dead', () => {
+      this.input$.disable();
+      this.attackManager.disable();
       this.time.delayedCall(400, () => this._showGameOver());
     });
   }

@@ -1,16 +1,16 @@
 /**
  * 부엉이왕 (OwlKing) — 구역 2 최종 보스 (10층)
- * HP 600 / 크기 80×80px
+ * HP 960 / 크기 80×80px
  *
  * 인지 범위: 방 어디서든 즉시 추적·공격 (DETECT_R 없음)
- * 이동속도: 200px/s (비행)
+ * 이동속도: 220px/s (비행)
  * 페이즈:
  *   Phase 1 (HP 100~60%) — 공중 정찰: shadow_dive(50%) + feather_volley(30%) + screech(20%)
  *   Phase 2 (HP 60~30%)  — 회오리 추가: + whirlwind(25%), shadow_dive 인디케이터 1.0→0.7s 단축
  *   Phase 3 (HP <30%)    — 광폭화: 첫 진입 시 박쥐 4 소환, 쿨다운 ×0.6, dive 인디케이터 0.4s, volley 16방향
  *
  * 패턴:
- *   shadow_dive  → 지면 그림자 인디케이터 후 직선 강하 380px/s × 0.5s
+ *   shadow_dive  → 지면 그림자 인디케이터 후 직선 강하 418px/s × 0.5s
  *                  강하 중 무적, 데미지 28, 착지 후 0.4초 경직
  *   feather_volley → 0.5초 정지 후 N방향 깃털 투사체 (각 220px/s, 데미지 12)
  *                    Phase 1·2: 8방향 / Phase 3: 16방향
@@ -26,8 +26,8 @@ const OK_H              = 56;
 const OK_DW             = 92;
 const OK_DH             = 92;
 
-const BASE_SPEED        = 200;
-const DIVE_SPEED        = 380;
+const BASE_SPEED        = 220;
+const DIVE_SPEED        = 418;
 const DIVE_DURATION     = 0.5;
 const DIVE_RECOVER      = 0.4;
 const DIVE_DMG          = 28;
@@ -81,8 +81,8 @@ export default class OwlKing {
   constructor(scene, x, y) {
     this.scene = scene;
 
-    this.hp     = 600;
-    this.maxHp  = 600;
+    this.hp     = 960;
+    this.maxHp  = 960;
     this.speed  = BASE_SPEED;
     this.damage = DIVE_DMG;
     this.displayName = 'OWL KING';

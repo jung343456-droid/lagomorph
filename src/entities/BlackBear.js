@@ -1,11 +1,11 @@
 /**
  * 검은곰 (BlackBear) — 8층 중간 보스 (구역 2)
- * HP 280 / 속도 160 / 데미지 24(접촉) / 코어 18
+ * HP 448 / 속도 176 / 데미지 24(접촉) / 코어 18
  * 크기 70×70px
  *
  * 패턴:
- *   idle  → chase (200px 이내 탐지)
- *   chase → 플레이어 추격 (160px/s)
+ *   idle  → chase (320px 이내 탐지)
+ *   chase → 플레이어 추격 (176px/s)
  *           5초마다 slam, 초기 9초/이후 22초 주기로 roar
  *   slam  → 0.6초 예고 → 반경 180px 충격파 (데미지 18 + 강한 넉백 400px/s)
  *   roar  → 1.8초 포효: 완전 정지 + 경직 취약
@@ -22,8 +22,8 @@ const BB_W          = 60;
 const BB_H          = 60;
 const BB_DW         = 88;
 const BB_DH         = 88;
-const DETECT_R      = 200;
-const CHASE_SPEED   = 160;
+const DETECT_R      = 320;
+const CHASE_SPEED   = 176;
 const SLAM_CD       = 5.0;
 const SLAM_WINDUP   = 0.6;
 const SLAM_RADIUS   = 180;
@@ -56,8 +56,8 @@ export default class BlackBear {
   constructor(scene, x, y) {
     this.scene = scene;
 
-    this.hp        = 280;
-    this.maxHp     = 280;
+    this.hp        = 448;
+    this.maxHp     = 448;
     this.speed     = CHASE_SPEED;
     this.damage    = 24;
     this.speedMult = 1.0;
