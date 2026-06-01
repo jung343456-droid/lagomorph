@@ -3,7 +3,7 @@
  * HP 112 / 속도 61 / 데미지 16(접촉) / 코어 드롭 4
  *
  * 패턴:
- *   idle  → chase(288px 이내 탐지)
+ *   idle  → chase(230px 이내 탐지)
  *   chase → 61px/s로 플레이어 추격
  *   spike → 2초마다 발동, 1초간 가시 원형 AoE(반경 65px, 데미지 12 + 넉백)
  *           spike 중 무적 — 공격받으면 플레이어만 넉백(데미지 없음)
@@ -12,7 +12,7 @@
  * 시각: spike 중 hedgehog-spike 스프라이트 + AoE 원 페이드아웃
  * speedMult: Wolf 오라(180px 이내) 적용 시 추격 속도 ×1.2
  */
-const DETECT_R       = 288;
+const DETECT_R       = 230;
 const CHASE_SPEED    = 61;
 const HEDGEHOG_W     = 24;   // 물리 body 크기 (canvas 26:24 비율 반영)
 const HEDGEHOG_H     = 22;

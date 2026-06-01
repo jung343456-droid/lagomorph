@@ -3,14 +3,14 @@
  * HP 48 / 속도 154 / 데미지 10 / 코어 드롭 3
  *
  * 패턴:
- *   idle  → chase(400px 이내 탐지)
+ *   idle  → chase(320px 이내 탐지)
  *   chase → 플레이어를 직접 추격
  *   chase → flee(HP 30% 이하 시 2초간 도주, 이후 1.5초 유예 후 재도주 가능)
  *   stun  → 피격 시 0.3초 경직 + 넉백 (이 시간 동안 추가 피격 무시 = i-frame)
  *
  * speedMult: Wolf 오라(180px 이내) 적용 시 이동속도 ×1.2
  */
-const DETECT_R = 400;
+const DETECT_R = 320;
 const FOX_W    = 26;   // 물리 body 크기
 const FOX_H    = 26;
 const FOX_DW   = 44;   // 표시 크기 (body보다 크게)

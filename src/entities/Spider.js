@@ -3,7 +3,7 @@
  * HP 45 / 속도 99 / 데미지 9(접촉) / 코어 3
  *
  * 패턴:
- *   idle       → reposition(320px 이내 탐지)
+ *   idle       → reposition(256px 이내 탐지)
  *   reposition → 플레이어 측면으로 횡이동, 정면 회피
  *                플레이어가 거미줄 패치 안에 있으면 attack 상태로 전환
  *   web_throw  → 3초마다 플레이어 위치+α에 거미줄 패치(반경 55px, 7초 지속) 투척
@@ -19,7 +19,7 @@
  * 시각: spider 스프라이트 + 검은 틴트, 거미줄은 spider-web 텍스처 사용
  * speedMult: Wolf 오라(180px 이내) 적용 시 횡이동 속도 ×1.2
  */
-const DETECT_R    = 320;
+const DETECT_R    = 256;
 const KITE_SPEED  = 99;
 const WEB_CD      = 3.0;
 const WEB_RADIUS  = 55;   // 슬로우 판정 반경 — spider-web 프레임(110px)의 반(설계 의도)

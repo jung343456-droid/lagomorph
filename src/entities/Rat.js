@@ -4,14 +4,14 @@
  * 스폰: 3마리 묶음 (120° 간격, 18px 반경 분산)
  *
  * 패턴:
- *   idle     → rush(448px 이내 탐지, 플레이어 위치로 방향 고정 후 돌진)
+ *   idle     → rush(358px 이내 탐지, 플레이어 위치로 방향 고정 후 돌진)
  *   rush     → 1.2초간 직선 돌진 (도중 방향 보정 없음)
  *   cooldown → 0.3초 정지 후 재조준 → rush 반복
  *   stun     → 피격 시 0.3초 경직 + 넉백 (이 시간 동안 추가 피격 무시 = i-frame)
  *
  * speedMult: Wolf 오라(180px 이내) 적용 시 이동속도 ×1.2
  */
-const DETECT_R   = 448;
+const DETECT_R   = 358;
 const RUSH_SPEED = 226;
 const RUSH_DUR   = 1.2;
 const COOL_DUR   = 0.3;

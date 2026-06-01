@@ -4,7 +4,7 @@
  * 스폰: 3마리 묶음 (들쥐와 동일)
  *
  * 패턴:
- *   idle    → orbit(624px 이내 탐지)
+ *   idle    → orbit(499px 이내 탐지)
  *   orbit   → 200~240px 거리에서 좌우 흔들리며 선회 (직진하지 않음)
  *   swoop   → 4초마다 가장 가까운 1마리가 0.4초간 직선 강하
  *   recover → 0.6초 정지 후 orbit 복귀
@@ -13,7 +13,7 @@
  * 시각: 어두운 보라 틴트 (placeholder: rat 스프라이트 재사용)
  * speedMult: Wolf 오라(180px 이내) 적용 시 ×1.2
  */
-const DETECT_R     = 624;
+const DETECT_R     = 499;
 const PREFER_DIST  = 220;
 const ORBIT_SPEED  = 176;
 const SWOOP_SPEED  = 242;

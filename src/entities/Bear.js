@@ -3,7 +3,7 @@
  * HP 176 / 속도 121 / 데미지 22(휘두르기) / 코어 6
  *
  * 패턴:
- *   idle          → chase(352px 이내 탐지)
+ *   idle          → chase(282px 이내 탐지)
  *   chase         → 121px/s 추격 (격노 시 165px/s)
  *   swipe_windup  → 80px 이내 접근 시 0.2초 예고
  *   swipe         → 0.2초간 120px 반경 정면 180° 부채꼴 피해 (등 뒤 안전), 시각 잔상 +0.1초
@@ -14,7 +14,7 @@
  * 시각: 짙은 갈색 틴트 (placeholder: hedgehog 스프라이트 재사용)
  * speedMult: Wolf 오라(180px 이내) 적용 시 추격 속도 ×1.2 (격노 시 추가 적용)
  */
-const DETECT_R       = 352;
+const DETECT_R       = 282;
 const CHASE_SPEED    = 121;
 const RAGE_SPEED     = 165;
 const SWIPE_RANGE    = 80;

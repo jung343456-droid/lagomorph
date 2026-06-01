@@ -3,7 +3,7 @@
  * HP 29 / 속도 116 / 데미지 8(도토리) / 코어 드롭 2
  *
  * 패턴:
- *   idle → kite(416px 이내 탐지)
+ *   idle → kite(333px 이내 탐지)
  *   kite → 선호 거리 140px 유지하며 플레이어 주위 횡이동 (1.5초마다 방향 전환)
  *          100px 이하 접근 시 반대 방향 후퇴(143px/s)
  *          2.5초마다 도토리 투척 (HP 30% 이하: 1.2초마다)
@@ -12,7 +12,7 @@
  * 도토리: 속도 230px/s, 벽 도달 시 소멸, 플레이어 22px 이내 명중 시 데미지
  * speedMult: Wolf 오라(180px 이내) 적용 시 횡이동·후퇴 속도 ×1.2
  */
-const DETECT_R        = 416;
+const DETECT_R        = 333;
 const PREFER_DIST     = 140;
 const CLOSE_DIST      = 100;
 const KITE_SPEED      = 116;

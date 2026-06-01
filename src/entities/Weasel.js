@@ -3,7 +3,7 @@
  * HP 35 / 속도 176→308 / 데미지 9 / 코어 드롭 2
  *
  * 패턴:
- *   idle     → approach(352px 이내 탐지)
+ *   idle     → approach(282px 이내 탐지)
  *   approach → 176px/s로 접근, 70px 이내 진입 시 대시 방향 고정 → dash
  *   dash     → 308px/s 직선 돌진 0.4초 (방향 고정)
  *   cooldown → 0.8초 대기 (HP 20% 이하: 0.4초) → approach 반복
@@ -12,7 +12,7 @@
  * 시각: 대시 중 weasel-dash 스프라이트 표시
  * speedMult: Wolf 오라(180px 이내) 적용 시 접근·후퇴 속도 ×1.2 (대시 속도는 고정)
  */
-const DETECT_R       = 352;
+const DETECT_R       = 282;
 const APPROACH_DIST  = 70;
 const APPROACH_SPEED = 176;
 const DASH_SPEED     = 308;

@@ -3,7 +3,7 @@
  * HP 88 / 속도 88(approach) → 297(charge) / 데미지 18 / 코어 4
  *
  * 패턴:
- *   idle     → approach(400px 이내 탐지)
+ *   idle     → approach(320px 이내 탐지)
  *   approach → 88px/s로 천천히 다가옴
  *   ready    → 200px 이내 진입 시 0.2초 예고(앞발 긁기)
  *   charge   → 297px/s 직선 1.0초 돌진, 장애물(boulder) 파괴 + 돌진 지속,
@@ -14,7 +14,7 @@
  * 시각: 갈색 틴트 (placeholder: fox 스프라이트 재사용)
  * speedMult: Wolf 오라(180px 이내) 적용 시 approach·recover만 ×1.2 (charge는 고정)
  */
-const DETECT_R       = 400;
+const DETECT_R       = 320;
 const READY_DIST     = 200;
 const APPROACH_SPEED = 88;
 const CHARGE_SPEED   = 297;

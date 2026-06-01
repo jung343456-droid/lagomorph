@@ -4,7 +4,7 @@
  * 크기 70×70px
  *
  * 패턴:
- *   idle  → chase (320px 이내 탐지)
+ *   idle  → chase (256px 이내 탐지)
  *   chase → 플레이어 추격 (176px/s)
  *           5초마다 slam, 초기 9초/이후 22초 주기로 roar
  *   slam  → 0.6초 예고 → 반경 180px 충격파 (데미지 18 + 강한 넉백 400px/s)
@@ -22,7 +22,7 @@ const BB_W          = 60;
 const BB_H          = 60;
 const BB_DW         = 88;
 const BB_DH         = 88;
-const DETECT_R      = 320;
+const DETECT_R      = 256;
 const CHASE_SPEED   = 176;
 const SLAM_CD       = 5.0;
 const SLAM_WINDUP   = 0.6;
