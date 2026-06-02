@@ -286,9 +286,13 @@ export default class AttackManager {
   _placePoop() {
     const { x: px, y: py } = this.player;
     const size = POOP_SIZE * this.player.trapSizeMult;
-    const go = this.scene.add.rectangle(px, py, size, size, POOP_COLOR);
+    // 원형 표시: 흰 원 텍스처(poop_circle 80px)에 tint·displaySize 적용 (Arc 금지 규칙 준수)
+    const go = this.scene.add.image(px, py, 'poop_circle').setTint(POOP_COLOR);
+    go.setDisplaySize(size, size);
     go.setDepth(5);
     this.scene.physics.add.existing(go);
+    // 물리 body 도 원형 — 텍스처 80px 기준 반경 40 (displaySize 스케일에 맞춰 자동 축소)
+    go.body.setCircle(40);
     go.body.setImmovable(true);
     go.body.setAllowGravity(false);
     this._poops.push({ go, damage: POOP_DMG, size });

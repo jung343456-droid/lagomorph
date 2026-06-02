@@ -36,8 +36,8 @@ export default class BootScene extends Phaser.Scene {
       label.setText('');
     });
 
-    ['top', 'top-right', 'right', 'bottom-right', 'bottom', 'bottom-left', 'left', 'top-left']
-      .forEach(d => this.load.image(`soma-${d}`, `assets/characters/soma-${d}.png`));
+    // 8방향 플레이어 스프라이트 시트 (950×712, RGBA). create()에서 방향별 프레임으로 분할.
+    this.load.image('soma8', 'assets/characters/soma-sprite-sheet8.png');
 
     // zone-2 용 (석재) — zone-2 에서 다시 사용
     ['tile_floor', 'tile_floor_b', 'tile_crack', 'tile_moss', 'tile_wall', 'tile_obstacle']
@@ -88,7 +88,28 @@ export default class BootScene extends Phaser.Scene {
 
   create() {
     this._generateTextures();
+    this._processPlayerSprites();
     this.scene.start('HubScene');
+  }
+
+  // 8방향 스프라이트 시트(soma8, 4열×2행)를 방향별 프레임으로 분할.
+  // 각 칸의 캐릭터 내용물 경계(투명 영역 제외)에 맞춰 타이트하게 잘라
+  // 방향 전환 시 위치가 흔들리지 않도록 한다. (rect: [x, y, w, h])
+  _processPlayerSprites() {
+    const FRAMES = {
+      'bottom':       [ 38,  67, 178, 240],
+      'top':          [266,  53, 179, 254],
+      'left':         [491,  53, 215, 248],
+      'right':        [712,  53, 217, 248],
+      'bottom-left':  [ 29, 397, 187, 239],
+      'top-left':     [258, 393, 192, 248],
+      'top-right':    [504, 393, 192, 248],
+      'bottom-right': [737, 397, 188, 239],
+    };
+    const texture = this.textures.get('soma8');
+    Object.entries(FRAMES).forEach(([dir, [x, y, w, h]]) => {
+      texture.add(dir, 0, x, y, w, h);
+    });
   }
 
   // 외부 에셋 없이 실행할 수 있도록 프로그래밍 방식으로 텍스처 생성
@@ -104,6 +125,12 @@ export default class BootScene extends Phaser.Scene {
     g.fillStyle(0x0d0d0d);
     g.fillCircle(22, 11, 2);
     g.generateTexture('player_tex', 32, 32);
+
+    // poop_circle: 설치형 공격용 흰 원형 (런타임에 tint·displaySize 적용)
+    g.clear();
+    g.fillStyle(0xffffff);
+    g.fillCircle(40, 40, 40);
+    g.generateTexture('poop_circle', 80, 80);
 
     // grim: 40x50 잿빛털 토끼 상인 (한쪽 귀 흉터 + 어깨 가방)
     g.clear();

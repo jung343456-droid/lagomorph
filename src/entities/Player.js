@@ -2,7 +2,7 @@
  * 플레이어 (VOSS-7 / soma) — 조작 캐릭터
  * 기본 HP 100 / 기본 속도 200
  *
- * 이동: 가상 조이스틱 또는 WASD, 8방향 스프라이트 자동 전환
+ * 이동: 가상 조이스틱 또는 WASD, 8방향 스프라이트 자동 전환 (soma8 시트 프레임)
  * 피격: 무적 시간 동안 깜빡임(alpha 0.35), 이후 재피격 가능
  *       넉백 지속 중에는 플레이어 입력 무시
  * 사망: takeDamage() 반환값 true → 호출부에서 player-dead 이벤트 발행
@@ -41,10 +41,10 @@
 import { showDamageNumber, showHealNumber } from '../utils/DamageNumbers';
 import { applyUnlocksToPlayer } from '../data/MetaProgress';
 
-const DISPLAY_W = 55; // 스프라이트 표시 너비 (px) — 히트박스와 동일
-const DISPLAY_H = 62; // 스프라이트 표시 높이 (px) — 원본 8:9 비율 유지
-const BODY_W    = 55; // 물리 히트박스 너비 (px)
-const BODY_H    = 53; // 물리 히트박스 높이 (px)
+const PLAYER_SCALE = 0.18; // soma8 프레임(높이 ~248px) 공통 스케일 → 표시 높이 ~45px, 방향별 원본 비율 유지
+const DISPLAY_H    = 56;    // 표시 높이 근사치 (px) — 데미지/회복 숫자·텍스트 위치 기준
+const BODY_W       = 40;    // 물리 히트박스 너비 (px)
+const BODY_H       = 38;    // 물리 히트박스 높이 (px)
 
 export default class Player {
   constructor(scene, x, y) {
@@ -95,8 +95,8 @@ export default class Player {
     // 영구 해금 효과 — 기본 스탯 셋업 직후, 게임오브젝트 생성 전에 적용
     applyUnlocksToPlayer(this);
 
-    this.gameObject = scene.add.image(x, y, 'soma-bottom');
-    this.gameObject.setDisplaySize(DISPLAY_W, DISPLAY_H);
+    this.gameObject = scene.add.image(x, y, 'soma8', 'bottom');
+    this.gameObject.setScale(PLAYER_SCALE);
     scene.physics.add.existing(this.gameObject);
     this._applyBodySize();
     this.gameObject.body.setCollideWorldBounds(true);
@@ -104,9 +104,8 @@ export default class Player {
     this.gameObject.setDepth(10);
   }
 
-  // body.setSize 는 source(scale 전) 픽셀이라 setDisplaySize 로 축소된
-  // 큰 원본 텍스처(soma ~380~460px) 위에서는 그대로 넣으면 body 가 ~8px 로 줄어든다.
-  // 표시 픽셀 기준 BODY_W × BODY_H 가 되도록 scale 을 역산한다.
+  // body.setSize 는 source(scale 전) 픽셀이라 PLAYER_SCALE 로 축소된 프레임에서
+  // 그대로 넣으면 body 가 작아진다. 표시 픽셀 기준 BODY_W × BODY_H 가 되도록 scale 을 역산한다.
   _applyBodySize() {
     const sx = this.gameObject.scaleX || 1;
     const sy = this.gameObject.scaleY || 1;
@@ -116,6 +115,7 @@ export default class Player {
   update({ x, y }, delta) {
     const dt = delta / 1000;
     if (this._slowTimer > 0) this._slowTimer = Math.max(0, this._slowTimer - dt);
+
     if (this._knockbackTimer > 0) {
       this._knockbackTimer = Math.max(0, this._knockbackTimer - dt);
       return;
@@ -269,10 +269,9 @@ export default class Player {
   _setDir(dir) {
     if (dir === this._dir) return;
     this._dir = dir;
-    this.gameObject.setTexture(`soma-${dir}`);
-    // 텍스처 교체 시 스케일이 초기화되므로 재적용
-    this.gameObject.setDisplaySize(DISPLAY_W, DISPLAY_H);
-    // 방향마다 원본 텍스처 크기가 달라 scale 이 바뀌므로 body 도 재계산
+    this.gameObject.setTexture('soma8', dir);
+    // 방향마다 프레임 크기가 달라 setTexture 후 scale 을 유지·재적용하고 body 재계산
+    this.gameObject.setScale(PLAYER_SCALE);
     this._applyBodySize();
   }
 

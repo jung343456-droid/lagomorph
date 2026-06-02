@@ -35,7 +35,8 @@
       "Bash(taskkill /F /FI \"WINDOWTITLE eq npm*\" /T)",
       "Bash(rtk ps *)",
       "Bash(npm i *)",
-      "Bash(rtk grep *)"
+      "Bash(rtk grep *)",
+      "Bash(dir C:\\\\projects\\\\lagomorph\\\\dist\\\\assets\\\\characters\\\\motion *)"
     ]
   }
 }
