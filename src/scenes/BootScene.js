@@ -36,8 +36,10 @@ export default class BootScene extends Phaser.Scene {
       label.setText('');
     });
 
-    // 8방향 플레이어 스프라이트 시트 (950×712, RGBA). create()에서 방향별 프레임으로 분할.
-    this.load.image('soma8', 'assets/characters/soma-sprite-sheet8.png');
+    // 플레이어 걷기 스프라이트 시트 (512×1024, RGBA, 8행×4열, 셀 128×128).
+    // 행 = 방향(반시계: S,SW,W,NW,N,NE,E,SE), 열 = 걷기 프레임 4개.
+    this.load.spritesheet('soma-walk', 'assets/characters/motion/soma-walk-sprite-sheet3.png',
+      { frameWidth: 128, frameHeight: 128 });
 
     // zone-2 용 (석재) — zone-2 에서 다시 사용
     ['tile_floor', 'tile_floor_b', 'tile_crack', 'tile_moss', 'tile_wall', 'tile_obstacle']
@@ -88,28 +90,7 @@ export default class BootScene extends Phaser.Scene {
 
   create() {
     this._generateTextures();
-    this._processPlayerSprites();
     this.scene.start('HubScene');
-  }
-
-  // 8방향 스프라이트 시트(soma8, 4열×2행)를 방향별 프레임으로 분할.
-  // 각 칸의 캐릭터 내용물 경계(투명 영역 제외)에 맞춰 타이트하게 잘라
-  // 방향 전환 시 위치가 흔들리지 않도록 한다. (rect: [x, y, w, h])
-  _processPlayerSprites() {
-    const FRAMES = {
-      'bottom':       [ 38,  67, 178, 240],
-      'top':          [266,  53, 179, 254],
-      'left':         [491,  53, 215, 248],
-      'right':        [712,  53, 217, 248],
-      'bottom-left':  [ 29, 397, 187, 239],
-      'top-left':     [258, 393, 192, 248],
-      'top-right':    [504, 393, 192, 248],
-      'bottom-right': [737, 397, 188, 239],
-    };
-    const texture = this.textures.get('soma8');
-    Object.entries(FRAMES).forEach(([dir, [x, y, w, h]]) => {
-      texture.add(dir, 0, x, y, w, h);
-    });
   }
 
   // 외부 에셋 없이 실행할 수 있도록 프로그래밍 방식으로 텍스처 생성

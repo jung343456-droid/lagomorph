@@ -23,7 +23,7 @@
 | `tough_hide` | 강인한 가죽 | 빨강 `0xff4455` | 최대 HP +50, 즉시 50 회복 | `player.maxHp += 50; player.heal(50)` |
 | `bulletproof_vest` | 방탄조끼 | 강철 `0x445566` | 방어력 +2 — 받는 피해 -2, 방어력 이하 공격은 통째로 무효 (무적/넉백/숫자 모두 스킵) | `player.armor += 2` |
 | `quick_claws` | 민첩한 발톱 | 노랑 `0xffee00` | 근거리 충전 속도 ×1.5 | `player.chargeSpeedMult *= 1.5` |
-| `thunder_claws` | 감전 발톱 | 황녹 `0xddff22` | 명중 시 반경 150px 내 다른 적에게 연쇄 (hop마다 직전 데미지의 50%, 데미지 ≥2 유지 시 최대 10hop) | `player.hasThunder = true` |
+| `thunder_claws` | 감전 발톱 | 황녹 `0xddff22` | 명중 시 20% 확률로 반경 150px 내 다른 적에게 연쇄 (hop마다 직전 데미지의 50%, 데미지 ≥2 유지 시 최대 10hop) | `player.hasThunder = true` |
 | `hunter_instinct` | 사냥꾼의 본능 | 분홍 `0xff6688` | 적 처치 시 HP 5 회복 | `player.healOnKill += 5` |
 | `fire_disguise` | 불꽃 위장 | 주황 `0xff5522` | 설치물 명중 시 반경 40px 스플래시 15 + 30% 확률 화상 | `player.hasFireDisguise = true` |
 | `ice_disguise` | 냉동 위장 | 하늘 `0x66ccff` | 설치물 명중 시 반경 40px 스플래시 15 + 30% 확률 빙결 | `player.hasIceDisguise = true` |

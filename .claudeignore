@@ -15,3 +15,6 @@ design/
 
 # Lock file (auto-generated, not useful to read)
 package-lock.json
+
+# 미사용 이미지 보관함 (dead assets) — CLAUDE.md에 명시된 경우에만 참조
+dead/

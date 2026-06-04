@@ -185,18 +185,19 @@ export default class Boar {
     if (!this.alive || this.state === 'stun' || this.state === 'wallstun') return false;
     this.hp -= amount;
     if (this.hp <= 0) { this._die(); return true; }
-    if (knockback) {
-      const { dx, dy, force, duration } = knockback;
-      this._knockbackTimer    = duration;
-      this._knockbackDuration = duration;
-      this._knockbackVx = dx * force;
-      this._knockbackVy = dy * force;
+    if (this.state !== 'charge') {
+      if (knockback) {
+        const { dx, dy, force, duration } = knockback;
+        this._knockbackTimer    = duration;
+        this._knockbackDuration = duration;
+        this._knockbackVx = dx * force;
+        this._knockbackVy = dy * force;
+      }
+      this._prevState = this.state === 'ready' ? 'recover' : this.state;
+      if (this._prevState === 'recover') this._stateTimer = RECOVER_DUR;
+      this.state      = 'stun';
+      this.stunTimer  = 0.3;
     }
-    // 돌격 중 피격 시 돌격 중단 회피용으로 recover 상태 진입
-    this._prevState = (this.state === 'charge' || this.state === 'ready') ? 'recover' : this.state;
-    if (this._prevState === 'recover') this._stateTimer = RECOVER_DUR;
-    this.state      = 'stun';
-    this.stunTimer  = 0.3;
     this._blinkHit();
     return false;
   }

@@ -143,8 +143,8 @@ export default class HubScene extends Phaser.Scene {
     this.add.rectangle(cx, cy - 6, WINDOW_W, WINDOW_H, WINDOW_COLOR)
       .setStrokeStyle(2, 0x1a2a3a).setDepth(5);
 
-    // 잠든 토끼 (soma8 bottom 프레임 — 살짝 어둡게)
-    const sleeper = this.add.image(cx, cy + 2, 'soma8', 'bottom')
+    // 잠든 토끼 (soma-walk 정면 0번 프레임 — 살짝 어둡게)
+    const sleeper = this.add.image(cx, cy + 2, 'soma-walk', 0)
       .setDisplaySize(44, 50).setDepth(6).setAlpha(0.75).setTint(0xaaaaff);
     this.tweens.add({
       targets: sleeper,

@@ -9,7 +9,7 @@
  *           5초마다 slam, 초기 9초/이후 22초 주기로 roar
  *   slam  → 0.6초 예고 → 반경 180px 충격파 (데미지 18 + 강한 넉백 400px/s)
  *   roar  → 1.8초 포효: 완전 정지 + 경직 취약
- *           종료 시 멧돼지(boar) 2마리 소환
+ *           종료 시 곰(bear) 4마리 소환 (최대 2회)
  *   stun  → 피격 경직 0.3초 + 넉백 (i-frame)
  *
  * 데미지 오라 (생존 중 상시):
@@ -35,8 +35,9 @@ const ROAR_CD       = 22;
 const ROAR_DUR      = 1.8;
 const AURA_R        = 220;
 const AURA_MULT     = 1.25;
-const SUMMON_COUNT  = 2;
-const SUMMON_TYPE   = 'boar';
+const SUMMON_COUNT  = 4;
+const SUMMON_TYPE   = 'bear';
+const SUMMON_MAX    = 2;
 
 function calcDir(vx, vy) {
   if (Math.abs(vx) < 1 && Math.abs(vy) < 1) return null;
@@ -79,6 +80,7 @@ export default class BlackBear {
     this._slamHit       = false;
     this._roarTimer     = ROAR_INIT_CD;
     this._roarDur       = 0;
+    this._roarUseCount  = 0;
     this._auraTargets   = new Map();  // Map<enemy, originalDamage>
     this._roarGfx       = null;
 
@@ -177,18 +179,20 @@ export default class BlackBear {
     if (!this.alive || this.state === 'stun') return false;
     this.hp -= amount;
     if (this.hp <= 0) { this._die(); return true; }
-    if (knockback) {
-      const { dx, dy, force, duration } = knockback;
-      // 무거운 보스: 넉백 40% 감산
-      this._knockbackTimer    = duration * 0.4;
-      this._knockbackDuration = duration * 0.4;
-      this._knockbackVx = dx * force * 0.4;
-      this._knockbackVy = dy * force * 0.4;
+    const isAttacking = this.state === 'slam_windup' || this.state === 'slam' || this.state === 'roar';
+    if (!isAttacking) {
+      if (knockback) {
+        const { dx, dy, force, duration } = knockback;
+        // 무거운 보스: 넉백 40% 감산
+        this._knockbackTimer    = duration * 0.4;
+        this._knockbackDuration = duration * 0.4;
+        this._knockbackVx = dx * force * 0.4;
+        this._knockbackVy = dy * force * 0.4;
+      }
+      this._prevState = this.state;
+      this.state      = 'stun';
+      this.stunTimer  = 0.3;
     }
-    this._prevState = this.state === 'slam_windup' ? 'chase' : this.state;
-    if (this._slamGfx?.active) { this._slamGfx.destroy(); this._slamGfx = null; }
-    this.state      = 'stun';
-    this.stunTimer  = 0.3;
     this._blinkHit();
     return false;
   }
@@ -272,6 +276,10 @@ export default class BlackBear {
   }
 
   _startRoar() {
+    if (this._roarUseCount >= SUMMON_MAX) {
+      this._roarTimer = ROAR_CD;
+      return;
+    }
     this.state = 'roar';
     this._roarDur = ROAR_DUR;
     this._playRoarEffect();
@@ -279,6 +287,7 @@ export default class BlackBear {
 
   _finishRoar() {
     this._roarTimer = ROAR_CD;
+    this._roarUseCount++;
     this.state = 'chase';
     this._summonMinions();
   }

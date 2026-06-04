@@ -19,7 +19,7 @@ export default class GameScene extends Phaser.Scene {
   create() {
     // scene.restart() 시 Phaser 3.60 은 이 씬의 이벤트 리스너를 자동 정리하지 않는다.
     // 이 씬에서 등록한 사용자 이벤트들을 명시적으로 비워야 listener 중복 등록을 막을 수 있다.
-    ['boss-cleared', 'floor-exit-ready', 'room-entered', 'shop-open-requested', 'floor-changed', 'all-enemies-dead']
+    ['boss-cleared', 'floor-exit-ready', 'room-entered', 'shop-open-requested', 'floor-changed', 'all-enemies-dead', 'elite-killed']
       .forEach(e => this.events.off(e));
     if (this.roomManager) this.roomManager.destroy();
 
@@ -86,6 +86,20 @@ export default class GameScene extends Phaser.Scene {
         this.time.delayedCall(800, () => this._markStairs(roomId, x, y + 90));
         // 구역 경계 통과 시 차용 텍스트 — 5층 → 6층 = 구역 1 → 2 진입
         if (floor === 5) this.time.delayedCall(1200, () => this._showZoneTransition(2));
+      }
+    });
+
+    // 엘리트 처치: 보유하지 않은 랜덤 패시브 아이템 드롭
+    this.events.on('elite-killed', ({ x, y }) => {
+      const excluded = new Set([
+        ...this._ownedItemIds(),
+        ...this._passiveItems.filter(i => i.alive).map(i => i.id),
+      ]);
+      const dropable = Object.keys(ITEM_DEFS).filter(id => !excluded.has(id));
+      if (dropable.length > 0) {
+        const id   = dropable[Math.floor(Math.random() * dropable.length)];
+        const safe = this.roomManager?.findSafeDropPos(x, y) ?? { x, y };
+        this._passiveItems.push(new PassiveItem(this, safe.x, safe.y, id));
       }
     });
 

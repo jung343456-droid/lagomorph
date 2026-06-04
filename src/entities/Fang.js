@@ -219,16 +219,20 @@ export default class Fang {
     this.hp = Math.max(0, this.hp - amount);
     if (this.hp <= 0) { this._die(); return true; }
 
-    if (knockback) {
-      const { dx, dy, force, duration } = knockback;
-      this._knockbackTimer    = duration * 0.35;
-      this._knockbackDuration = duration * 0.35;
-      this._knockbackVx = dx * force * 0.35;
-      this._knockbackVy = dy * force * 0.35;
+    const isDashing = this.state === 'dash' || this.state === 'combo_dash'
+                   || this.state === 'stomp_windup' || this.state === 'roar';
+    if (!isDashing) {
+      if (knockback) {
+        const { dx, dy, force, duration } = knockback;
+        this._knockbackTimer    = duration * 0.35;
+        this._knockbackDuration = duration * 0.35;
+        this._knockbackVx = dx * force * 0.35;
+        this._knockbackVy = dy * force * 0.35;
+      }
+      this._prevState = this.state;
+      this.state = 'stun';
+      this.stunTimer = HIT_STUN_DUR;
     }
-    this._prevState = this.state;
-    this.state = 'stun';
-    this.stunTimer = HIT_STUN_DUR;
     this._blinkHit();
     return false;
   }

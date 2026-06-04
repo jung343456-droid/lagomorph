@@ -257,16 +257,18 @@ export default class OwlKing {
     this.hp = Math.max(0, this.hp - amount);
     if (this.hp <= 0) { this._die(); return true; }
 
-    if (knockback) {
-      const { dx, dy, force, duration } = knockback;
-      this._knockbackTimer    = duration * 0.3;
-      this._knockbackDuration = duration * 0.3;
-      this._knockbackVx = dx * force * 0.3;
-      this._knockbackVy = dy * force * 0.3;
+    if (this.state === 'idle') {
+      if (knockback) {
+        const { dx, dy, force, duration } = knockback;
+        this._knockbackTimer    = duration * 0.3;
+        this._knockbackDuration = duration * 0.3;
+        this._knockbackVx = dx * force * 0.3;
+        this._knockbackVy = dy * force * 0.3;
+      }
+      this._prevState = this.state;
+      this.state = 'stun';
+      this.stunTimer = HIT_STUN_DUR;
     }
-    this._prevState = this.state === 'dive_recover' ? 'idle' : this.state;
-    this.state = 'stun';
-    this.stunTimer = HIT_STUN_DUR;
     this._blinkHit();
     return false;
   }
@@ -488,10 +490,8 @@ export default class OwlKing {
     if (this._diveIndGfx?.active) { this._diveIndGfx.destroy(); this._diveIndGfx = null; }
     if (this._whirlGfx?.active)   { this._whirlGfx.destroy(); this._whirlGfx = null; }
     this._patternCd = 1.0;
-    this.gameObject.setTexture('owlking-rage').setDisplaySize(OK_DW, OK_DH);
-    this._applyBodySize();
     this.gameObject.setTint(PHASE3_TINT);
-    this._curKey = 'owlking-rage';
+    this._curKey = '';
     this.scene.cameras.main.flash(500, 255, 0, 0, false);
     this._summonBats();
   }
@@ -514,20 +514,9 @@ export default class OwlKing {
 
   _updateSprite() {
     if (this.state === 'stun') return;
-    let key;
-    if (this.state === 'dive' || this.state === 'dive_recover') {
-      key = 'owlking-dive';
-    } else if (this.state === 'screech' || this.state === 'screech_windup') {
-      key = 'owlking-screech';
-    } else if (this.state === 'whirl') {
-      key = 'owlking-whirl';
-    } else if (this._phase === 3) {
-      key = 'owlking-rage';
-    } else {
-      const dir = calcDir(this.gameObject.body.velocity.x, this.gameObject.body.velocity.y);
-      if (dir) this._lastDir = dir;
-      key = `owlking-${this._lastDir}`;
-    }
+    const dir = calcDir(this.gameObject.body.velocity.x, this.gameObject.body.velocity.y);
+    if (dir) this._lastDir = dir;
+    const key = `owlking-${this._lastDir}`;
     if (this._curKey !== key) {
       this._curKey = key;
       this.gameObject.setTexture(key).setDisplaySize(OK_DW, OK_DH);

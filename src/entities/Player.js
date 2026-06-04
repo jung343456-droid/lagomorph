@@ -2,7 +2,8 @@
  * 플레이어 (VOSS-7 / soma) — 조작 캐릭터
  * 기본 HP 100 / 기본 속도 200
  *
- * 이동: 가상 조이스틱 또는 WASD, 8방향 스프라이트 자동 전환 (soma8 시트 프레임)
+ * 이동: 가상 조이스틱 또는 WASD, 8방향 걷기 애니메이션 (soma-walk 시트, 방향별 4프레임)
+ *       이동 중에만 프레임 순환, 정지 시 해당 방향 0번 프레임 고정
  * 피격: 무적 시간 동안 깜빡임(alpha 0.35), 이후 재피격 가능
  *       넉백 지속 중에는 플레이어 입력 무시
  * 사망: takeDamage() 반환값 true → 호출부에서 player-dead 이벤트 발행
@@ -41,10 +42,18 @@
 import { showDamageNumber, showHealNumber } from '../utils/DamageNumbers';
 import { applyUnlocksToPlayer } from '../data/MetaProgress';
 
-const PLAYER_SCALE = 0.18; // soma8 프레임(높이 ~248px) 공통 스케일 → 표시 높이 ~45px, 방향별 원본 비율 유지
+const PLAYER_SCALE = 0.45; // soma-walk 셀(128×128, 내용물 높이 ~100px) 공통 스케일 → 표시 높이 ~45px
 const DISPLAY_H    = 56;    // 표시 높이 근사치 (px) — 데미지/회복 숫자·텍스트 위치 기준
 const BODY_W       = 40;    // 물리 히트박스 너비 (px)
 const BODY_H       = 38;    // 물리 히트박스 높이 (px)
+const WALK_FPS_MS  = 125;   // 걷기 프레임 전환 간격 (ms) ≈ 8fps
+
+// soma-walk 시트: 8행(방향) × 4열(걷기 프레임). 행 = 반시계 방향 순서.
+// 프레임 인덱스 = row*4 + frame (Phaser 스프라이트시트 행우선 인덱싱)
+const DIR_ROW = {
+  bottom: 0, 'bottom-left': 1, left: 2, 'top-left': 3,
+  top: 4, 'top-right': 5, right: 6, 'bottom-right': 7,
+};
 
 export default class Player {
   constructor(scene, x, y) {
@@ -91,11 +100,14 @@ export default class Player {
     this.shopPriceMult    = 1;   // 상인의 신용 해금 시 ×0.9 (DungeonGenerator._generateShopSlots 참조)
     this.inventory        = [];
     this._dir            = 'bottom';
+    this._row            = DIR_ROW.bottom; // 현재 방향 행
+    this._animFrame      = 0;              // 걷기 프레임 0~3
+    this._animTimer      = 0;              // 프레임 누적 시간 (ms)
 
     // 영구 해금 효과 — 기본 스탯 셋업 직후, 게임오브젝트 생성 전에 적용
     applyUnlocksToPlayer(this);
 
-    this.gameObject = scene.add.image(x, y, 'soma8', 'bottom');
+    this.gameObject = scene.add.image(x, y, 'soma-walk', 0);
     this.gameObject.setScale(PLAYER_SCALE);
     scene.physics.add.existing(this.gameObject);
     this._applyBodySize();
@@ -122,10 +134,29 @@ export default class Player {
     }
     const slowMult = this._slowTimer > 0 ? 0.4 : 1;
     this.gameObject.body.setVelocity(x * this.speed * slowMult, y * this.speed * slowMult);
+
     if (x !== 0 || y !== 0) {
       this.facingDir.x = x;
       this.facingDir.y = y;
-      this._setDir(this._vecToDir(x, y));
+      const dir = this._vecToDir(x, y);
+      if (dir !== this._dir) {
+        this._dir = dir;
+        this._row = DIR_ROW[dir];
+        this._animFrame = 0;
+        this._animTimer = 0;
+      }
+      // 이동 중에만 걷기 프레임 순환 (setFrame 3번째 인자 false 로 스케일 유지)
+      this._animTimer += delta;
+      if (this._animTimer >= WALK_FPS_MS) {
+        this._animTimer -= WALK_FPS_MS;
+        this._animFrame = (this._animFrame + 1) % 4;
+      }
+      this.gameObject.setFrame(this._row * 4 + this._animFrame, false, false);
+    } else {
+      // 정지: 해당 방향 0번 프레임 고정
+      this._animFrame = 0;
+      this._animTimer = 0;
+      this.gameObject.setFrame(this._row * 4, false, false);
     }
   }
 
@@ -265,15 +296,6 @@ export default class Player {
   get y() { return this.gameObject.y; }
 
   // ── private ─────────────────────────────────────────
-
-  _setDir(dir) {
-    if (dir === this._dir) return;
-    this._dir = dir;
-    this.gameObject.setTexture('soma8', dir);
-    // 방향마다 프레임 크기가 달라 setTexture 후 scale 을 유지·재적용하고 body 재계산
-    this.gameObject.setScale(PLAYER_SCALE);
-    this._applyBodySize();
-  }
 
   _vecToDir(x, y) {
     const a = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;

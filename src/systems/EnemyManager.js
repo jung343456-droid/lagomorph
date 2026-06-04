@@ -26,6 +26,9 @@ const KNOCKBACK_DUR          = 0.22; // 적 넉백 지속 시간 (초)
 const PLAYER_KNOCKBACK_FORCE = 220; // 적 접촉 시 플레이어 넉백 강도
 const PLAYER_KNOCKBACK_DUR   = 0.18; // 적 접촉 시 플레이어 넉백 지속 시간 (초)
 const PLAYER_AVG_HALF        = 23;  // 플레이어 히트박스 평균 반경 (BODY_W=48, BODY_H=46 → (24+23)/2)
+const ELITE_CHANCE           = 0.01; // 방당 엘리트 등장 확률 (1%)
+const ELITE_TINT_COLOR       = 0xffaaaa; // 엘리트 스프라이트 틴트 (붉은 계열)
+const ELITE_HP_COLOR         = 0xcc1111; // 엘리트 HP 바 색상
 
 const ENEMY_CLASSES = {
   // 구역 1
@@ -210,7 +213,7 @@ export default class EnemyManager {
       entry.timer -= dt;
       if (entry.timer <= 0) {
         this._poisoned.delete(enemy);
-        enemy._hpFill?.setFillStyle(0x44dd44);
+        enemy._hpFill?.setFillStyle(enemy.isElite ? ELITE_HP_COLOR : 0x44dd44);
         continue;
       }
       entry.tickTimer -= dt;
@@ -223,6 +226,7 @@ export default class EnemyManager {
           this._poisoned.delete(enemy);
           this.dropCores(enemy.x, enemy.y, enemy.coreDrops ?? 3);
           if (enemy.isBoss) { this.dropRareItem(enemy.x, enemy.y); this.boss = null; }
+          this.dropEliteItem(enemy);
           if (this.player.healOnKill > 0) this.player.heal(this.player.healOnKill);
         }
       }
@@ -234,7 +238,7 @@ export default class EnemyManager {
       entry.timer -= dt;
       if (entry.timer <= 0) {
         this._burned.delete(enemy);
-        enemy._hpFill?.setFillStyle(0x44dd44);
+        enemy._hpFill?.setFillStyle(enemy.isElite ? ELITE_HP_COLOR : 0x44dd44);
         continue;
       }
       entry.tickTimer -= dt;
@@ -247,6 +251,7 @@ export default class EnemyManager {
           this._burned.delete(enemy);
           this.dropCores(enemy.x, enemy.y, enemy.coreDrops ?? 3);
           if (enemy.isBoss) { this.dropRareItem(enemy.x, enemy.y); this.boss = null; }
+          this.dropEliteItem(enemy);
           if (this.player.healOnKill > 0) this.player.heal(this.player.healOnKill);
         }
       }
@@ -258,7 +263,7 @@ export default class EnemyManager {
       entry.timer -= dt;
       if (entry.timer <= 0) {
         this._frozen.delete(enemy);
-        enemy._hpFill?.setFillStyle(0x44dd44);
+        enemy._hpFill?.setFillStyle(enemy.isElite ? ELITE_HP_COLOR : 0x44dd44);
         continue;
       }
       enemy.gameObject.body?.setVelocity(0, 0);
@@ -339,6 +344,12 @@ export default class EnemyManager {
       } else {
         this.spawnEnemy(type, x, y);
       }
+    }
+
+    // 1% 확률로 엘리트 — 보스방이 아닌 일반/출구방 전용
+    if (this.enemies.length > 0 && Math.random() < ELITE_CHANCE) {
+      const pick = this.enemies[Math.floor(Math.random() * this.enemies.length)];
+      this._makeElite(pick);
     }
   }
 
@@ -456,7 +467,10 @@ export default class EnemyManager {
   }
 
   _clearAll() {
-    this.enemies.forEach(e => { if (!e.destroyed) e.dispose(); });
+    this.enemies.forEach(e => {
+      if (e._eliteCleanup) { e._eliteCleanup(); e._eliteCleanup = null; }
+      if (!e.destroyed) e.dispose();
+    });
     this.enemies = [];
     this.boss = null;
     this.cores.forEach(core => {
@@ -470,6 +484,32 @@ export default class EnemyManager {
     this._poisoned.clear();
     this._burned.clear();
     this._frozen.clear();
+  }
+
+  /** 적 1마리를 엘리트로 변환: HP 4배, 나머지 능력치 2배, 붉은 틴트로 외형 강조 */
+  _makeElite(enemy) {
+    enemy.maxHp  *= 4;
+    enemy.hp      = enemy.maxHp;
+    enemy.damage *= 2;
+    if (typeof enemy.speed === 'number') enemy.speed *= 2;
+    enemy.coreDrops = (enemy.coreDrops ?? 3) * 2;
+    enemy.isElite = true;
+
+    enemy._hpFill?.setFillStyle(ELITE_HP_COLOR);
+
+    // 붉은 틴트 적용 — clearTint 오버라이드로 stun 종료 후에도 재적용
+    const go = enemy.gameObject;
+    go.setTint(ELITE_TINT_COLOR);
+    const origClearTint = go.clearTint.bind(go);
+    go.clearTint = () => {
+      origClearTint();
+      if (enemy.isElite && enemy.alive) go.setTint(ELITE_TINT_COLOR);
+    };
+
+    enemy._eliteCleanup = () => {
+      go.clearTint = origClearTint;
+      origClearTint();
+    };
   }
 
   _applyPoison(enemy) {
@@ -522,7 +562,7 @@ export default class EnemyManager {
         duration: KNOCKBACK_DUR,
       });
       if (!isSpike) showDamageNumber(this.scene, e.x, e.y - e.gameObject.height / 2, appliedDmg, '#ffffff', isCrit);
-      if (!isSpike && this.player.hasThunder) directHit.push({ enemy: e, damage: appliedDmg });
+      if (!isSpike && this.player.hasThunder && Math.random() < 0.2) directHit.push({ enemy: e, damage: appliedDmg });
       // 피의 향연 — 치명타 명중 시 HP 회복 (실제 데미지가 들어간 경우만, spike 반사는 제외)
       if (isCrit && !isSpike && this.player.critHealAmount > 0) {
         this.player.heal(this.player.critHealAmount);
@@ -533,6 +573,7 @@ export default class EnemyManager {
         this._frozen.delete(e);
         this.dropCores(e.x, e.y, e.coreDrops ?? 3);
         if (e.isBoss) { this.dropRareItem(e.x, e.y); this.boss = null; }
+        this.dropEliteItem(e);
         if (this.player.healOnKill > 0) this.player.heal(this.player.healOnKill);
       }
     });
@@ -583,6 +624,7 @@ export default class EnemyManager {
         if (died) {
           this.dropCores(nearest.x, nearest.y, nearest.coreDrops ?? 3);
           if (nearest.isBoss) { this.dropRareItem(nearest.x, nearest.y); this.boss = null; }
+          this.dropEliteItem(nearest);
           if (this.player.healOnKill > 0) this.player.heal(this.player.healOnKill);
         }
         chained.add(nearest);
@@ -628,6 +670,12 @@ export default class EnemyManager {
     const along = relX * dx    + relY * dy;
     const perp  = relX * (-dy) + relY * dx;
     return along >= 0 && along <= length && Math.abs(perp) <= halfW;
+  }
+
+  /** 엘리트 처치 시 패시브 아이템 드롭 이벤트 발행 */
+  dropEliteItem(enemy) {
+    if (!enemy.isElite) return;
+    this.scene.events.emit('elite-killed', { x: enemy.x, y: enemy.y });
   }
 
   dropCores(x, y, count) {

@@ -332,6 +332,7 @@ export default class AttackManager {
     if (dead) {
       em.dropCores(enemy.x, enemy.y, enemy.coreDrops ?? 3);
       if (enemy.isBoss) { em.dropRareItem(enemy.x, enemy.y); em.boss = null; }
+      em.dropEliteItem(enemy);
       if (this.player.healOnKill > 0) this.player.heal(this.player.healOnKill);
     }
 
@@ -365,6 +366,7 @@ export default class AttackManager {
         if (splashDead) {
           em.dropCores(other.x, other.y, other.coreDrops ?? 3);
           if (other.isBoss) { em.dropRareItem(other.x, other.y); em.boss = null; }
+          em.dropEliteItem(other);
           if (this.player.healOnKill > 0) this.player.heal(this.player.healOnKill);
         } else if (other.state !== 'spike') {
           this._applyDisguiseStatus(other, em);
