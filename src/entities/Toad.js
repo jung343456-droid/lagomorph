@@ -1,6 +1,6 @@
 /**
  * 두꺼비 (Toad) — 독 원거리병 (구역 2)
- * HP 51 / 속도 72 / 데미지 7(접촉) + 5 독 DoT(진입 즉시 1회, 이후 0.5초마다, 웅덩이 4초 지속) / 코어 3
+ * HP 51 / 속도 72 / 데미지 7(접촉) + 5 독 DoT(진입 즉시 1회, 이후 0.5초마다, 웅덩이 15초 지속) / 코어 3
  *
  * 패턴:
  *   idle      → kite(307px 이내 탐지)
@@ -12,6 +12,7 @@
  *
  * 독 웅덩이: 플레이어가 범위에 진입한 순간 즉시 5 피해, 이후 0.5초마다 5 피해 — 방어력(armor/damageReduction) 관통
  *           두꺼비 1마리당 활성 2개 (초과 시 가장 오래된 것 소멸)
+ *           두꺼비 사망 후에도 웅덩이 지속 — 지속시간 만료 또는 dispose 시 소멸
  *
  * 시각: toad 스프라이트 + 독초록 틴트, 독 웅덩이는 toad-puddle 텍스처 사용
  * speedMult: Wolf 오라(180px 이내) 적용 시 후퇴 속도 ×1.2
@@ -26,7 +27,7 @@ const SPIT_FLIGHT  = 0.333;
 const SPIT_SPEED   = 270;
 const PUDDLE_RADIUS = 60;   // DoT 판정 반경 — toad-puddle 프레임(120px)의 반(설계 의도)
 const PUDDLE_IMG_SIZE = 120; // toad-puddle 텍스처 네이티브 프레임 (1:1 렌더)
-const PUDDLE_DUR   = 4.0;
+const PUDDLE_DUR   = 15.0;
 const PUDDLE_MAX   = 2;
 const PUDDLE_DMG   = 5;       // 틱당 데미지
 const PUDDLE_TICK  = 0.5;     // 0.5초마다 적용 (진입 시 즉시 1회)
@@ -77,6 +78,8 @@ export default class Toad {
     this._spitTargetY = 0;
     this._spitProjGfx = null;
     this._puddles    = [];   // [{ gfx, timer, x, y, tickTimer }]
+    this._sceneUpdateCb = null;
+    this._player      = null;
 
     this._knockbackTimer    = 0;
     this._knockbackDuration = 0;
@@ -99,6 +102,7 @@ export default class Toad {
   // ── public ──────────────────────────────────────────
 
   update(delta, player) {
+    this._player = player;
     if (!this.alive) {
       this._tickPuddles(delta / 1000, player);
       return;
@@ -217,6 +221,7 @@ export default class Toad {
   dispose() {
     if (this.destroyed) return;
     if (this._blinkEvent) { this._blinkEvent.remove(); this._blinkEvent = null; }
+    if (this._sceneUpdateCb) { this.scene.events.off('update', this._sceneUpdateCb); this._sceneUpdateCb = null; }
     if (this._spitProjGfx?.active) this._spitProjGfx.destroy();
     if (this._hpBg?.active)   this._hpBg.destroy();
     if (this._hpFill?.active) this._hpFill.destroy();
@@ -327,6 +332,9 @@ export default class Toad {
     this._hpBg.setPosition(x, y - 22);
     this._hpFill.setPosition(x - TOAD_DW / 2, y - 22);
     this._hpFill.width = TOAD_DW * Math.max(0, this.hp / this.maxHp);
+    const vis = this.hp < this.maxHp;
+    this._hpBg.setVisible(vis);
+    this._hpFill.setVisible(vis);
   }
 
   _blinkHit() {
@@ -351,23 +359,27 @@ export default class Toad {
     if (this._spitProjGfx?.active) this._spitProjGfx.destroy();
     this._hpBg.destroy();
     this._hpFill.destroy();
-    // 독 웅덩이 페이드아웃 후 정리
-    this._puddles.forEach(p => {
-      if (!p.gfx?.active) return;
-      this.scene.tweens.add({
-        targets: p.gfx, alpha: 0,
-        duration: 350, ease: 'Quad.Out',
-        onComplete: () => { if (p.gfx?.active) p.gfx.destroy(); },
-      });
-    });
-    this._puddles = [];
     const sx = this.gameObject.scaleX * 1.8;
     const sy = this.gameObject.scaleY * 1.8;
     this.scene.tweens.add({
       targets: this.gameObject,
       alpha: 0, scaleX: sx, scaleY: sy,
       duration: 260, ease: 'Quad.Out',
-      onComplete: () => { this.gameObject.destroy(); this.destroyed = true; },
+      onComplete: () => {
+        this.gameObject.destroy();
+        this.destroyed = true;
+        // EnemyManager에서 제거된 이후에도 남은 웅덩이를 scene update로 계속 틱
+        if (this._puddles.length > 0) {
+          this._sceneUpdateCb = (time, delta) => {
+            if (this._player) this._tickPuddles(delta / 1000, this._player);
+            if (this._puddles.length === 0) {
+              this.scene.events.off('update', this._sceneUpdateCb);
+              this._sceneUpdateCb = null;
+            }
+          };
+          this.scene.events.on('update', this._sceneUpdateCb);
+        }
+      },
     });
   }
 }

@@ -249,6 +249,9 @@ export default class Squirrel {
     this._hpBg.setPosition(x, y - 21);
     this._hpFill.setPosition(x - SQUIRREL_DW / 2, y - 21);
     this._hpFill.width = SQUIRREL_DW * Math.max(0, this.hp / this.maxHp);
+    const vis = this.hp < this.maxHp;
+    this._hpBg.setVisible(vis);
+    this._hpFill.setVisible(vis);
   }
 
   _blinkHit() {

@@ -6,15 +6,15 @@
  *   idle       → reposition(256px 이내 탐지)
  *   reposition → 플레이어 측면으로 횡이동, 정면 회피
  *                플레이어가 거미줄 패치 안에 있으면 attack 상태로 전환
- *   web_throw  → 3초마다 플레이어 위치+α에 거미줄 패치(반경 55px, 7초 지속) 투척
+ *   web_throw  → 3초마다 플레이어 위치+α에 거미줄 패치(반경 55px, 15초 지속) 투척
  *   attack     → 플레이어를 향해 직진 접근 (접촉 데미지로 처벌)
  *                플레이어가 모든 거미줄에서 벗어나면 reposition 복귀
  *   stun       → 피격 시 0.3초 경직 + 넉백 (i-frame)
  *
- * 거미줄: 플레이어 위에 있을 때 이동속도 ×0.4 슬로우 (Player._slowTimer 갱신)
+ * 거미줄: 플레이어 위에 있을 때 이동속도 ×0.3 슬로우 (Player._slowTimer 갱신)
  *         거미 본체는 거미줄 영향 없음 (slow는 player에게만 적용)
  *         거미 1마리당 활성 2개 (초과 시 가장 오래된 거미줄 소멸)
- *         거미 사망 시 거미줄도 dispose
+ *         거미 사망 후에도 거미줄 지속 — 지속시간 만료 또는 dispose 시 소멸
  *
  * 시각: spider 스프라이트 + 검은 틴트, 거미줄은 spider-web 텍스처 사용
  * speedMult: Wolf 오라(180px 이내) 적용 시 횡이동 속도 ×1.2
@@ -24,7 +24,7 @@ const KITE_SPEED  = 99;
 const WEB_CD      = 3.0;
 const WEB_RADIUS  = 55;   // 슬로우 판정 반경 — spider-web 프레임(110px)의 반(설계 의도)
 const WEB_IMG_SIZE = 110; // spider-web 텍스처 네이티브 프레임 (1:1 렌더)
-const WEB_DUR     = 7.0;
+const WEB_DUR     = 15.0;
 const WEB_MAX     = 2;
 const LATERAL_FLIP = 1.5;
 const SPIDER_W    = 22;
@@ -72,6 +72,8 @@ export default class Spider {
     this._lateralSign = Math.random() < 0.5 ? 1 : -1;
     this._lateralFlip = LATERAL_FLIP;
     this._webs        = [];  // [{ gfx, timer, x, y }]
+    this._sceneUpdateCb = null;
+    this._player      = null;
 
     this._knockbackTimer    = 0;
     this._knockbackDuration = 0;
@@ -94,6 +96,7 @@ export default class Spider {
   // ── public ──────────────────────────────────────────
 
   update(delta, player) {
+    this._player = player;
     if (!this.alive) {
       this._tickWebs(delta / 1000, player);
       return;
@@ -179,6 +182,7 @@ export default class Spider {
   dispose() {
     if (this.destroyed) return;
     if (this._blinkEvent) { this._blinkEvent.remove(); this._blinkEvent = null; }
+    if (this._sceneUpdateCb) { this.scene.events.off('update', this._sceneUpdateCb); this._sceneUpdateCb = null; }
     if (this._hpBg?.active)   this._hpBg.destroy();
     if (this._hpFill?.active) this._hpFill.destroy();
     this._webs.forEach(w => { if (w.gfx?.active) w.gfx.destroy(); });
@@ -307,6 +311,9 @@ export default class Spider {
     this._hpBg.setPosition(x, y - 22);
     this._hpFill.setPosition(x - SPIDER_DW / 2, y - 22);
     this._hpFill.width = SPIDER_DW * Math.max(0, this.hp / this.maxHp);
+    const vis = this.hp < this.maxHp;
+    this._hpBg.setVisible(vis);
+    this._hpFill.setVisible(vis);
   }
 
   _blinkHit() {
@@ -330,24 +337,27 @@ export default class Spider {
     if (this._blinkEvent) { this._blinkEvent.remove(); this._blinkEvent = null; }
     this._hpBg.destroy();
     this._hpFill.destroy();
-    // 거미줄은 사망 시 빠르게 페이드아웃 — destroyed 후엔 update()가 끊겨 슬로우가 적용되지 않으므로
-    // 시각만 남기지 않고 자연스럽게 소멸시킨다.
-    this._webs.forEach(w => {
-      if (!w.gfx?.active) return;
-      this.scene.tweens.add({
-        targets: w.gfx, alpha: 0,
-        duration: 350, ease: 'Quad.Out',
-        onComplete: () => { if (w.gfx?.active) w.gfx.destroy(); },
-      });
-    });
-    this._webs = [];
     const sx = this.gameObject.scaleX * 1.8;
     const sy = this.gameObject.scaleY * 1.8;
     this.scene.tweens.add({
       targets: this.gameObject,
       alpha: 0, scaleX: sx, scaleY: sy,
       duration: 260, ease: 'Quad.Out',
-      onComplete: () => { this.gameObject.destroy(); this.destroyed = true; },
+      onComplete: () => {
+        this.gameObject.destroy();
+        this.destroyed = true;
+        // EnemyManager에서 제거된 이후에도 남은 거미줄을 scene update로 계속 틱
+        if (this._webs.length > 0) {
+          this._sceneUpdateCb = (time, delta) => {
+            if (this._player) this._tickWebs(delta / 1000, this._player);
+            if (this._webs.length === 0) {
+              this.scene.events.off('update', this._sceneUpdateCb);
+              this._sceneUpdateCb = null;
+            }
+          };
+          this.scene.events.on('update', this._sceneUpdateCb);
+        }
+      },
     });
   }
 }

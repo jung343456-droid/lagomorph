@@ -273,6 +273,9 @@ export default class Hedgehog {
     this._hpBg.setPosition(x, y - 25);
     this._hpFill.setPosition(x - HEDGEHOG_DW / 2, y - 25);
     this._hpFill.width = HEDGEHOG_DW * Math.max(0, this.hp / this.maxHp);
+    const vis = this.hp < this.maxHp;
+    this._hpBg.setVisible(vis);
+    this._hpFill.setVisible(vis);
   }
 
   _blinkHit() {

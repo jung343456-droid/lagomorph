@@ -6,10 +6,12 @@
  *   lagomorph_unlock_nodes    해금된 UNLOCK_NODES id 배열
  *   lagomorph_shop_discovered 상점방을 한 번이라도 진입했는지 (bool) — Hub NPC 등장 조건
  *
- * 메타 코어 적립 규칙:
+ * 메타 코어 적립 규칙 (보존율 모델):
  *   - 게임 시작 시 부여되는 30 코어는 제외
- *   - 런 중 픽업한 코어 1개당 +1 (EnemyManager.update() 의 픽업 분기에서 호출)
- *   - 사망/ZONE CLEAR/보스 보너스 등 별도 적립은 없음 (픽업 기반 단일 출처)
+ *   - 런 중 픽업한 코어는 즉시 적립되지 않고 _runPicked 카운터에만 누적
+ *     (EnemyManager.update() 의 픽업 분기에서 addRunPickup() 호출)
+ *   - 런 종료 시 commitMetaRun() 으로 정산: 클리어=픽업분 100%, 사망=보존율(기본 20%)만 적립
+ *   - 보존율은 Player.metaRetainRate (잔해 회수 해금으로 +5%p 씩 상승)
  */
 
 import { UNLOCK_NODES } from './UnlockTree';
@@ -37,6 +39,35 @@ export function setMetaCores(n) {
 /** delta 만큼 가감 (음수 허용 — 해금 구매 시 차감). 최종값 반환. */
 export function addMetaCores(delta) {
   return setMetaCores(getMetaCores() + delta);
+}
+
+// ── 런 단위 픽업 정산 (보존율 모델) ──────────────────
+//
+// 픽업은 즉시 영속 적립되지 않고 모듈 상태 _runPicked 에만 쌓인다.
+// 런 종료(사망/클리어) 시 commitMetaRun() 으로 보존율을 적용해 영속 적립한다.
+
+let _runPicked = 0;
+
+/** 런 시작 시 호출 — 픽업 카운터 리셋. */
+export function beginMetaRun() { _runPicked = 0; }
+
+/** 코어 픽업 시 호출 (EnemyManager). */
+export function addRunPickup(n = 1) { _runPicked += n; }
+
+/** 현재 런에서 픽업한 코어 수. */
+export function getRunPicked() { return _runPicked; }
+
+/**
+ * 런 종료 정산. survived=true → 픽업분 전량, false → retainRate 비율만 영속 적립.
+ * { picked, gained } 반환 후 카운터를 리셋한다 (중복 호출 시 두 번째는 0 적립 — 안전).
+ */
+export function commitMetaRun(survived, retainRate = 0.2) {
+  const picked = _runPicked;
+  const rate   = survived ? 1 : Math.max(0, Math.min(1, retainRate));
+  const gained = Math.floor(picked * rate);
+  addMetaCores(gained);
+  _runPicked = 0;
+  return { picked, gained };
 }
 
 // ── 해금 노드 ────────────────────────────────────────

@@ -9,7 +9,7 @@ import RoomManager from '../world/RoomManager';
 import { ROOM_W, ROOM_H } from '../world/Room';
 import PassiveItem, { ITEM_DEFS } from '../entities/PassiveItem';
 import Shopkeeper from '../entities/Shopkeeper';
-import { getMetaCores } from '../data/MetaProgress';
+import { getMetaCores, beginMetaRun, commitMetaRun } from '../data/MetaProgress';
 
 export default class GameScene extends Phaser.Scene {
   constructor() {
@@ -59,8 +59,8 @@ export default class GameScene extends Phaser.Scene {
 
     // 엔드 스크린 — scene.restart() 시 게임 오브젝트는 파괴되지만 인스턴스 프로퍼티는 잔존하므로 명시 리셋
     this._endScreenEls    = null;
-    // 런 시작 시점의 메타 코어 잔량 — 종료 화면에서 "이번 런 적립" 차분 표시용
-    this._runStartMeta    = getMetaCores();
+    // 런 시작 — 픽업 카운터 리셋. 픽업분은 종료 시 commitMetaRun() 으로 정산(보존율 모델).
+    beginMetaRun();
 
     // 보스 클리어: 랜덤 아이템 드롭(보유 패시브 + 미수집 월드 아이템 제외) + 계단 표시 / 구역 클리어
     //   1~4·6~9: 일반 보스방 클리어 → 계단
@@ -170,6 +170,7 @@ export default class GameScene extends Phaser.Scene {
       titleColor: '#ff4444',
       subtitle:   null,
       showCause:  true,
+      survived:   false,
     });
   }
 
@@ -179,6 +180,7 @@ export default class GameScene extends Phaser.Scene {
       titleColor: '#4ecca3',
       subtitle:   `구역 ${zone} 클리어!`,
       showCause:  false,
+      survived:   true,
     });
   }
 
@@ -187,15 +189,17 @@ export default class GameScene extends Phaser.Scene {
    * - 타이틀 + (선택) 부제
    * - 사망 위치: "구역 1 - N층"
    * - (GAME OVER) 사망 원인: 마지막 가해자 displayName
-   * - 결과: 이번 런 픽업/메타 적립/남은 코어/누적 메타
+   * - 결과: 이번 런 픽업/메타 적립(사망 시 보존율·유실)/남은 코어/누적 메타
    * - 획득한 아이템 그리드 (2열)
    * - 단일 "허브로 돌아가기" 버튼
    */
-  _buildRunSummary({ title, titleColor, subtitle, showCause }) {
+  _buildRunSummary({ title, titleColor, subtitle, showCause, survived }) {
     this._endScreenEls = [];
     const push = (...els) => this._endScreenEls.push(...els);
-    const pickedCores = getMetaCores() - this._runStartMeta;
-    const totalMeta   = getMetaCores();
+    // 픽업분 정산 — 클리어=전량, 사망=보존율(Player.metaRetainRate)만 영속 적립
+    const { picked, gained } = commitMetaRun(survived, this.player.metaRetainRate ?? 0.2);
+    const retainRate  = survived ? 1 : (this.player.metaRetainRate ?? 0.2);
+    const totalMeta   = getMetaCores(); // 정산 후 잔량
     const runCores    = this.enemyManager.coreCount;
     const cause       = this.player.lastDamageSource ?? '원인 미상';
     const inv         = this.player.inventory ?? [];
@@ -241,11 +245,19 @@ export default class GameScene extends Phaser.Scene {
     const labelX = GAME_W / 2 - 90;
     const valueX = GAME_W / 2 + 90;
     const lines = [
-      { label: '이번 런 픽업',   value: `◆ ${pickedCores}`, valueColor: '#ffe9bb' },
-      { label: '메타 적립',       value: `+${pickedCores}`,  valueColor: '#ffcc44' },
-      { label: '남은 런 코어',    value: `◆ ${runCores}`,    valueColor: '#aaaaaa' },
-      { label: '누적 메타',       value: `◆ ${totalMeta}`,   valueColor: '#4ecca3' },
+      { label: '이번 런 픽업', value: `◆ ${picked}`, valueColor: '#ffe9bb' },
+      {
+        label: survived ? '메타 적립' : `메타 적립 (보존 ${Math.round(retainRate * 100)}%)`,
+        value: `+${gained}`, valueColor: '#ffcc44',
+      },
     ];
+    if (!survived && picked > gained) {
+      lines.push({ label: '사망 유실', value: `-${picked - gained}`, valueColor: '#ff6666' });
+    }
+    lines.push(
+      { label: '남은 런 코어', value: `◆ ${runCores}`, valueColor: '#aaaaaa' },
+      { label: '누적 메타',    value: `◆ ${totalMeta}`, valueColor: '#4ecca3' },
+    );
     lines.forEach(({ label, value, valueColor }) => {
       push(this.add.text(labelX, y, label, {
         fontSize: '12px', color: '#888888', fontFamily: 'monospace',

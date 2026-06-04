@@ -38,6 +38,7 @@
  *   startingCores    0      런 시작 코어 추가 (영구 해금 '점화의 잔해' +10) — GameScene.create 에서 enemyManager.coreCount 에 합산
  *   invulnDurationMult 1    피격 후 무적 깜빡임 지속 배율 (영구 해금 '잔영의 가호' ×1.25) — takeDamage 일반 분기 tween duration 에 적용
  *   hasMapReveal     false 현재 층 전체 방을 지도에 표시 (던전의 감각)
+ *   metaRetainRate   0.2    사망 시 메타 픽업분 보존율 (영구 해금 '잔해 회수 I~IV' +0.05 씩 → 최대 0.4) — MetaProgress.commitMetaRun 참조
  */
 import { showDamageNumber, showHealNumber } from '../utils/DamageNumbers';
 import { applyUnlocksToPlayer } from '../data/MetaProgress';
@@ -98,6 +99,7 @@ export default class Player {
     this.extraLives       = 0;   // 최후의 발버둥 해금 시 +1 (takeDamage 치명 흡수)
     this.extraStartItems  = 0;   // 기억 단편화 해금 시 +1 (GameScene._spawnStartRoomItem 참조)
     this.shopPriceMult    = 1;   // 상인의 신용 해금 시 ×0.9 (DungeonGenerator._generateShopSlots 참조)
+    this.metaRetainRate   = 0.2; // 사망 시 메타 픽업분 보존율 — 잔해 회수 해금으로 +0.05 씩 (MetaProgress.commitMetaRun 참조)
     this.inventory        = [];
     this._dir            = 'bottom';
     this._row            = DIR_ROW.bottom; // 현재 방향 행
@@ -132,7 +134,7 @@ export default class Player {
       this._knockbackTimer = Math.max(0, this._knockbackTimer - dt);
       return;
     }
-    const slowMult = this._slowTimer > 0 ? 0.4 : 1;
+    const slowMult = this._slowTimer > 0 ? 0.3 : 1;
     this.gameObject.body.setVelocity(x * this.speed * slowMult, y * this.speed * slowMult);
 
     if (x !== 0 || y !== 0) {

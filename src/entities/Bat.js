@@ -264,6 +264,9 @@ export default class Bat {
     this._hpBg.setPosition(x, y - 16);
     this._hpFill.setPosition(x - BAT_DW / 2, y - 16);
     this._hpFill.width = BAT_DW * Math.max(0, this.hp / this.maxHp);
+    const vis = this.hp < this.maxHp;
+    this._hpBg.setVisible(vis);
+    this._hpFill.setVisible(vis);
   }
 
   _blinkHit() {

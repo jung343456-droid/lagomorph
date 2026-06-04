@@ -547,6 +547,9 @@ export default class OwlKing {
     this._hpBg.setPosition(x, barY);
     this._hpFill.setPosition(x - OK_DW / 2, barY);
     this._hpFill.width = OK_DW * Math.max(0, this.hp / this.maxHp);
+    const vis = this.hp < this.maxHp;
+    this._hpBg.setVisible(vis);
+    this._hpFill.setVisible(vis);
   }
 
   _blinkHit() {

@@ -287,6 +287,9 @@ export default class Wolf {
     this._hpBg.setPosition(x, y - 33);
     this._hpFill.setPosition(x - (WOLF_DW + 4) / 2, y - 33);
     this._hpFill.width = (WOLF_DW + 4) * Math.max(0, this.hp / this.maxHp);
+    const vis = this.hp < this.maxHp;
+    this._hpBg.setVisible(vis);
+    this._hpFill.setVisible(vis);
   }
 
   _blinkHit() {
