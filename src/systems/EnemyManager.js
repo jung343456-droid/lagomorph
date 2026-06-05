@@ -28,6 +28,7 @@ const PLAYER_KNOCKBACK_DUR   = 0.18; // 적 접촉 시 플레이어 넉백 지�
 const PLAYER_AVG_HALF        = 23;  // 플레이어 히트박스 평균 반경 (BODY_W=48, BODY_H=46 → (24+23)/2)
 const ELITE_CHANCE           = 0.01; // 방당 엘리트 등장 확률 (1%)
 const ELITE_TINT_COLOR       = 0xffaaaa; // 엘리트 스프라이트 틴트 (붉은 계열)
+const MIN_SPAWN_DIST         = 160;      // 플레이어 진입 위치와 적 스폰 최소 거리 (px)
 
 const ENEMY_CLASSES = {
   // 구역 1
@@ -331,9 +332,19 @@ export default class EnemyManager {
     const roomTable = this._buildRoomTable(isExit);
 
     const pad = WALL_T + 55;
+    const px  = this.player.x;
+    const py  = this.player.y;
     for (let i = 0; i < count; i++) {
-      const x    = pad + Math.random() * (ROOM_W - pad * 2);
-      const y    = pad + Math.random() * (ROOM_H - pad * 2);
+      let x, y;
+      let tries = 0;
+      do {
+        x = pad + Math.random() * (ROOM_W - pad * 2);
+        y = pad + Math.random() * (ROOM_H - pad * 2);
+        tries++;
+      } while (
+        tries < 20 &&
+        Math.hypot(x - px, y - py) < MIN_SPAWN_DIST
+      );
       const type = this._pickType(roomTable);
       if (PACK_TYPES.has(type)) {
         // 3마리 묶음 스폰 (rat, bat)
@@ -543,9 +554,9 @@ export default class EnemyManager {
       const isSpike = e.state === 'spike';
 
       if (!isSpike) {
-        if (this.player.hasPoison && Math.random() < 0.2) this._applyPoison(e);
-        if (this.player.hasFire && Math.random() < 0.2) this._applyBurn(e);
-        if (this.player.hasIce && Math.random() < 0.2) this._applyFreeze(e);
+        if (this.player.hasPoison && Math.random() < 0.25) this._applyPoison(e);
+        if (this.player.hasFire && Math.random() < 0.25) this._applyBurn(e);
+        if (this.player.hasIce && Math.random() < 0.25) this._applyFreeze(e);
       }
 
       const ddx = e.x - playerX;
@@ -561,7 +572,7 @@ export default class EnemyManager {
         duration: KNOCKBACK_DUR,
       });
       if (!isSpike) showDamageNumber(this.scene, e.x, e.y - e.gameObject.height / 2, appliedDmg, '#ffffff', isCrit);
-      if (!isSpike && this.player.hasThunder && Math.random() < 0.2) directHit.push({ enemy: e, damage: appliedDmg });
+      if (!isSpike && this.player.hasThunder && Math.random() < 0.25) directHit.push({ enemy: e, damage: appliedDmg });
       // 피의 향연 — 치명타 명중 시 HP 회복 (실제 데미지가 들어간 경우만, spike 반사는 제외)
       if (isCrit && !isSpike && this.player.critHealAmount > 0) {
         this.player.heal(this.player.critHealAmount);

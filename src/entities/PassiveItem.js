@@ -34,27 +34,27 @@ export const ITEM_DEFS = {
   },
   poison_claws: {
     name:  '독성 발톱',
-    desc:  '명중 시 20% 확률로 10초 독 (1%/s, 최소 2)',
+    desc:  '명중 시 25% 확률로 10초 독',
     color: 0xaa44ff,
     apply: (player) => { player.hasPoison = true; },
   },
   fire_claws: {
     name:  '화염 발톱',
-    desc:  '명중 시 20% 확률로 3초 화상 (2.5%/s, 최소 4)',
+    desc:  '명중 시 25% 확률로 3초 화상',
     color: 0xff2200,
     apply: (player) => { player.hasFire = true; },
   },
   ice_claws: {
     name:  '얼음 발톱',
-    desc:  '명중 시 20% 확률로 3초 빙결 (이동 불가)',
+    desc:  '명중 시 25% 확률로 3초 빙결',
     color: 0x88ddff,
     apply: (player) => { player.hasIce = true; },
   },
   swift_feet: {
     name:  '질주 발',
-    desc:  '이동속도 ×1.30',
+    desc:  '이동속도 +40',
     color: 0x00ee66,
-    apply: (player) => { player.speed *= 1.3; player.baseSpeed *= 1.3; },
+    apply: (player) => { player.speed += 40; player.baseSpeed += 40; },
   },
   tough_hide: {
     name:  '강인한 가죽',
@@ -76,7 +76,7 @@ export const ITEM_DEFS = {
   },
   thunder_claws: {
     name:  '감전 발톱',
-    desc:  '명중 시 20% 확률로 반경 150px 내 적에게 연쇄 (입힌 피해의 50%, 데미지 2 이상 유지 시 최대 10회)',
+    desc:  '명중 시 25% 확률로 반경 150px 내 적에게 연쇄',
     color: 0xddff22,
     apply: (player) => { player.hasThunder = true; },
   },
@@ -88,19 +88,19 @@ export const ITEM_DEFS = {
   },
   fire_disguise: {
     name:  '불꽃 위장',
-    desc:  '트랩 명중 시 반경 40px 스플래시 15 + 20% 확률 화상',
+    desc:  '트랩 명중 시 반경 40px 스플래시 15 + 50% 확률 화상',
     color: 0xff5522,
     apply: (player) => { player.hasFireDisguise = true; },
   },
   ice_disguise: {
     name:  '냉동 위장',
-    desc:  '트랩 명중 시 반경 40px 스플래시 15 + 20% 확률 빙결',
+    desc:  '트랩 명중 시 반경 40px 스플래시 15 + 50% 확률 빙결',
     color: 0x66ccff,
     apply: (player) => { player.hasIceDisguise = true; },
   },
   poison_disguise: {
     name:  '독성 위장',
-    desc:  '트랩 명중 시 반경 40px 스플래시 15 + 20% 확률 중독',
+    desc:  '트랩 명중 시 반경 40px 스플래시 15 + 50% 확률 중독',
     color: 0x88dd44,
     apply: (player) => { player.hasPoisonDisguise = true; },
   },
@@ -113,6 +113,7 @@ export const ITEM_DEFS = {
   big_trap: {
     name:  '대식가',
     desc:  '트랩 크기 ×2 (22 → 44px), 회복 아이템 효과 +10%',
+    dynDesc: (p) => { const cur = Math.round(22 * (p.trapSizeMult ?? 1)); return `트랩 크기 ×2 (${cur} → ${cur * 2}px), 회복 아이템 효과 +10%`; },
     color: 0x885500,
     apply: (player) => {
       player.trapSizeMult *= 2;
@@ -122,6 +123,7 @@ export const ITEM_DEFS = {
   cruel_claws: {
     name:  '잔혹한 발톱',
     desc:  '치명타율 +15% (15 → 30%)',
+    dynDesc: (p) => `치명타율 +15% (${Math.round(p.critRate * 100)} → ${Math.round((p.critRate + 0.15) * 100)}%)`,
     color: 0xcc1144,
     apply: (player) => { player.critRate += 0.15; },
   },
@@ -134,6 +136,7 @@ export const ITEM_DEFS = {
   savage_strike: {
     name:  '광폭한 일격',
     desc:  '치명타 피해 +100% (×1.5 → ×2.5)',
+    dynDesc: (p) => `치명타 피해 +100% (×${p.critMult.toFixed(1)} → ×${(p.critMult + 1.0).toFixed(1)})`,
     color: 0x8b0000,
     apply: (player) => { player.critMult += 1.0; },
   },

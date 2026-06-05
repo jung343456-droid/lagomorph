@@ -966,7 +966,7 @@ export default class UIScene extends Phaser.Scene {
   }
 
   _shopDesc(slot, player) {
-    if (slot.kind === 'item')      return slot.desc ?? '';
+    if (slot.kind === 'item')      return slot.dynDesc ? slot.dynDesc(player) : (slot.desc ?? '');
     if (slot.kind === 'heal')      return `HP +${slot.amount}`;
     if (slot.kind === 'heal_pct')  return `HP +${Math.floor(player.maxHp * slot.ratio)} (50%)`;
     if (slot.kind === 'heal_full') return 'HP 완전 회복';

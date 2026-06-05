@@ -16,18 +16,18 @@
 |---|---|---|---|---|
 | `wide_claws` | 넓은 발톱 | 주황 `0xff8800` | 근거리 공격 반경 ×1.33 | `player.meleeRadiusMult += 0.33` |
 | `sharp_claws` | 예리한 발톱 | 청록 `0x00ccff` | 근거리 공격 데미지 ×1.20 | `player.meleeDamageMult += 0.20` |
-| `poison_claws` | 독성 발톱 | 보라 `0xaa44ff` | 근거리 공격 명중 시 30% 확률로 10초간 독 (maxHp×1%/s, 최소 2/s) | `player.hasPoison = true` |
-| `fire_claws` | 화염 발톱 | 빨강 `0xff2200` | 근거리 공격 명중 시 30% 확률로 3초 화상 (maxHp×2.5%/s, 최소 4/s) | `player.hasFire = true` |
-| `ice_claws` | 얼음 발톱 | 하늘 `0x88ddff` | 근거리 공격 명중 시 30% 확률로 3초 빙결 (이동 불가) | `player.hasIce = true` |
-| `swift_feet` | 질주 발 | 초록 `0x00ee66` | 이동속도 ×1.30 | `player.speed *= 1.3; player.baseSpeed *= 1.3` |
+| `poison_claws` | 독성 발톱 | 보라 `0xaa44ff` | 근거리 공격 명중 시 25% 확률로 10초간 독 (maxHp×1%/s, 최소 2/s) | `player.hasPoison = true` |
+| `fire_claws` | 화염 발톱 | 빨강 `0xff2200` | 근거리 공격 명중 시 25% 확률로 3초 화상 (maxHp×2.5%/s, 최소 4/s) | `player.hasFire = true` |
+| `ice_claws` | 얼음 발톱 | 하늘 `0x88ddff` | 근거리 공격 명중 시 25% 확률로 3초 빙결 (이동 불가) | `player.hasIce = true` |
+| `swift_feet` | 질주 발 | 초록 `0x00ee66` | 이동속도 +40 | `player.speed += 40; player.baseSpeed += 40` |
 | `tough_hide` | 강인한 가죽 | 빨강 `0xff4455` | 최대 HP +50, 즉시 50 회복 | `player.maxHp += 50; player.heal(50)` |
 | `bulletproof_vest` | 방탄조끼 | 강철 `0x445566` | 방어력 +2 — 받는 피해 -2, 방어력 이하 공격은 통째로 무효 (무적/넉백/숫자 모두 스킵) | `player.armor += 2` |
 | `quick_claws` | 민첩한 발톱 | 노랑 `0xffee00` | 근거리 충전 속도 ×1.5 | `player.chargeSpeedMult *= 1.5` |
-| `thunder_claws` | 감전 발톱 | 황녹 `0xddff22` | 명중 시 20% 확률로 반경 150px 내 다른 적에게 연쇄 (hop마다 직전 데미지의 50%, 데미지 ≥2 유지 시 최대 10hop) | `player.hasThunder = true` |
+| `thunder_claws` | 감전 발톱 | 황녹 `0xddff22` | 명중 시 25% 확률로 반경 150px 내 다른 적에게 연쇄 (hop마다 직전 데미지의 50%, 데미지 ≥2 유지 시 최대 10hop) | `player.hasThunder = true` |
 | `hunter_instinct` | 사냥꾼의 본능 | 분홍 `0xff6688` | 적 처치 시 HP 5 회복 | `player.healOnKill += 5` |
-| `fire_disguise` | 불꽃 위장 | 주황 `0xff5522` | 설치물 명중 시 반경 40px 스플래시 15 + 30% 확률 화상 | `player.hasFireDisguise = true` |
-| `ice_disguise` | 냉동 위장 | 하늘 `0x66ccff` | 설치물 명중 시 반경 40px 스플래시 15 + 30% 확률 빙결 | `player.hasIceDisguise = true` |
-| `poison_disguise` | 독성 위장 | 연두 `0x88dd44` | 설치물 명중 시 반경 40px 스플래시 15 + 30% 확률 중독 | `player.hasPoisonDisguise = true` |
+| `fire_disguise` | 불꽃 위장 | 주황 `0xff5522` | 설치물 명중 시 반경 40px 스플래시 15 + 50% 확률 화상 | `player.hasFireDisguise = true` |
+| `ice_disguise` | 냉동 위장 | 하늘 `0x66ccff` | 설치물 명중 시 반경 40px 스플래시 15 + 50% 확률 빙결 | `player.hasIceDisguise = true` |
+| `poison_disguise` | 독성 위장 | 연두 `0x88dd44` | 설치물 명중 시 반경 40px 스플래시 15 + 50% 확률 중독 | `player.hasPoisonDisguise = true` |
 | `frugal_instinct` | 절약 본능 | 노랑 `0xffdd00` | 설치물 코어 소모 3→2 | `player.trapCostBonus += 1` |
 | `big_trap` | 대식가 | 갈색 `0x885500` | 설치물 크기 ×2 (22→44px), 회복 아이템 효과 +10% | `player.trapSizeMult *= 2; player.healItemMult += 0.1` |
 | `cruel_claws` | 잔혹한 발톱 | 진홍 `0xcc1144` | 치명타율 +15% (15→30%) | `player.critRate += 0.15` |

@@ -20,7 +20,7 @@
 import Phaser from 'phaser';
 import { BRANCHES, BRANCH_LABELS, nodesByBranch } from '../data/UnlockTree';
 import {
-  getMetaCores, purchaseNode, nodeStatus,
+  getMetaCores, purchaseNode, nodeStatus, computeUnlockStats,
 } from '../data/MetaProgress';
 import { GAME_W, GAME_H } from '../constants';
 
@@ -179,6 +179,7 @@ export default class UnlockMenu {
   }
 
   _buildCards(colW) {
+    const currentStats = computeUnlockStats();
     let maxRows = 0;
     BRANCHES.forEach((branch, ci) => {
       const cx = PANEL_PAD + colW * ci + colW / 2;
@@ -188,14 +189,14 @@ export default class UnlockMenu {
       nodes.forEach(([id, node], ri) => {
         // 컨테이너 로컬 y — 0 부터 시작
         const cy = ri * (CARD_H + ROW_GAP) + CARD_H / 2;
-        this._buildNodeCard(id, node, cx, cy, cardW, CARD_H);
+        this._buildNodeCard(id, node, cx, cy, cardW, CARD_H, currentStats);
       });
     });
     this._totalH    = maxRows * (CARD_H + ROW_GAP) - ROW_GAP;
     this._maxScroll = Math.max(0, this._totalH - GRID_VIEW_H);
   }
 
-  _buildNodeCard(id, node, cx, cy, w, h) {
+  _buildNodeCard(id, node, cx, cy, w, h, currentStats) {
     const status = nodeStatus(id);
     const c = STATUS_COLORS[status];
 
@@ -207,7 +208,15 @@ export default class UnlockMenu {
       wordWrap: { width: w - 10 }, align: 'center',
     }).setOrigin(0.5, 0);
 
-    const desc = this.scene.add.text(cx, cy - 4, node.desc, {
+    let descStr;
+    if (status === 'owned') {
+      descStr = node.desc.replace(/\s*\([^)]*\)\s*$/, '').trim();
+    } else if (node.dynDesc && currentStats) {
+      descStr = node.dynDesc(currentStats);
+    } else {
+      descStr = node.desc;
+    }
+    const desc = this.scene.add.text(cx, cy - 4, descStr, {
       fontSize: '10px', color: c.desc, fontFamily: 'monospace',
       wordWrap: { width: w - 10 }, align: 'center',
     }).setOrigin(0.5, 0);

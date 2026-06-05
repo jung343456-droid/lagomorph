@@ -9,7 +9,7 @@ import RoomManager from '../world/RoomManager';
 import { ROOM_W, ROOM_H } from '../world/Room';
 import PassiveItem, { ITEM_DEFS } from '../entities/PassiveItem';
 import Shopkeeper from '../entities/Shopkeeper';
-import { getMetaCores, beginMetaRun, commitMetaRun } from '../data/MetaProgress';
+import { getMetaCores, beginMetaRun, commitMetaRun, addRunPickup } from '../data/MetaProgress';
 
 export default class GameScene extends Phaser.Scene {
   constructor() {
@@ -28,9 +28,11 @@ export default class GameScene extends Phaser.Scene {
     this.enemyManager  = new EnemyManager(this, this.player);
     this.attackManager = new AttackManager(this, this.player);
 
-    // 점화의 잔해 — 런 시작 시 코어 추가 (메타 적립 대상 아님)
+    // 기본 제공 코어 + 점화의 잔해 추가 코어를 메타 픽업에 합산
+    addRunPickup(this.enemyManager.coreCount);
     if (this.player.startingCores > 0) {
       this.enemyManager.coreCount += this.player.startingCores;
+      addRunPickup(this.player.startingCores);
     }
 
     this.currentFloor = 1;
@@ -197,8 +199,8 @@ export default class GameScene extends Phaser.Scene {
     this._endScreenEls = [];
     const push = (...els) => this._endScreenEls.push(...els);
     // 픽업분 정산 — 클리어=전량, 사망=보존율(Player.metaRetainRate)만 영속 적립
-    const { picked, gained } = commitMetaRun(survived, this.player.metaRetainRate ?? 0.2);
-    const retainRate  = survived ? 1 : (this.player.metaRetainRate ?? 0.2);
+    const { picked, gained } = commitMetaRun(survived, this.player.metaRetainRate ?? 0.25);
+    const retainRate  = survived ? 1 : (this.player.metaRetainRate ?? 0.25);
     const totalMeta   = getMetaCores(); // 정산 후 잔량
     const runCores    = this.enemyManager.coreCount;
     const cause       = this.player.lastDamageSource ?? '원인 미상';

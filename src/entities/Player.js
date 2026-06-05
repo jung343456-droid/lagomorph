@@ -1,6 +1,6 @@
 /**
  * 플레이어 (VOSS-7 / soma) — 조작 캐릭터
- * 기본 HP 100 / 기본 속도 200
+ * 기본 HP 100 / 기본 속도 210
  *
  * 이동: 가상 조이스틱 또는 WASD, 8방향 걷기 애니메이션 (soma-walk 시트, 방향별 4프레임)
  *       이동 중에만 프레임 순환, 정지 시 해당 방향 0번 프레임 고정
@@ -15,10 +15,10 @@
  *   critMult         1.5   치명타 피해 배율
  *   critHealAmount   0     치명타 명중 시 회복량 (피의 향연)
  *   chargeSpeedMult  1.0   근거리 충전 속도 배율
- *   hasPoison        false  근거리 명중 시 20% 확률 독 부여
- *   hasFire          false  근거리 명중 시 20% 확률 화상 부여
- *   hasIce           false  근거리 명중 시 20% 확률 빙결
- *   hasThunder       false  근거리 명중 시 150px 반경 연쇄, hop마다 직전 데미지의 50% (≥2 유지, 최대 10hop)
+ *   hasPoison        false  근거리 명중 시 25% 확률 독 부여
+ *   hasFire          false  근거리 명중 시 25% 확률 화상 부여
+ *   hasIce           false  근거리 명중 시 25% 확률 빙결
+ *   hasThunder       false  근거리 명중 시 25% 확률로 150px 반경 연쇄, hop마다 직전 데미지의 50% (≥2 유지, 최대 10hop)
  *   healOnKill       0      적 처치 시 HP 회복량
  *   hasFireDisguise   false  불꽃 위장 — 트랩 스플래시 + 20% 화상
  *   hasIceDisguise    false  냉동 위장 — 트랩 스플래시 + 20% 빙결
@@ -38,7 +38,7 @@
  *   startingCores    0      런 시작 코어 추가 (영구 해금 '점화의 잔해' +10) — GameScene.create 에서 enemyManager.coreCount 에 합산
  *   invulnDurationMult 1    피격 후 무적 깜빡임 지속 배율 (영구 해금 '잔영의 가호' ×1.25) — takeDamage 일반 분기 tween duration 에 적용
  *   hasMapReveal     false 현재 층 전체 방을 지도에 표시 (던전의 감각)
- *   metaRetainRate   0.2    사망 시 메타 픽업분 보존율 (영구 해금 '잔해 회수 I~IV' +0.05 씩 → 최대 0.4) — MetaProgress.commitMetaRun 참조
+ *   metaRetainRate   0.25   사망 시 메타 픽업분 보존율 (영구 해금 '잔해 회수 I~IV' +0.05 씩 → 최대 0.45) — MetaProgress.commitMetaRun 참조
  */
 import { showDamageNumber, showHealNumber } from '../utils/DamageNumbers';
 import { applyUnlocksToPlayer } from '../data/MetaProgress';
@@ -59,8 +59,8 @@ const DIR_ROW = {
 export default class Player {
   constructor(scene, x, y) {
     this.scene  = scene;
-    this.baseSpeed = 200;
-    this.speed     = 200;
+    this.baseSpeed = 210;
+    this.speed     = 210;
     this.hp        = 100;
     this.maxHp  = 100;
 
@@ -99,7 +99,7 @@ export default class Player {
     this.extraLives       = 0;   // 최후의 발버둥 해금 시 +1 (takeDamage 치명 흡수)
     this.extraStartItems  = 0;   // 기억 단편화 해금 시 +1 (GameScene._spawnStartRoomItem 참조)
     this.shopPriceMult    = 1;   // 상인의 신용 해금 시 ×0.9 (DungeonGenerator._generateShopSlots 참조)
-    this.metaRetainRate   = 0.2; // 사망 시 메타 픽업분 보존율 — 잔해 회수 해금으로 +0.05 씩 (MetaProgress.commitMetaRun 참조)
+    this.metaRetainRate   = 0.25; // 사망 시 메타 픽업분 보존율 — 잔해 회수 해금으로 +0.05 씩 (MetaProgress.commitMetaRun 참조)
     this.inventory        = [];
     this._dir            = 'bottom';
     this._row            = DIR_ROW.bottom; // 현재 방향 행
