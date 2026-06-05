@@ -1210,16 +1210,23 @@ export default class UIScene extends Phaser.Scene {
 
   _showDialogueButtons() {
     this._dlgAdvance.setVisible(false);
-    this._dlgBtnShop.setVisible(true);
-    this._dlgBtnLeave.setVisible(true);
-    this._dlgBtnShop.removeAllListeners('pointerdown');
     this._dlgBtnLeave.removeAllListeners('pointerdown');
-    this._dlgBtnShop.on('pointerdown', () => {
-      const cb = this._dlgOnComplete;
-      this.closeDialogue();
-      cb?.();
-    });
     this._dlgBtnLeave.on('pointerdown', () => this.closeDialogue());
+
+    if (this._dlgOnComplete) {
+      this._dlgBtnShop.setVisible(true);
+      this._dlgBtnLeave.setVisible(true);
+      this._dlgBtnShop.removeAllListeners('pointerdown');
+      this._dlgBtnShop.on('pointerdown', () => {
+        const cb = this._dlgOnComplete;
+        this.closeDialogue();
+        cb?.();
+      });
+    } else {
+      // 상점 없는 대화 — [됐어]만 중앙에 표시
+      this._dlgBtnShop.setVisible(false);
+      this._dlgBtnLeave.setX(GAME_W / 2).setVisible(true);
+    }
   }
 
   closeDialogue() {
@@ -1228,7 +1235,7 @@ export default class UIScene extends Phaser.Scene {
     if (this._dlgTypeTimer) { this._dlgTypeTimer.remove(); this._dlgTypeTimer = null; }
     this._dlgStaticEls.forEach(el => el.setVisible(false));
     this._dlgBtnShop.setVisible(false);
-    this._dlgBtnLeave.setVisible(false);
+    this._dlgBtnLeave.setX(GAME_W / 2 + 72).setVisible(false);  // 원래 위치 복원
     this._dlgAdvance.setVisible(true);
     this.scene.get('GameScene').scene.resume();
   }

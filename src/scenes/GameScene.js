@@ -11,6 +11,27 @@ import PassiveItem, { ITEM_DEFS } from '../entities/PassiveItem';
 import Shopkeeper from '../entities/Shopkeeper';
 import { getMetaCores, beginMetaRun, commitMetaRun, addRunPickup } from '../data/MetaProgress';
 
+const GRIM_START_LINES = [
+  '어. 왔군.',
+  '왜 여기 있냐고? ...그냥. 바람 좀 쐬러.',
+  '코어 생기면 찾아오게. 깊이 들어갈수록 나도 있을 거야.',
+];
+
+const GRIM_TIPS = [
+  ['A를 꾹 눌러봐. 더 강하고 넓은 공격이 나와. 알고 쓰면 꽤 달라져.'],
+  ['저 아이템은 자네가 전에 주운 것 중에서 나와. 처음 보는 게 없어도 이상한 거 아니야.'],
+  ['B버튼 트랩은 사실 똥이야. 뭐... 효과는 있어.'],
+  ['B버튼은 코어가 들어. 근데 적이 밟으면 제법 아파해. 똥치고는 쓸 만하지.'],
+  ['쥐는 항상 셋이야. 왜인진 나도 몰라. 그냥 항상 셋이더라고.'],
+  ['고슴도치가 가시 세우면 건드리지 마. 그때는 무적이거든. 기다리면 돼.'],
+  ['다람쥐는 거리 두고 도토리를 던져. 가까이 붙으면 멈춰.'],
+  ['여우는 끝까지 쫓아와. 진짜로. 질릴 때까지.'],
+  ['나도 한때 싸웠어. 지금 내가 여기서 뭘 팔고 있는지 보면... 그냥 참고만 해.'],
+  ['이 지하에 몇 명이 내려왔는지 알아? 자네한테는 말 안 할게.'],
+  ['살아 돌아온 손님한테 팔아야 돈이 돼. 그래서 나도 이러는 거야. 오해하지 마.'],
+  ['깊이 들어갈수록 뭐가 나올지 몰라. 코어 아끼지 마.'],
+];
+
 const GRIM_FIRST_LINES = [
   '잠깐. 거기 서봐.',
   '...자네, 토끼인가. 내가 이 입구 근처까지 내려온 게 얼마만인지. 아직 끝나지 않은 건가..',
@@ -26,7 +47,7 @@ export default class GameScene extends Phaser.Scene {
   create() {
     // scene.restart() 시 Phaser 3.60 은 이 씬의 이벤트 리스너를 자동 정리하지 않는다.
     // 이 씬에서 등록한 사용자 이벤트들을 명시적으로 비워야 listener 중복 등록을 막을 수 있다.
-    ['boss-cleared', 'floor-exit-ready', 'room-entered', 'shop-open-requested', 'floor-changed', 'all-enemies-dead', 'elite-killed']
+    ['boss-cleared', 'floor-exit-ready', 'room-entered', 'shop-open-requested', 'grim-start-interaction', 'floor-changed', 'all-enemies-dead', 'elite-killed']
       .forEach(e => this.events.off(e));
     if (this.roomManager) this.roomManager.destroy();
 
@@ -53,8 +74,9 @@ export default class GameScene extends Phaser.Scene {
     ));
 
     // 상점방 NPC (현재 방이 'shop' 일 때만 살아 있음)
-    this._shopkeeper = null;
-    this._grimMet    = false;  // 런 단위 첫 만남 플래그
+    this._shopkeeper   = null;
+    this._grimMet      = false;  // 런 단위 상점방 첫 만남 플래그
+    this._grimStartMet = false;  // 런 단위 시작방 첫 만남 플래그
 
     // 시작 방 — 이전 런에서 한 번이라도 획득한 아이템 중 랜덤 1개
     this._passiveItems = [];
@@ -129,12 +151,28 @@ export default class GameScene extends Phaser.Scene {
         }
       }
 
-      // 상점방 NPC 라이프사이클 — 방 바뀔 때마다 기존 NPC 정리 후 필요 시 재생성
+      // NPC 라이프사이클 — 방 바뀔 때마다 기존 NPC 정리 후 필요 시 재생성
       if (this._shopkeeper) { this._shopkeeper.dispose(); this._shopkeeper = null; }
       if (roomData.type === 'shop') {
         this._shopkeeper = new Shopkeeper(
           this, ROOM_W / 2, ROOM_H * 0.32, roomData.shopSlots,
         );
+      } else if (roomData.type === 'start' && this.currentFloor === 1) {
+        this._shopkeeper = new Shopkeeper(
+          this, ROOM_W * 0.68, ROOM_H * 0.42, null, 'grim-start-interaction',
+        );
+      }
+    });
+
+    // 시작방 GRIM 대화 (1층 한정) — 첫 만남: 소개, 이후: 랜덤 팁
+    this.events.on('grim-start-interaction', () => {
+      const ui = this.scene.get('UIScene');
+      if (!this._grimStartMet) {
+        this._grimStartMet = true;
+        ui.openDialogue?.(GRIM_START_LINES, null);
+      } else {
+        const tip = GRIM_TIPS[Math.floor(Math.random() * GRIM_TIPS.length)];
+        ui.openDialogue?.(tip, null);
       }
     });
 
