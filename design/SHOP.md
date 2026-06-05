@@ -1,30 +1,33 @@
 # LAGOMORPH — 상점 시스템
 
 ## 핵심 컨셉
-- **희소성**: 1런에 2개 상점 (짝수층 2층·4층 각 1개)
-- **안전 지대**: 적 없음, 문 자동 개방, 진입 즉시 `cleared=true`
-- **NPC 접근 모달**: 상인 NPC 22px 이내에서 B 버튼 → 상점 창(오버레이) 오픈. 상품은 바닥에 뿌리지 않음.
+- **희소성**: 1런 최대 2개 상점 (구역 1: 2·4층, 구역 2: 7·9층 각 1개)
+- **안전 지대**: 적 없음, 문 자동 개방, 진입 즉시 `cleared=true`, 장애물 없음
+- **NPC 근접 자동 오픈**: 상인 NEAR_R(85px) 이내 진입 시 `shop-open-requested` 이벤트 자동 발행 → 상점 창(오버레이) 오픈
 
 ## 배치 규칙
-- **짝수층(2·4층) 각 1개** 상점방 생성
-- 시작방·보스방·출구방 제외한 일반 전투방 1개를 `type='shop'`으로 치환
-- 시작방에서 거리 ≤ 2 우선 (탐색 보장)
-- 미니맵 노란 `$` 아이콘
+- **2·4·7·9층 각 1개** 상점방 생성 (구역 1: 2·4층, 구역 2: 7·9층)
+- 시작방·보스방 제외한 일반 전투방 1개를 `type='shop'`으로 치환
+- 시작방에서 거리 ≤ 전체 전투방 수의 절반 우선 (탐색 보장)
+- 미니맵 노란 `$` 아이콘 (`0xddcc22`)
 
 ## NPC: 잿빛털 토끼 상인 GRIM
 - 잿빛(`#8a8a86`) 털, 한쪽 귀 흉터, 어깨에 가방
-- 정면 1프레임 + 미세 호흡 트윈
-- 위치: 방 중앙 상단 (`y ≈ ROOM_H * 0.32`)
-- 근접 시 머리 위에 ▼ + "B로 상점 열기" 힌트
+- 정면 1프레임 + 미세 호흡 트윈 (`scaleY × 1.05`, 1500ms Sine.InOut yoyo)
+- 위치: 방 중앙 상단 (`y = ROOM_H * 0.32`)
+- 표시 크기: 40×50px
+- **탁자**: 상인 바로 앞(아래) 정적 static body 사각형 (56×14px, 갈색 `0x6b4226`). 플레이어와 충돌. 상인 몸체 하단 + 4px 여백 위치.
 - 에셋(예정): `public/assets/characters/grim.png`. 미존재 시 잿빛 rectangle 폴백.
 
 ## 상점 창(모달) UX
-- 게임 일시정지 (`physics.pause()` + `time.timeScale=0` 또는 `GameScene` `pause()`)
-- 반투명 검정 배경(`0x000000` α=0.7), 중앙 패널 300×500
-- 상단: 상인 초상화 + "GRIM" / 우상단: 보유 코어 `◆ 23`
-- 중앙: 슬롯 카드 N개 세로 배치 (기본 3, '상인의 호의' 보유 시 +1) — 아이콘 / 이름 / 효과 / 가격 / [구매]. '상인의 신용' 보유 시 모든 가격 ×0.9. 패널 높이는 슬롯 수에 따라 가변.
-- 하단: [닫기] 버튼 (화면 외곽 터치로도 닫힘)
-- 입력: 터치 = 카드 직접 탭 / 키보드 = ↑↓ + Z(구매) + X(닫기)
+- 게임 일시정지 (`GameScene.scene.pause()` / `.resume()`)
+- 반투명 검정 배경(`0x000000` α=0.75), 외부 영역 탭 시 닫기
+- 중앙 패널 320×(슬롯 수에 따라 가변) — headerH(60) + slotCount × cardH(110) + (slotCount-1) × gap(8) + footerH(30)
+- 상단: "GRIM 상점" 텍스트(좌) + 보유 코어 `◆ N`(우) + [✕] 닫기 버튼(우상단)
+- 중앙: 슬롯 카드 N개 세로 배치 (기본 3, '상인의 호의' 보유 시 +1) — 아이콘 / 이름 / 효과 / 가격 / 탭으로 구매
+- 하단: 닫기 버튼 없음 (패널 외부 탭 또는 ✕ 버튼)
+- 입력: 터치·포인터 탭만 지원 (키보드 ↑↓/Z/X 미구현)
+- 상점 오픈 중 HP·코어 카운터 즉시 반영
 
 ## 판매 슬롯 (기본 3개, '상인의 호의' 해금 시 4개, 전부 랜덤)
 
@@ -46,19 +49,20 @@
 | 50% 회복 | `heal_half` | 푸짐한 한 끼 | 50 | HP를 `maxHp * 0.5`만큼 회복 |
 | 전체 회복 | `heal_full` | 정원의 만찬 | 75 | HP를 maxHp로 |
 
-> 정액 회복(`heal_1`~`heal_8`)은 maxHp가 낮을 때 가성비 우위. `heal_half`는 maxHp가 클수록 가성비 우위 — `tough_hide` 빌드와 시너지. 빌드별로 다른 선택이 합리적.
+> 정액 회복(`heal_1`~`heal_8`)은 maxHp가 낮을 때 가성비 우위. `heal_half`는 maxHp가 클수록 가성비 우위 — `tough_hide` 빌드와 시너지.
 
 ### 뽑기 규칙
-- 가중치: 패시브 30% / 정액 회복 8단계 55% / `heal_half` 10% / `heal_full` 5%
-- 패시브 슬롯이 두 번 뽑히면 서로 다른 패시브여야 함 — 슬롯 id 단위로 중복 금지 (정액 회복도 같은 id 두 장 금지)
-- 충돌 시 재추첨 (최대 30회 후 강제 통과)
-- maxHp 초과분은 잘려 표시 — `현재HP + 회복량 > maxHp`일 때 가격 라벨 회색 "비효율" 표시 (UX 힌트)
+- 가중치: 패시브 30% / 정액 회복 8단계 55% (균등) / `heal_half` 10% / `heal_full` 5%
+- 슬롯 간 같은 id 중복 금지 — 충돌 시 재추첨 (최대 `targetCount × 14`회 후 강제 통과)
+- 패시브 슬롯이 두 번 뽑히면 서로 다른 패시브여야 함
+- 이미 보유한 패시브는 `item` 슬롯 후보에서 제외 (생성 시점 + 상점 오픈 시점 두 번 체크)
+- 상점 오픈 시점에 보유 중인 패시브와 충돌하는 슬롯은 미보유 패시브로 재추첨, 후보 없으면 `sold=true` 처리
+- 회복 아이템: `대식가(big_trap)` 패시브 보유 시 `healItemMult`만큼 회복량 증가
 
 ## 구매 플로우
-1. 카드 탭 → 코어 충분: 차감 → 효과 즉시 적용 → 카드 SOLD 상태 (어둡게)
-2. 코어 부족: 가격 빨강 깜빡임 + 짧은 카메라 진동
+1. 카드 탭 → 코어 충분: `em.spendCores(cost)` → 효과 즉시 적용 → 카드 SOLD 상태 (어둡게)
+2. 코어 부족: 가격 빨강 깜빡임 + 스케일 펄스 트윈
 3. 이미 SOLD: 무반응
-4. 모달 닫기 시 게임 재개
 
 ## 데이터 모델
 
@@ -75,25 +79,31 @@ roomData.shopSlots = [
 
 재진입 시 `sold` 유지. `roomData.shopSlots`는 던전(층) 단위 영속.
 
-## 코드 변경 지점
-- `src/world/DungeonGenerator.js` — 짝수층 한정 상점방 1개 선정 + `shopSlots` 가중치 추첨
-- `src/world/Room.js` — `type==='shop'` 분기: 바닥 톤(`0x3a2818`), 등불 글로우, NPC 스프라이트
-- `src/world/RoomManager.js` — `type==='shop'` 분기: 적 스폰 스킵, 즉시 `cleared=true`, 문 잠금 없음
-- `src/entities/Shopkeeper.js` (신규) — NPC 근접 감지, 힌트, 모달 트리거 이벤트 emit
-- `src/systems/ShopUI.js` (신규) — 모달 렌더, 카드 입력, 일시정지
-- `src/entities/Player.js` — `spendCores(n) → bool` 헬퍼
-- `src/systems/AttackManager.js` — NPC 근접 + B 버튼 시 트랩 설치 대신 `shop-open` 이벤트
-- `src/scenes/UIScene.js` — 미니맵 상점방 색상 분기 (노란색)
+## 구현 위치
+
+| 역할 | 파일 |
+|---|---|
+| 상점방 슬롯 추첨 + 방 type 치환 | `src/world/DungeonGenerator.js` |
+| 상점방 바닥 톤 오버레이 + 장애물 제거 | `src/world/Room.js` |
+| 상점방 적 스폰 스킵, 즉시 `cleared=true` | `src/world/RoomManager.js` |
+| NPC 배치, 호흡 트윈, 탁자, 근접 감지 | `src/entities/Shopkeeper.js` |
+| 모달 렌더, 카드 입력, 구매 처리, 일시정지 | `src/scenes/UIScene.js` (`openShop` / `closeShop`) |
+| NPC 라이프사이클, `shop-open-requested` 수신 | `src/scenes/GameScene.js` |
+| 코어 차감 | `src/systems/EnemyManager.js` (`spendCores`) |
+| `shopSlotBonus` / `shopPriceMult` 스탯 | `src/entities/Player.js` |
+| 미니맵 상점방 색상 분기 (노란색) | `src/scenes/UIScene.js` |
+
+## 영구 해금 연동
+- **상인의 호의**: 슬롯 +1 (기본 3 → 4) — `player.shopSlotBonus`
+- **상인의 신용**: 모든 슬롯 가격 `×0.9`, Math.floor (최소 1) — `player.shopPriceMult`
+- `generateDungeon()` 호출 시 `player.shopSlotBonus` / `player.shopPriceMult` 인자로 전달
 
 ## 의도적으로 뺀 것
 - 최대 HP 영구 증가 슬롯
 - 재입고/리롤, 상점 도난, NPC 대화 트리
-
-## 영구 해금 연동
-- **상인의 호의** (특수 t1): 슬롯 +1 (기본 3 → 4)
-- **상인의 신용** (특수 t4): 모든 슬롯 가격 ×0.9, Math.floor (최소 1)
-- 두 노드 모두 `generateDungeon()` 호출 시 `Player.shopSlotBonus` / `Player.shopPriceMult` 인자로 전달
+- NPC 근접 힌트 텍스트 ("상점 열기" 안내 UI)
+- 키보드 방향키·Z/X 탐색
 
 ## 확장 여지
-- 4층 상점 풀 차별화 (희귀 회복, 멀티 적용 효과)
+- 4층 / 9층 상점 풀 차별화 (희귀 회복, 멀티 적용 효과)
 - GRIM의 정체 — ARCANA 폐기 유닛 스토리 연계

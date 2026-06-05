@@ -75,6 +75,13 @@ export default class UIScene extends Phaser.Scene {
     this._currentDungeonData = null;
     this._currentRoomId      = null;
     this._currentFloor       = 1;
+    this._dialogueOpen   = false;
+    this._dlgLines       = [];
+    this._dlgLineIdx     = 0;
+    this._dlgOnComplete  = null;
+    this._dlgTyping      = false;
+    this._dlgFullText    = '';
+    this._dlgTypeTimer   = null;
 
     this._buildTopPanel();
     this._buildChargeGauge();
@@ -85,6 +92,7 @@ export default class UIScene extends Phaser.Scene {
     this._buildBossHPBar();
     this._buildBagOverlay();
     this._buildShopOverlay();
+    this._buildDialogueOverlay();
     this._buildMinimapHitArea();
     this._buildMinimapOverlay();
     this._bindKeys();
@@ -120,7 +128,7 @@ export default class UIScene extends Phaser.Scene {
   }
 
   update() {
-    if (this._bagOpen || this._shopOpen || this._minimapOpen) return;
+    if (this._bagOpen || this._shopOpen || this._minimapOpen || this._dialogueOpen) return;
     const { player, attackManager, enemyManager } = this.gameScene ?? {};
     if (player)        this._updateHP(player.hp, player.maxHp);
     if (attackManager) this._updateChargeGauge(attackManager);
@@ -1062,6 +1070,7 @@ export default class UIScene extends Phaser.Scene {
       if (this._bagOpen)           this._closeBag();
       else if (this._shopOpen)     this.closeShop();
       else if (this._minimapOpen)  this._closeMinimap();
+      else if (this._dialogueOpen) this.closeDialogue();
     });
   }
 
@@ -1071,5 +1080,156 @@ export default class UIScene extends Phaser.Scene {
     this.tweens.killTweensOf(rect);
     rect.setAlpha(1);
     this.tweens.add({ targets: rect, alpha: 0.8, duration: 200, ease: 'Quad.In' });
+  }
+
+  // ── NPC 대화 오버레이 ─────────────────────────────────
+
+  _buildDialogueOverlay() {
+    const panelW = GAME_W - 20;
+    const panelH = 180;
+    const panelX = GAME_W / 2;
+    const panelY = GAME_H - 90;
+    const L = panelX - panelW / 2;  // 10
+    const T = panelY - panelH / 2;  // 664
+
+    const backdrop = this.add.rectangle(0, 0, GAME_W, GAME_H, 0x000000, 0.45)
+      .setOrigin(0, 0).setDepth(90).setInteractive();
+    backdrop.on('pointerdown', () => this._advanceDialogue());
+
+    this._dlgPanel = this.add.rectangle(panelX, panelY, panelW, panelH, 0x0c0c18, 0.97)
+      .setStrokeStyle(1, 0x334466, 0.8).setDepth(91).setInteractive();
+    this._dlgPanel.on('pointerdown', () => this._advanceDialogue());
+
+    // 초상화 (grim 텍스처 없으면 회색 사각형 폴백)
+    if (this.textures.exists('grim')) {
+      this._dlgPortrait = this.add.image(L + 34, T + 100, 'grim')
+        .setDisplaySize(44, 56).setDepth(92);
+    } else {
+      this._dlgPortrait = this.add.rectangle(L + 34, T + 100, 44, 56, 0x3a3a4a)
+        .setStrokeStyle(1, 0x556688, 0.7).setDepth(92);
+    }
+
+    // 이름 + 구분선 (헤더 영역)
+    this._dlgName = this.add.text(L + 66, T + 18, 'GRIM', {
+      fontSize: '13px', color: '#aabbcc', fontFamily: 'monospace', fontStyle: 'bold',
+    }).setOrigin(0, 0.5).setDepth(92);
+
+    this._dlgDivider = this.add.rectangle(L + 12, T + 30, panelW - 24, 1, 0x334466)
+      .setOrigin(0, 0.5).setDepth(92);
+
+    // 대사 텍스트 (초상화 오른쪽)
+    this._dlgText = this.add.text(L + 66, T + 42, '', {
+      fontSize: '14px', color: '#ddeeff', fontFamily: 'monospace',
+      wordWrap: { width: panelW - 80, useAdvancedWrap: true },
+      lineSpacing: 4,
+    }).setOrigin(0, 0).setDepth(92);
+
+    // 진행 인디케이터 ▼ (깜빡임)
+    this._dlgAdvance = this.add.text(panelX + panelW / 2 - 14, panelY + panelH / 2 - 16, '▼', {
+      fontSize: '11px', color: '#4ecca3', fontFamily: 'monospace',
+    }).setOrigin(0.5).setDepth(92);
+    this.tweens.add({
+      targets: this._dlgAdvance, alpha: { from: 1, to: 0.2 },
+      duration: 700, yoyo: true, repeat: -1,
+    });
+
+    // 마지막 줄 선택지 버튼
+    const btnY = panelY + panelH / 2 - 20;
+    this._dlgBtnShop = this.add.text(panelX - 55, btnY, '[둘러보기]', {
+      fontSize: '14px', color: '#4ecca3', fontFamily: 'monospace', fontStyle: 'bold',
+    }).setOrigin(0.5).setDepth(92).setInteractive({ cursor: 'pointer' });
+    this._dlgBtnShop.on('pointerover', () => this._dlgBtnShop.setColor('#ffffff'));
+    this._dlgBtnShop.on('pointerout',  () => this._dlgBtnShop.setColor('#4ecca3'));
+
+    this._dlgBtnLeave = this.add.text(panelX + 72, btnY, '[됐어]', {
+      fontSize: '14px', color: '#88aacc', fontFamily: 'monospace',
+    }).setOrigin(0.5).setDepth(92).setInteractive({ cursor: 'pointer' });
+    this._dlgBtnLeave.on('pointerover', () => this._dlgBtnLeave.setColor('#ffffff'));
+    this._dlgBtnLeave.on('pointerout',  () => this._dlgBtnLeave.setColor('#88aacc'));
+
+    this._dlgStaticEls = [backdrop, this._dlgPanel, this._dlgPortrait, this._dlgName,
+                          this._dlgDivider, this._dlgText, this._dlgAdvance];
+    this._dlgStaticEls.forEach(el => el.setVisible(false));
+    this._dlgBtnShop.setVisible(false);
+    this._dlgBtnLeave.setVisible(false);
+  }
+
+  openDialogue(lines, onComplete) {
+    if (this._dialogueOpen) return;
+    this._dialogueOpen  = true;
+    this._dlgLines      = lines;
+    this._dlgLineIdx    = 0;
+    this._dlgOnComplete = onComplete ?? null;
+    this._dlgStaticEls.forEach(el => el.setVisible(true));
+    this._dlgBtnShop.setVisible(false);
+    this._dlgBtnLeave.setVisible(false);
+    this._dlgAdvance.setVisible(true);
+    this._dlgText.setText('');
+    this.scene.get('GameScene').scene.pause();
+    this._typewriteLine(lines[0]);
+  }
+
+  _typewriteLine(text) {
+    this._dlgTyping   = true;
+    this._dlgFullText = text;
+    let i = 0;
+    if (this._dlgTypeTimer) { this._dlgTypeTimer.remove(); this._dlgTypeTimer = null; }
+    this._dlgTypeTimer = this.time.addEvent({
+      delay: 30,
+      repeat: text.length - 1,
+      callback: () => {
+        i++;
+        this._dlgText.setText(text.slice(0, i));
+        if (i >= text.length) {
+          this._dlgTyping    = false;
+          this._dlgTypeTimer = null;
+          if (this._dlgLineIdx >= this._dlgLines.length - 1) {
+            this._showDialogueButtons();
+          }
+        }
+      },
+    });
+  }
+
+  _advanceDialogue() {
+    if (!this._dialogueOpen) return;
+    if (this._dlgTyping) {
+      if (this._dlgTypeTimer) { this._dlgTypeTimer.remove(); this._dlgTypeTimer = null; }
+      this._dlgTyping = false;
+      this._dlgText.setText(this._dlgFullText);
+      if (this._dlgLineIdx >= this._dlgLines.length - 1) this._showDialogueButtons();
+      return;
+    }
+    if (this._dlgBtnShop.visible) return; // 버튼 표시 중 — 버튼으로만 진행
+    this._dlgLineIdx++;
+    if (this._dlgLineIdx < this._dlgLines.length) {
+      this._dlgText.setText('');
+      this._typewriteLine(this._dlgLines[this._dlgLineIdx]);
+    }
+  }
+
+  _showDialogueButtons() {
+    this._dlgAdvance.setVisible(false);
+    this._dlgBtnShop.setVisible(true);
+    this._dlgBtnLeave.setVisible(true);
+    this._dlgBtnShop.removeAllListeners('pointerdown');
+    this._dlgBtnLeave.removeAllListeners('pointerdown');
+    this._dlgBtnShop.on('pointerdown', () => {
+      const cb = this._dlgOnComplete;
+      this.closeDialogue();
+      cb?.();
+    });
+    this._dlgBtnLeave.on('pointerdown', () => this.closeDialogue());
+  }
+
+  closeDialogue() {
+    if (!this._dialogueOpen) return;
+    this._dialogueOpen = false;
+    if (this._dlgTypeTimer) { this._dlgTypeTimer.remove(); this._dlgTypeTimer = null; }
+    this._dlgStaticEls.forEach(el => el.setVisible(false));
+    this._dlgBtnShop.setVisible(false);
+    this._dlgBtnLeave.setVisible(false);
+    this._dlgAdvance.setVisible(true);
+    this.scene.get('GameScene').scene.resume();
   }
 }

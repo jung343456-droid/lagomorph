@@ -79,6 +79,7 @@ export default class RoomManager {
     // 새 방 생성
     this._room = new Room(this.scene, roomData);
     this.currentRoomData = roomData;
+    const wasVisited = roomData.visited;
     roomData.visited = true;
 
     // 벽 콜라이더 등록
@@ -116,8 +117,8 @@ export default class RoomManager {
     this._enteredAt = this.scene.time.now;
     this._clearedAt = 0;
 
-    // 클리어 방 재진입 시 이동속도 1.5배
-    this.player.speed = roomData.cleared
+    // 클리어 방 재진입(2번째 방문 이상)에서만 이동속도 1.5배
+    this.player.speed = (roomData.cleared && wasVisited)
       ? this.player.baseSpeed * 1.5
       : this.player.baseSpeed;
 

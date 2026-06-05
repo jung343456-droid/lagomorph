@@ -11,6 +11,13 @@ import PassiveItem, { ITEM_DEFS } from '../entities/PassiveItem';
 import Shopkeeper from '../entities/Shopkeeper';
 import { getMetaCores, beginMetaRun, commitMetaRun, addRunPickup } from '../data/MetaProgress';
 
+const GRIM_FIRST_LINES = [
+  '잠깐. 거기 서봐.',
+  '...자네, 토끼인가. 내가 이 입구 근처까지 내려온 게 얼마만인지. 아직 끝나지 않은 건가..',
+  '이대로 있을 수는 없겠어. 거래를 하지. 코어를 가져오게. 자네가 살아남는 데 도움은 될 거야.',
+  '필요한건 코어뿐이야. 이 지하에선 그게 전부지 — 돈이고, 목숨이고.',
+];
+
 export default class GameScene extends Phaser.Scene {
   constructor() {
     super({ key: 'GameScene' });
@@ -47,6 +54,7 @@ export default class GameScene extends Phaser.Scene {
 
     // 상점방 NPC (현재 방이 'shop' 일 때만 살아 있음)
     this._shopkeeper = null;
+    this._grimMet    = false;  // 런 단위 첫 만남 플래그
 
     // 시작 방 — 이전 런에서 한 번이라도 획득한 아이템 중 랜덤 1개
     this._passiveItems = [];
@@ -130,11 +138,17 @@ export default class GameScene extends Phaser.Scene {
       }
     });
 
-    // 상점 열기 요청 (AttackManager 가 NPC 근접 시 B 버튼 → 발행)
+    // 상점 열기 요청 (Shopkeeper NPC 근접 시 발행)
     this.events.on('shop-open-requested', () => {
       if (!this._shopkeeper) return;
-      const ui = this.scene.get('UIScene');
-      ui.openShop?.(this._shopkeeper.shopSlots);
+      const ui    = this.scene.get('UIScene');
+      const slots = this._shopkeeper.shopSlots;
+      if (!this._grimMet) {
+        this._grimMet = true;
+        ui.openDialogue?.(GRIM_FIRST_LINES, () => ui.openShop?.(slots));
+      } else {
+        ui.openShop?.(slots);
+      }
     });
 
     // 카메라 뷰포트를 HUD 아래 영역으로 제한 → 게임/HUD 영역 시각적 분리
