@@ -1200,7 +1200,8 @@ export default class UIScene extends Phaser.Scene {
       if (this._dlgLineIdx >= this._dlgLines.length - 1) this._showDialogueButtons();
       return;
     }
-    if (this._dlgBtnShop.visible) return; // 버튼 표시 중 — 버튼으로만 진행
+    if (this._dlgBtnShop.visible) return;   // 2개 버튼 — 버튼으로만 진행
+    if (this._dlgBtnLeave.visible) { this.closeDialogue(); return; }  // 1개 버튼 — 아무데나 탭으로 종료
     this._dlgLineIdx++;
     if (this._dlgLineIdx < this._dlgLines.length) {
       this._dlgText.setText('');

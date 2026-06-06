@@ -23,6 +23,33 @@ import Room, { ROOM_W, ROOM_H } from '../world/Room';
 import UnlockMenu from '../ui/UnlockMenu';
 import { getMetaCores, getShopDiscovered, resetAllProgress } from '../data/MetaProgress';
 
+const GRIM_START_LINES = [
+  '어. 왔군.',
+  '왜 여기 있냐고? ...그냥. 바람 좀 쐬러.',
+  '코어 생기면 찾아오게. 깊이 들어갈수록 나도 있을 거야.',
+];
+
+const GRIM_TIPS = [
+  ['A를 꾹 눌러봐. 더 강하고 넓은 공격이 나와. 알고 쓰면 꽤 달라져.'],
+  ['저 아이템은 자네가 전에 주운 것 중에서 나와. 처음 보는 게 없어도 이상한 거 아니야.'],
+  ['B버튼 트랩은 사실 똥이야. 뭐... 효과는 있어.'],
+  ['B버튼은 코어가 들어. 근데 적이 밟으면 제법 아파해. 똥치고는 쓸 만하지.'],
+  ['쥐는 항상 셋이야. 왜인진 나도 몰라. 그냥 항상 셋이더라고.'],
+  ['고슴도치가 가시 세우면 건드리지 마. 그때는 무적이거든. 기다리면 돼.'],
+  ['다람쥐는 거리 두고 도토리를 던져. 가까이 붙으면 멈춰.'],
+  ['여우는 끝까지 쫓아와. 진짜로. 질릴 때까지.'],
+  ['나도 한때 싸웠어. 지금 내가 여기서 뭘 팔고 있는지 보면... 그냥 참고만 해.'],
+  ['이 지하에 몇 명이 내려왔는지 알아? 자네한테는 말 안 할게.'],
+  ['살아 돌아온 손님한테 팔아야 돈이 돼. 그래서 나도 이러는 거야. 오해하지 마.'],
+  ['깊이 들어갈수록 뭐가 나올지 몰라. 코어 아끼지 마.'],
+  ['저 짐승들이 왜 지하에 모여 있겠어. 코어 냄새가 나거든. 오래된 본능이야.'],
+  ['기억이 코어라는 말, 들어봤어? 나는 그게 비유가 아니라고 생각해. 그냥 내 생각이야.'],
+  ['코어가 어디로 가는지 생각해봤어? 나는 안 생각하려고 해. 그게 편하더라고.'],
+];
+
+// 세션 내 첫 만남 여부 — HubScene 재생성(씬 restart)에도 유지
+let _grimIntroShown = false;
+
 const MACHINE_W       = 110;
 const MACHINE_H       = 140;
 const MACHINE_TRIG_R  = 70;   // 이 거리 이내로 들어오면 "탭하여 시작" 프롬프트 노출
@@ -83,9 +110,16 @@ export default class HubScene extends Phaser.Scene {
       );
     }
 
-    // 해금 메뉴 — Shopkeeper 가 근접 시 발행 / 또는 직접 호출
+    // 해금 메뉴 — Shopkeeper 근접 시: 대화 → 메뉴 순으로 진행
     this._unlockMenu = null;
-    this.events.on('unlock-menu-requested', () => this._openUnlockMenu());
+    this.events.on('unlock-menu-requested', () => {
+      if (this._unlockMenu?.alive) return;
+      const lines = _grimIntroShown
+        ? GRIM_TIPS[Math.floor(Math.random() * GRIM_TIPS.length)]
+        : GRIM_START_LINES;
+      _grimIntroShown = true;
+      this._showGrimDialogue(lines, () => this._openUnlockMenu());
+    });
 
     // 런 시작 요청 — 기상 기계 탭 또는 X(B) 키
     this.events.on('hub-start-run', () => this._startRun());
@@ -273,6 +307,109 @@ export default class HubScene extends Phaser.Scene {
     }).setOrigin(0.5).setScrollFactor(0).setDepth(202).setInteractive({ cursor: 'pointer' });
     okBtn.on('pointerdown', () => { close(); onOk?.(); });
     els.push(okBtn);
+  }
+
+  _showGrimDialogue(lines, onComplete) {
+    const panelW = GAME_W - 20;
+    const panelH = 180;
+    const panelX = GAME_W / 2;
+    const panelY = GAME_H - 90;
+    const L = panelX - panelW / 2;
+    const T = panelY - panelH / 2;
+    const els = [];
+    let lineIdx = 0, typing = false, fullText = '', typeTimer = null;
+
+    const close = () => {
+      if (typeTimer) { typeTimer.remove(); typeTimer = null; }
+      els.forEach(el => { if (el?.active) el.destroy(); });
+      if (this._shopkeeper) this._shopkeeper.isNear = true;
+    };
+
+    const backdrop = this.add.rectangle(0, 0, GAME_W, GAME_H, 0x000000, 0.45)
+      .setOrigin(0).setScrollFactor(0).setDepth(90).setInteractive();
+    const panel = this.add.rectangle(panelX, panelY, panelW, panelH, 0x0c0c18, 0.97)
+      .setStrokeStyle(1, 0x334466, 0.8).setScrollFactor(0).setDepth(91).setInteractive();
+
+    const portrait = this.textures.exists('grim')
+      ? this.add.image(L + 34, T + 100, 'grim').setDisplaySize(44, 56).setScrollFactor(0).setDepth(92)
+      : this.add.rectangle(L + 34, T + 100, 44, 56, 0x3a3a4a).setStrokeStyle(1, 0x556688, 0.7).setScrollFactor(0).setDepth(92);
+
+    const nameLabel = this.add.text(L + 66, T + 18, 'GRIM', {
+      fontSize: '13px', color: '#aabbcc', fontFamily: 'monospace', fontStyle: 'bold',
+    }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(92);
+    const divider = this.add.rectangle(L + 12, T + 30, panelW - 24, 1, 0x334466)
+      .setOrigin(0, 0.5).setScrollFactor(0).setDepth(92);
+    const dlgText = this.add.text(L + 66, T + 42, '', {
+      fontSize: '14px', color: '#ddeeff', fontFamily: 'monospace',
+      wordWrap: { width: panelW - 80, useAdvancedWrap: true }, lineSpacing: 4,
+    }).setOrigin(0, 0).setScrollFactor(0).setDepth(92);
+
+    const advInd = this.add.text(panelX + panelW / 2 - 14, panelY + panelH / 2 - 16, '▼', {
+      fontSize: '11px', color: '#4ecca3', fontFamily: 'monospace',
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(92);
+    this.tweens.add({ targets: advInd, alpha: { from: 1, to: 0.2 }, duration: 700, yoyo: true, repeat: -1 });
+
+    const btnY = panelY + panelH / 2 - 20;
+    const btnMenu = this.add.text(panelX - 55, btnY, '[해금 메뉴]', {
+      fontSize: '14px', color: '#4ecca3', fontFamily: 'monospace', fontStyle: 'bold',
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(92).setInteractive({ cursor: 'pointer' }).setVisible(false);
+    btnMenu.on('pointerover', () => btnMenu.setColor('#ffffff'));
+    btnMenu.on('pointerout',  () => btnMenu.setColor('#4ecca3'));
+
+    const btnLeave = this.add.text(panelX + 72, btnY, '[됐어]', {
+      fontSize: '14px', color: '#88aacc', fontFamily: 'monospace',
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(92).setInteractive({ cursor: 'pointer' }).setVisible(false);
+    btnLeave.on('pointerover', () => btnLeave.setColor('#ffffff'));
+    btnLeave.on('pointerout',  () => btnLeave.setColor('#88aacc'));
+
+    els.push(backdrop, panel, portrait, nameLabel, divider, dlgText, advInd, btnMenu, btnLeave);
+
+    const showButtons = () => {
+      advInd.setVisible(false);
+      btnLeave.setVisible(true);
+      if (onComplete) {
+        btnMenu.setVisible(true);
+        btnMenu.on('pointerdown', () => { close(); onComplete(); });
+      } else {
+        btnLeave.setX(GAME_W / 2);
+      }
+      btnLeave.on('pointerdown', close);
+    };
+
+    const typewriteLine = (text) => {
+      typing = true; fullText = text;
+      let i = 0;
+      if (typeTimer) typeTimer.remove();
+      typeTimer = this.time.addEvent({
+        delay: 30, repeat: text.length - 1,
+        callback: () => {
+          i++;
+          dlgText.setText(text.slice(0, i));
+          if (i >= text.length) {
+            typing = false; typeTimer = null;
+            if (lineIdx >= lines.length - 1) showButtons();
+          }
+        },
+      });
+    };
+
+    const advance = () => {
+      if (typing) {
+        if (typeTimer) { typeTimer.remove(); typeTimer = null; }
+        typing = false;
+        dlgText.setText(fullText);
+        if (lineIdx >= lines.length - 1) showButtons();
+        return;
+      }
+      if (btnMenu.visible) return;          // 2개 버튼 — 버튼으로만 진행
+      if (btnLeave.visible) { close(); return; }  // 1개 버튼 — 아무데나 탭으로 종료
+      lineIdx++;
+      if (lineIdx < lines.length) { dlgText.setText(''); typewriteLine(lines[lineIdx]); }
+    };
+
+    backdrop.on('pointerdown', advance);
+    panel.on('pointerdown', advance);
+    typewriteLine(lines[0]);
   }
 
   _openUnlockMenu() {
