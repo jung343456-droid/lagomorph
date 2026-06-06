@@ -132,7 +132,7 @@ export default class HubScene extends Phaser.Scene {
   }
 
   update(_time, delta) {
-    if (this._starting) return;
+    if (this._starting || this._grimDialogueOpen) return;
     this.player.update(this.input$.getDirection(), delta);
     if (this._shopkeeper) this._shopkeeper.update(this.player);
 
@@ -313,16 +313,19 @@ export default class HubScene extends Phaser.Scene {
     const panelW = GAME_W - 20;
     const panelH = 180;
     const panelX = GAME_W / 2;
-    const panelY = GAME_H - 90;
+    const panelY = GAME_H - 130;  // 하단 40px 마진 (홈 인디케이터 여유)
     const L = panelX - panelW / 2;
     const T = panelY - panelH / 2;
     const els = [];
     let lineIdx = 0, typing = false, fullText = '', typeTimer = null;
 
+    this._grimDialogueOpen = true;
+
     const close = () => {
       if (typeTimer) { typeTimer.remove(); typeTimer = null; }
       els.forEach(el => { if (el?.active) el.destroy(); });
       if (this._shopkeeper) this._shopkeeper.isNear = true;
+      this._grimDialogueOpen = false;
     };
 
     const backdrop = this.add.rectangle(0, 0, GAME_W, GAME_H, 0x000000, 0.45)

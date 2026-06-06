@@ -1088,9 +1088,9 @@ export default class UIScene extends Phaser.Scene {
     const panelW = GAME_W - 20;
     const panelH = 180;
     const panelX = GAME_W / 2;
-    const panelY = GAME_H - 90;
-    const L = panelX - panelW / 2;  // 10
-    const T = panelY - panelH / 2;  // 664
+    const panelY = GAME_H - 130;   // 하단 40px 마진 (홈 인디케이터 여유)
+    const L = panelX - panelW / 2;
+    const T = panelY - panelH / 2;
 
     const backdrop = this.add.rectangle(0, 0, GAME_W, GAME_H, 0x000000, 0.45)
       .setOrigin(0, 0).setDepth(90).setInteractive();
