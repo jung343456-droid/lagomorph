@@ -22,6 +22,9 @@ import Shopkeeper from '../entities/Shopkeeper';
 import Room, { ROOM_W, ROOM_H } from '../world/Room';
 import UnlockMenu from '../ui/UnlockMenu';
 import { getMetaCores, getShopDiscovered, resetAllProgress } from '../data/MetaProgress';
+import { safeInsetBottom } from '../utils/SafeArea';
+
+const DLG_BOTTOM_PAD = 16;  // 대화 패널 하단 기본 여백 (안전영역과 별개로 항상 확보)
 
 const GRIM_START_LINES = [
   '어. 왔군.',
@@ -313,7 +316,8 @@ export default class HubScene extends Phaser.Scene {
     const panelW = GAME_W - 20;
     const panelH = 180;
     const panelX = GAME_W / 2;
-    const panelY = GAME_H - 130;  // 하단 40px 마진 (홈 인디케이터 여유)
+    // 하단 마진 = 기본 여백 + 기종별 안전영역(홈 인디케이터·제스처바) 환산값
+    const panelY = GAME_H - panelH / 2 - (DLG_BOTTOM_PAD + safeInsetBottom(this));
     const L = panelX - panelW / 2;
     const T = panelY - panelH / 2;
     const els = [];

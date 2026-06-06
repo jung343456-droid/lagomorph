@@ -1,6 +1,9 @@
 import Phaser from 'phaser';
 import { GAME_W, GAME_H, HUD_H } from '../constants';
 import PassiveItem, { ITEM_DEFS } from '../entities/PassiveItem';
+import { safeInsetBottom } from '../utils/SafeArea';
+
+const DLG_BOTTOM_PAD = 16;  // 패널 하단 기본 여백 (안전영역과 별개로 항상 확보)
 
 // ── 상단 패널 레이아웃 ────────────────────────────────
 const TOP_H      = HUD_H; // 상단 패널 높이 — constants.HUD_H 와 반드시 일치
@@ -1088,7 +1091,9 @@ export default class UIScene extends Phaser.Scene {
     const panelW = GAME_W - 20;
     const panelH = 180;
     const panelX = GAME_W / 2;
-    const panelY = GAME_H - 130;   // 하단 40px 마진 (홈 인디케이터 여유)
+    // 하단 마진 = 기본 여백 + 기종별 안전영역(홈 인디케이터·제스처바) 환산값
+    const bottomMargin = DLG_BOTTOM_PAD + safeInsetBottom(this);
+    const panelY = GAME_H - panelH / 2 - bottomMargin;
     const L = panelX - panelW / 2;
     const T = panelY - panelH / 2;
 
