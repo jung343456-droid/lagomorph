@@ -1,6 +1,6 @@
 /**
  * 늑대 (Wolf) — 엘리트형 중간 보스
- * HP 240 / 속도 176 / 데미지 12(접촉) / 코어 드롭 10
+ * HP 240 / 속도 176 / 데미지 12(접촉) / 코어 드롭 12
  * 크기 32×36px
  *
  * 패턴:
@@ -63,7 +63,7 @@ export default class Wolf {
 
     this.alive     = true;
     this.destroyed = false;
-    this.coreDrops = 10;
+    this.coreDrops = 12;
 
     this._howlTimer   = HOWL_INIT_CD;
     this._howlDur     = 0;

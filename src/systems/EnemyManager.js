@@ -224,7 +224,7 @@ export default class EnemyManager {
         showDamageNumber(this.scene, enemy.x, enemy.y - enemy.gameObject.height / 2, dmg, '#cc88ff');
         if (died) {
           this._poisoned.delete(enemy);
-          this.dropCores(enemy.x, enemy.y, enemy.coreDrops ?? 3);
+          this.dropCores(enemy.x, enemy.y, enemy.coreDrops ?? 3, enemy.isFinalBoss);
           if (enemy.isBoss) { this.dropRareItem(enemy.x, enemy.y); this.boss = null; }
           this.dropEliteItem(enemy);
           if (this.player.healOnKill > 0) this.player.heal(this.player.healOnKill);
@@ -249,7 +249,7 @@ export default class EnemyManager {
         showDamageNumber(this.scene, enemy.x, enemy.y - enemy.gameObject.height / 2, dmg, '#ff6622');
         if (died) {
           this._burned.delete(enemy);
-          this.dropCores(enemy.x, enemy.y, enemy.coreDrops ?? 3);
+          this.dropCores(enemy.x, enemy.y, enemy.coreDrops ?? 3, enemy.isFinalBoss);
           if (enemy.isBoss) { this.dropRareItem(enemy.x, enemy.y); this.boss = null; }
           this.dropEliteItem(enemy);
           if (this.player.healOnKill > 0) this.player.heal(this.player.healOnKill);
@@ -357,10 +357,12 @@ export default class EnemyManager {
       }
     }
 
-    // 1% 확률로 엘리트 — 보스방이 아닌 일반/출구방 전용
-    if (this.enemies.length > 0 && Math.random() < ELITE_CHANCE) {
-      const pick = this.enemies[Math.floor(Math.random() * this.enemies.length)];
-      this._makeElite(pick);
+    // 각 적마다 1% 확률로 엘리트 — 방당 최대 1마리 제한
+    for (const enemy of this.enemies) {
+      if (Math.random() < ELITE_CHANCE) {
+        this._makeElite(enemy);
+        break;
+      }
     }
   }
 
@@ -497,13 +499,13 @@ export default class EnemyManager {
     this._frozen.clear();
   }
 
-  /** 적 1마리를 엘리트로 변환: HP 4배, 나머지 능력치 2배, 붉은 틴트로 외형 강조 */
+  /** 적 1마리를 엘리트로 변환: HP 4배, 나머지 능력치 2배, 코어 드롭 5배(최소 8), 붉은 틴트로 외형 강조 */
   _makeElite(enemy) {
     enemy.maxHp  *= 4;
     enemy.hp      = enemy.maxHp;
     enemy.damage *= 2;
     if (typeof enemy.speed === 'number') enemy.speed *= 2;
-    enemy.coreDrops = (enemy.coreDrops ?? 3) * 2;
+    enemy.coreDrops = Math.max(8, (enemy.coreDrops ?? 3) * 5);
     enemy.isElite = true;
 
 
@@ -581,7 +583,7 @@ export default class EnemyManager {
         this._poisoned.delete(e);
         this._burned.delete(e);
         this._frozen.delete(e);
-        this.dropCores(e.x, e.y, e.coreDrops ?? 3);
+        this.dropCores(e.x, e.y, e.coreDrops ?? 3, e.isFinalBoss);
         if (e.isBoss) { this.dropRareItem(e.x, e.y); this.boss = null; }
         this.dropEliteItem(e);
         if (this.player.healOnKill > 0) this.player.heal(this.player.healOnKill);
@@ -632,7 +634,7 @@ export default class EnemyManager {
         const died = nearest.poisonHp(dmg);
         showDamageNumber(this.scene, nearest.x, nearest.y - nearest.gameObject.height / 2, dmg, '#ddff22');
         if (died) {
-          this.dropCores(nearest.x, nearest.y, nearest.coreDrops ?? 3);
+          this.dropCores(nearest.x, nearest.y, nearest.coreDrops ?? 3, nearest.isFinalBoss);
           if (nearest.isBoss) { this.dropRareItem(nearest.x, nearest.y); this.boss = null; }
           this.dropEliteItem(nearest);
           if (this.player.healOnKill > 0) this.player.heal(this.player.healOnKill);
@@ -688,11 +690,41 @@ export default class EnemyManager {
     this.scene.events.emit('elite-killed', { x: enemy.x, y: enemy.y });
   }
 
-  dropCores(x, y, count) {
+  dropCores(x, y, count, isBoss = false) {
+    if (isBoss) { this.dropCoresBoss(x, y, count); return; }
     ({ x, y } = this.scene.roomManager?.findSafeDropPos(x, y) ?? { x, y });
     // 영구 해금 '코어 수집기' (×1.15) — 소수점은 반올림, 최소 1개는 보장
     const mult = this.player?.coreDropMult ?? 1;
     const finalCount = Math.max(1, Math.round(count * mult));
     for (let i = 0; i < finalCount; i++) this.cores.push(new Core(this.scene, x, y));
+  }
+
+  /** 보스 처치 전용: 코어를 방 전체에 분산 드롭 (Core 초기 tween을 교체) */
+  dropCoresBoss(x, y, count) {
+    const mult = this.player?.coreDropMult ?? 1;
+    const finalCount = Math.max(1, Math.round(count * mult));
+    const wb  = this.scene.physics.world.bounds;
+    const pad = 50;
+    for (let i = 0; i < finalCount; i++) {
+      const tx   = wb.x + pad + Math.random() * (wb.width  - pad * 2);
+      const ty   = wb.y + pad + Math.random() * (wb.height - pad * 2);
+      const core = new Core(this.scene, x, y);
+      this.scene.tweens.killTweensOf(core.gameObject);
+      core.gameObject.setPosition(x, y);
+      this.scene.tweens.add({
+        targets:  core.gameObject,
+        x: tx, y: ty,
+        duration: 250 + Math.random() * 200,
+        ease:     'Quad.Out',
+        onComplete: () => {
+          if (!core.alive) return;
+          this.scene.tweens.add({
+            targets: core.gameObject, y: ty - 5,
+            duration: 750, yoyo: true, repeat: -1, ease: 'Sine.InOut',
+          });
+        },
+      });
+      this.cores.push(core);
+    }
   }
 }

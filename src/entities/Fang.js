@@ -80,7 +80,8 @@ export default class Fang {
     this.alive     = true;
     this.destroyed = false;
     this.coreDrops = 50;
-    this.isBoss    = true;
+    this.isBoss      = true;
+    this.isFinalBoss = true;
 
     this._phase         = 1;
     this._patternCd     = 1.0;

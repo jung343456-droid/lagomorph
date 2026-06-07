@@ -1,6 +1,6 @@
 /**
  * 검은곰 (BlackBear) — 8층 중간 보스 (구역 2)
- * HP 448 / 속도 176 / 데미지 24(접촉) / 코어 18
+ * HP 448 / 속도 176 / 데미지 24(접촉) / 코어 30
  * 크기 70×70px
  *
  * 패턴:
@@ -71,7 +71,7 @@ export default class BlackBear {
 
     this.alive     = true;
     this.destroyed = false;
-    this.coreDrops = 18;
+    this.coreDrops = 30;
     this.isBoss    = true;  // UIScene 보스 HP바 표시 + 처치 시 레어 아이템 드롭
 
     this._slamCd        = SLAM_CD;

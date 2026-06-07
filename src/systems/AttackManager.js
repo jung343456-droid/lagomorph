@@ -330,7 +330,7 @@ export default class AttackManager {
       this.player.heal(this.player.critHealAmount);
     }
     if (dead) {
-      em.dropCores(enemy.x, enemy.y, enemy.coreDrops ?? 3);
+      em.dropCores(enemy.x, enemy.y, enemy.coreDrops ?? 3, enemy.isFinalBoss);
       if (enemy.isBoss) { em.dropRareItem(enemy.x, enemy.y); em.boss = null; }
       em.dropEliteItem(enemy);
       if (this.player.healOnKill > 0) this.player.heal(this.player.healOnKill);
@@ -364,7 +364,7 @@ export default class AttackManager {
           this.player.heal(this.player.critHealAmount);
         }
         if (splashDead) {
-          em.dropCores(other.x, other.y, other.coreDrops ?? 3);
+          em.dropCores(other.x, other.y, other.coreDrops ?? 3, other.isFinalBoss);
           if (other.isBoss) { em.dropRareItem(other.x, other.y); em.boss = null; }
           em.dropEliteItem(other);
           if (this.player.healOnKill > 0) this.player.heal(this.player.healOnKill);

@@ -95,7 +95,8 @@ export default class OwlKing {
     this.alive     = true;
     this.destroyed = false;
     this.coreDrops = 60;
-    this.isBoss    = true;
+    this.isBoss      = true;
+    this.isFinalBoss = true;
 
     this._phase         = 1;
     this._patternCd     = 1.2;
