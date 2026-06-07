@@ -52,6 +52,12 @@ export default class InputManager {
     this._reset();
   }
 
+  /** 조이스틱 그래픽 표시/숨김 — 대화·메뉴 오버레이가 가려지지 않도록 (idempotent). */
+  setVisible(v) {
+    if (this._baseGfx?.active)  this._baseGfx.setVisible(v);
+    if (this._thumbGfx?.active) this._thumbGfx.setVisible(v);
+  }
+
   /** 정규화 아날로그 방향 { x, y } — update() 마다 호출 */
   getDirection() {
     if (this._disabled) return { x: 0, y: 0 };

@@ -21,7 +21,7 @@ import InputManager from '../utils/InputManager';
 import Shopkeeper from '../entities/Shopkeeper';
 import Room, { ROOM_W, ROOM_H } from '../world/Room';
 import UnlockMenu from '../ui/UnlockMenu';
-import { getMetaCores, getShopDiscovered, resetAllProgress } from '../data/MetaProgress';
+import { getMetaCores, getShopDiscovered, resetAllProgress, getGrimIntroShown, markGrimIntroShown } from '../data/MetaProgress';
 import { safeInsetBottom } from '../utils/SafeArea';
 
 const DLG_BOTTOM_PAD = 16;  // 대화 패널 하단 추가 여백 (floor 위에 더하는 숨 쉴 공간)
@@ -52,9 +52,6 @@ const GRIM_TIPS = [
   ['기억이 코어라는 말, 들어봤어? 나는 그게 비유가 아니라고 생각해. 그냥 내 생각이야.'],
   ['코어가 어디로 가는지 생각해봤어? 나는 안 생각하려고 해. 그게 편하더라고.'],
 ];
-
-// 세션 내 첫 만남 여부 — HubScene 재생성(씬 restart)에도 유지
-let _grimIntroShown = false;
 
 const MACHINE_W       = 110;
 const MACHINE_H       = 140;
@@ -116,14 +113,21 @@ export default class HubScene extends Phaser.Scene {
       );
     }
 
-    // 해금 메뉴 — Shopkeeper 근접 시: 대화 → 메뉴 순으로 진행
-    this._unlockMenu = null;
+    // 해금 메뉴 — Shopkeeper 근접 시: 첫 접근은 대화 → 메뉴, 이후엔 메뉴 바로 오픈
+    this._unlockMenu  = null;
+    this._grimGreeted = false;  // 이번 HUB 방문에서 인사 완료 여부 (왔다갔다 시 재대화 방지)
     this.events.on('unlock-menu-requested', () => {
-      if (this._unlockMenu?.alive) return;
-      const lines = _grimIntroShown
+      if (this._unlockMenu?.alive || this._grimDialogueOpen) return;
+      this.player.halt();  // 대화/메뉴 진입 시 잔여 속도로 미끄러지는 것 방지
+      // 이미 인사했으면 대화 없이 메뉴 바로 오픈
+      if (this._grimGreeted) { this._openUnlockMenu(); return; }
+      this._grimGreeted = true;
+      // 첫 인사 대사는 게임 전체에서 딱 1회, 이후로는 랜덤 팁
+      const introDone = getGrimIntroShown();
+      const lines = introDone
         ? GRIM_TIPS[Math.floor(Math.random() * GRIM_TIPS.length)]
         : GRIM_START_LINES;
-      _grimIntroShown = true;
+      if (!introDone) markGrimIntroShown();
       this._showGrimDialogue(lines, () => this._openUnlockMenu());
     });
 
@@ -138,7 +142,10 @@ export default class HubScene extends Phaser.Scene {
   }
 
   update(_time, delta) {
-    if (this._starting || this._grimDialogueOpen) return;
+    // 대화·해금 메뉴가 열려 있으면 이동 차단 + 조이스틱 숨김 (오버레이 가림 방지)
+    const blocked = this._starting || this._grimDialogueOpen || this._unlockMenu?.alive;
+    this.input$.setVisible(!blocked);
+    if (blocked) return;
     this.player.update(this.input$.getDirection(), delta);
     if (this._shopkeeper) this._shopkeeper.update(this.player);
 
@@ -360,33 +367,7 @@ export default class HubScene extends Phaser.Scene {
     }).setOrigin(0.5).setScrollFactor(0).setDepth(92);
     this.tweens.add({ targets: advInd, alpha: { from: 1, to: 0.2 }, duration: 700, yoyo: true, repeat: -1 });
 
-    // 패널 하단에서 42px 위 — 하단이 약간 잘려도 버튼은 살아남도록 여유
-    const btnY = panelY + panelH / 2 - 42;
-    const btnMenu = this.add.text(panelX - 55, btnY, '[해금 메뉴]', {
-      fontSize: '14px', color: '#4ecca3', fontFamily: 'monospace', fontStyle: 'bold',
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(92).setInteractive({ cursor: 'pointer' }).setVisible(false);
-    btnMenu.on('pointerover', () => btnMenu.setColor('#ffffff'));
-    btnMenu.on('pointerout',  () => btnMenu.setColor('#4ecca3'));
-
-    const btnLeave = this.add.text(panelX + 72, btnY, '[됐어]', {
-      fontSize: '14px', color: '#88aacc', fontFamily: 'monospace',
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(92).setInteractive({ cursor: 'pointer' }).setVisible(false);
-    btnLeave.on('pointerover', () => btnLeave.setColor('#ffffff'));
-    btnLeave.on('pointerout',  () => btnLeave.setColor('#88aacc'));
-
-    els.push(backdrop, panel, portrait, nameLabel, divider, dlgText, advInd, btnMenu, btnLeave);
-
-    const showButtons = () => {
-      advInd.setVisible(false);
-      btnLeave.setVisible(true);
-      if (onComplete) {
-        btnMenu.setVisible(true);
-        btnMenu.on('pointerdown', () => { close(); onComplete(); });
-      } else {
-        btnLeave.setX(GAME_W / 2);
-      }
-      btnLeave.on('pointerdown', close);
-    };
+    els.push(backdrop, panel, portrait, nameLabel, divider, dlgText, advInd);
 
     const typewriteLine = (text) => {
       typing = true; fullText = text;
@@ -397,26 +378,29 @@ export default class HubScene extends Phaser.Scene {
         callback: () => {
           i++;
           dlgText.setText(text.slice(0, i));
-          if (i >= text.length) {
-            typing = false; typeTimer = null;
-            if (lineIdx >= lines.length - 1) showButtons();
-          }
+          if (i >= text.length) { typing = false; typeTimer = null; }
         },
       });
     };
 
     const advance = () => {
+      // 타이핑 중 탭 → 즉시 전체 표시
       if (typing) {
         if (typeTimer) { typeTimer.remove(); typeTimer = null; }
         typing = false;
         dlgText.setText(fullText);
-        if (lineIdx >= lines.length - 1) showButtons();
         return;
       }
-      if (btnMenu.visible) return;          // 2개 버튼 — 버튼으로만 진행
-      if (btnLeave.visible) { close(); return; }  // 1개 버튼 — 아무데나 탭으로 종료
+      // 마지막 줄에서 탭 → 대화 종료 + 완료 콜백(해금 메뉴 오픈). 버튼 선택지 없음.
+      if (lineIdx >= lines.length - 1) {
+        close();
+        onComplete?.();
+        return;
+      }
+      // 다음 줄
       lineIdx++;
-      if (lineIdx < lines.length) { dlgText.setText(''); typewriteLine(lines[lineIdx]); }
+      dlgText.setText('');
+      typewriteLine(lines[lineIdx]);
     };
 
     backdrop.on('pointerdown', advance);

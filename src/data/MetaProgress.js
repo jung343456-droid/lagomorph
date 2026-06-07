@@ -19,6 +19,7 @@ import { UNLOCK_NODES } from './UnlockTree';
 const META_CORES_KEY       = 'lagomorph_meta_cores';
 const UNLOCK_NODES_KEY     = 'lagomorph_unlock_nodes';
 const SHOP_DISCOVERED_KEY  = 'lagomorph_shop_discovered';
+const GRIM_INTRO_KEY       = 'lagomorph_grim_intro'; // 해금상점 GRIM 첫 인사 대사를 본 적 있는지 (게임 전체 1회)
 const PASSIVE_ITEMS_KEY    = 'lagomorph_unlocked'; // PassiveItem.js 와 키 공유 — 초기화 대상에 포함
 
 // ── 메타 코어 ────────────────────────────────────────
@@ -152,6 +153,18 @@ export function markShopDiscovered() {
   try { localStorage.setItem(SHOP_DISCOVERED_KEY, 'true'); } catch {}
 }
 
+// ── GRIM 첫 인사 플래그 (게임 전체 1회) ──────────────
+
+export function getGrimIntroShown() {
+  try { return localStorage.getItem(GRIM_INTRO_KEY) === 'true'; }
+  catch { return false; }
+}
+
+/** 해금상점에서 GRIM 첫 인사 대사를 처음 출력하는 순간 호출 — 이후로는 랜덤 팁만 나온다. */
+export function markGrimIntroShown() {
+  try { localStorage.setItem(GRIM_INTRO_KEY, 'true'); } catch {}
+}
+
 // ── 전체 초기화 ──────────────────────────────────────
 
 /** 메타 코어·해금 노드·상점 발견·패시브 획득 이력을 전부 삭제. Hub HUD 초기화 버튼에서 호출. */
@@ -160,6 +173,7 @@ export function resetAllProgress() {
     localStorage.removeItem(META_CORES_KEY);
     localStorage.removeItem(UNLOCK_NODES_KEY);
     localStorage.removeItem(SHOP_DISCOVERED_KEY);
+    localStorage.removeItem(GRIM_INTRO_KEY);
     localStorage.removeItem(PASSIVE_ITEMS_KEY);
   } catch {}
 }

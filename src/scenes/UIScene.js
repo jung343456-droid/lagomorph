@@ -1141,31 +1141,15 @@ export default class UIScene extends Phaser.Scene {
       duration: 700, yoyo: true, repeat: -1,
     });
 
-    // 마지막 줄 선택지 버튼 — 패널 하단에서 42px 위(하단 약간 잘려도 버튼 유지)
-    const btnY = panelY + panelH / 2 - 42;
-    this._dlgBtnShop = this.add.text(panelX - 55, btnY, '[둘러보기]', {
-      fontSize: '14px', color: '#4ecca3', fontFamily: 'monospace', fontStyle: 'bold',
-    }).setOrigin(0.5).setDepth(92).setInteractive({ cursor: 'pointer' });
-    this._dlgBtnShop.on('pointerover', () => this._dlgBtnShop.setColor('#ffffff'));
-    this._dlgBtnShop.on('pointerout',  () => this._dlgBtnShop.setColor('#4ecca3'));
-
-    this._dlgBtnLeave = this.add.text(panelX + 72, btnY, '[됐어]', {
-      fontSize: '14px', color: '#88aacc', fontFamily: 'monospace',
-    }).setOrigin(0.5).setDepth(92).setInteractive({ cursor: 'pointer' });
-    this._dlgBtnLeave.on('pointerover', () => this._dlgBtnLeave.setColor('#ffffff'));
-    this._dlgBtnLeave.on('pointerout',  () => this._dlgBtnLeave.setColor('#88aacc'));
-
     this._dlgStaticEls = [backdrop, this._dlgPanel, this._dlgPortrait, this._dlgName,
                           this._dlgDivider, this._dlgText, this._dlgAdvance];
     this._dlgStaticEls.forEach(el => el.setVisible(false));
-    this._dlgBtnShop.setVisible(false);
-    this._dlgBtnLeave.setVisible(false);
 
     // 열 때마다 안전영역 재측정 후 위치 보정용 — backdrop(전체화면) 제외 전 요소를 델타 이동
     this._dlgPanelY   = panelY;
     this._dlgPanelH   = panelH;
     this._dlgShiftEls = [this._dlgPanel, this._dlgPortrait, this._dlgName, this._dlgDivider,
-                         this._dlgText, this._dlgAdvance, this._dlgBtnShop, this._dlgBtnLeave];
+                         this._dlgText, this._dlgAdvance];
   }
 
   // 현재 안전영역 기준으로 대화 패널 y 를 재배치 (요소 일괄 델타 이동)
@@ -1186,8 +1170,6 @@ export default class UIScene extends Phaser.Scene {
     this._dlgOnComplete = onComplete ?? null;
     this._repositionDialogue();
     this._dlgStaticEls.forEach(el => el.setVisible(true));
-    this._dlgBtnShop.setVisible(false);
-    this._dlgBtnLeave.setVisible(false);
     this._dlgAdvance.setVisible(true);
     this._dlgText.setText('');
     this.scene.get('GameScene').scene.pause();
@@ -1208,9 +1190,6 @@ export default class UIScene extends Phaser.Scene {
         if (i >= text.length) {
           this._dlgTyping    = false;
           this._dlgTypeTimer = null;
-          if (this._dlgLineIdx >= this._dlgLines.length - 1) {
-            this._showDialogueButtons();
-          }
         }
       },
     });
@@ -1218,41 +1197,24 @@ export default class UIScene extends Phaser.Scene {
 
   _advanceDialogue() {
     if (!this._dialogueOpen) return;
+    // 타이핑 중 탭 → 즉시 전체 표시
     if (this._dlgTyping) {
       if (this._dlgTypeTimer) { this._dlgTypeTimer.remove(); this._dlgTypeTimer = null; }
       this._dlgTyping = false;
       this._dlgText.setText(this._dlgFullText);
-      if (this._dlgLineIdx >= this._dlgLines.length - 1) this._showDialogueButtons();
       return;
     }
-    if (this._dlgBtnShop.visible) return;   // 2개 버튼 — 버튼으로만 진행
-    if (this._dlgBtnLeave.visible) { this.closeDialogue(); return; }  // 1개 버튼 — 아무데나 탭으로 종료
+    // 마지막 줄에서 탭 → 대화 종료 + 완료 콜백(상점 오픈). 버튼 선택지 없음.
+    if (this._dlgLineIdx >= this._dlgLines.length - 1) {
+      const cb = this._dlgOnComplete;
+      this.closeDialogue();
+      cb?.();
+      return;
+    }
+    // 다음 줄
     this._dlgLineIdx++;
-    if (this._dlgLineIdx < this._dlgLines.length) {
-      this._dlgText.setText('');
-      this._typewriteLine(this._dlgLines[this._dlgLineIdx]);
-    }
-  }
-
-  _showDialogueButtons() {
-    this._dlgAdvance.setVisible(false);
-    this._dlgBtnLeave.removeAllListeners('pointerdown');
-    this._dlgBtnLeave.on('pointerdown', () => this.closeDialogue());
-
-    if (this._dlgOnComplete) {
-      this._dlgBtnShop.setVisible(true);
-      this._dlgBtnLeave.setVisible(true);
-      this._dlgBtnShop.removeAllListeners('pointerdown');
-      this._dlgBtnShop.on('pointerdown', () => {
-        const cb = this._dlgOnComplete;
-        this.closeDialogue();
-        cb?.();
-      });
-    } else {
-      // 상점 없는 대화 — [됐어]만 중앙에 표시
-      this._dlgBtnShop.setVisible(false);
-      this._dlgBtnLeave.setX(GAME_W / 2).setVisible(true);
-    }
+    this._dlgText.setText('');
+    this._typewriteLine(this._dlgLines[this._dlgLineIdx]);
   }
 
   closeDialogue() {
@@ -1260,8 +1222,6 @@ export default class UIScene extends Phaser.Scene {
     this._dialogueOpen = false;
     if (this._dlgTypeTimer) { this._dlgTypeTimer.remove(); this._dlgTypeTimer = null; }
     this._dlgStaticEls.forEach(el => el.setVisible(false));
-    this._dlgBtnShop.setVisible(false);
-    this._dlgBtnLeave.setX(GAME_W / 2 + 72).setVisible(false);  // 원래 위치 복원
     this._dlgAdvance.setVisible(true);
     this.scene.get('GameScene').scene.resume();
   }

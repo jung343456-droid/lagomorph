@@ -141,6 +141,7 @@ export default class GameScene extends Phaser.Scene {
     // 상점 열기 요청 (Shopkeeper NPC 근접 시 발행)
     this.events.on('shop-open-requested', () => {
       if (!this._shopkeeper) return;
+      this.player.halt();  // 대화/상점 진입 시 잔여 속도로 미끄러지는 것 방지
       const ui    = this.scene.get('UIScene');
       const slots = this._shopkeeper.shopSlots;
       if (!this._grimMet) {

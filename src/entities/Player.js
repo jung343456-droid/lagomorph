@@ -269,6 +269,14 @@ export default class Player {
     });
   }
 
+  /** 즉시 정지 — 대화/메뉴 진입 시 잔여 속도로 미끄러지는 것 방지 (정지 프레임 고정) */
+  halt() {
+    this.gameObject.body.setVelocity(0, 0);
+    this._animFrame = 0;
+    this._animTimer = 0;
+    this.gameObject.setFrame(this._row * 4, false, false);
+  }
+
   /** 보스 포효 등 무피해 기절 (무적 중엔 무시) */
   stun(duration) {
     if (this._invincible) return;
