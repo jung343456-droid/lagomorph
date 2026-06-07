@@ -24,7 +24,10 @@ import UnlockMenu from '../ui/UnlockMenu';
 import { getMetaCores, getShopDiscovered, resetAllProgress } from '../data/MetaProgress';
 import { safeInsetBottom } from '../utils/SafeArea';
 
-const DLG_BOTTOM_PAD = 16;  // 대화 패널 하단 기본 여백 (안전영역과 별개로 항상 확보)
+const DLG_BOTTOM_PAD = 16;  // 대화 패널 하단 추가 여백 (floor 위에 더하는 숨 쉴 공간)
+// 측정값이 0이어도 보장하는 최소 하단 확보량(게임 좌표). 일반 브라우저 탭에선 홈 인디케이터·
+// 제스처바가 env()/visualViewport 로 보고되지 않으므로, 측정값과 floor 중 큰 쪽을 쓴다.
+const DLG_MIN_BOTTOM = 60;
 
 const GRIM_START_LINES = [
   '어. 왔군.',
@@ -316,8 +319,9 @@ export default class HubScene extends Phaser.Scene {
     const panelW = GAME_W - 20;
     const panelH = 180;
     const panelX = GAME_W / 2;
-    // 하단 마진 = 기본 여백 + 기종별 안전영역(홈 인디케이터·제스처바) 환산값
-    const panelY = GAME_H - panelH / 2 - (DLG_BOTTOM_PAD + safeInsetBottom(this));
+    // 하단 마진 = 기본 여백 + max(측정 안전영역, 최소 floor)
+    const panelY = GAME_H - panelH / 2
+      - (DLG_BOTTOM_PAD + Math.max(safeInsetBottom(this), DLG_MIN_BOTTOM));
     const L = panelX - panelW / 2;
     const T = panelY - panelH / 2;
     const els = [];
@@ -351,12 +355,13 @@ export default class HubScene extends Phaser.Scene {
       wordWrap: { width: panelW - 80, useAdvancedWrap: true }, lineSpacing: 4,
     }).setOrigin(0, 0).setScrollFactor(0).setDepth(92);
 
-    const advInd = this.add.text(panelX + panelW / 2 - 14, panelY + panelH / 2 - 16, '▼', {
+    const advInd = this.add.text(panelX + panelW / 2 - 14, panelY + panelH / 2 - 38, '▼', {
       fontSize: '11px', color: '#4ecca3', fontFamily: 'monospace',
     }).setOrigin(0.5).setScrollFactor(0).setDepth(92);
     this.tweens.add({ targets: advInd, alpha: { from: 1, to: 0.2 }, duration: 700, yoyo: true, repeat: -1 });
 
-    const btnY = panelY + panelH / 2 - 20;
+    // 패널 하단에서 42px 위 — 하단이 약간 잘려도 버튼은 살아남도록 여유
+    const btnY = panelY + panelH / 2 - 42;
     const btnMenu = this.add.text(panelX - 55, btnY, '[해금 메뉴]', {
       fontSize: '14px', color: '#4ecca3', fontFamily: 'monospace', fontStyle: 'bold',
     }).setOrigin(0.5).setScrollFactor(0).setDepth(92).setInteractive({ cursor: 'pointer' }).setVisible(false);

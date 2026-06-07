@@ -3,7 +3,10 @@ import { GAME_W, GAME_H, HUD_H } from '../constants';
 import PassiveItem, { ITEM_DEFS } from '../entities/PassiveItem';
 import { safeInsetBottom } from '../utils/SafeArea';
 
-const DLG_BOTTOM_PAD = 16;  // 패널 하단 기본 여백 (안전영역과 별개로 항상 확보)
+const DLG_BOTTOM_PAD = 16;  // 패널 하단 추가 여백 (floor 위에 더하는 숨 쉴 공간)
+// 측정값이 0이어도 보장하는 최소 하단 확보량(게임 좌표). 일반 브라우저 탭에선 홈 인디케이터·
+// 제스처바가 env()/visualViewport 로 보고되지 않으므로, 측정값과 floor 중 큰 쪽을 쓴다.
+const DLG_MIN_BOTTOM = 60;
 
 // ── 상단 패널 레이아웃 ────────────────────────────────
 const TOP_H      = HUD_H; // 상단 패널 높이 — constants.HUD_H 와 반드시 일치
@@ -1091,8 +1094,8 @@ export default class UIScene extends Phaser.Scene {
     const panelW = GAME_W - 20;
     const panelH = 180;
     const panelX = GAME_W / 2;
-    // 하단 마진 = 기본 여백 + 기종별 안전영역(홈 인디케이터·제스처바) 환산값
-    const bottomMargin = DLG_BOTTOM_PAD + safeInsetBottom(this);
+    // 하단 마진 = 기본 여백 + max(측정 안전영역, 최소 floor)
+    const bottomMargin = DLG_BOTTOM_PAD + Math.max(safeInsetBottom(this), DLG_MIN_BOTTOM);
     const panelY = GAME_H - panelH / 2 - bottomMargin;
     const L = panelX - panelW / 2;
     const T = panelY - panelH / 2;
@@ -1130,7 +1133,7 @@ export default class UIScene extends Phaser.Scene {
     }).setOrigin(0, 0).setDepth(92);
 
     // 진행 인디케이터 ▼ (깜빡임)
-    this._dlgAdvance = this.add.text(panelX + panelW / 2 - 14, panelY + panelH / 2 - 16, '▼', {
+    this._dlgAdvance = this.add.text(panelX + panelW / 2 - 14, panelY + panelH / 2 - 38, '▼', {
       fontSize: '11px', color: '#4ecca3', fontFamily: 'monospace',
     }).setOrigin(0.5).setDepth(92);
     this.tweens.add({
@@ -1138,8 +1141,8 @@ export default class UIScene extends Phaser.Scene {
       duration: 700, yoyo: true, repeat: -1,
     });
 
-    // 마지막 줄 선택지 버튼
-    const btnY = panelY + panelH / 2 - 20;
+    // 마지막 줄 선택지 버튼 — 패널 하단에서 42px 위(하단 약간 잘려도 버튼 유지)
+    const btnY = panelY + panelH / 2 - 42;
     this._dlgBtnShop = this.add.text(panelX - 55, btnY, '[둘러보기]', {
       fontSize: '14px', color: '#4ecca3', fontFamily: 'monospace', fontStyle: 'bold',
     }).setOrigin(0.5).setDepth(92).setInteractive({ cursor: 'pointer' });
@@ -1157,6 +1160,22 @@ export default class UIScene extends Phaser.Scene {
     this._dlgStaticEls.forEach(el => el.setVisible(false));
     this._dlgBtnShop.setVisible(false);
     this._dlgBtnLeave.setVisible(false);
+
+    // 열 때마다 안전영역 재측정 후 위치 보정용 — backdrop(전체화면) 제외 전 요소를 델타 이동
+    this._dlgPanelY   = panelY;
+    this._dlgPanelH   = panelH;
+    this._dlgShiftEls = [this._dlgPanel, this._dlgPortrait, this._dlgName, this._dlgDivider,
+                         this._dlgText, this._dlgAdvance, this._dlgBtnShop, this._dlgBtnLeave];
+  }
+
+  // 현재 안전영역 기준으로 대화 패널 y 를 재배치 (요소 일괄 델타 이동)
+  _repositionDialogue() {
+    const desiredY = GAME_H - this._dlgPanelH / 2
+      - (DLG_BOTTOM_PAD + Math.max(safeInsetBottom(this), DLG_MIN_BOTTOM));
+    const delta = desiredY - this._dlgPanelY;
+    if (delta === 0) return;
+    this._dlgShiftEls.forEach(el => { el.y += delta; });
+    this._dlgPanelY = desiredY;
   }
 
   openDialogue(lines, onComplete) {
@@ -1165,6 +1184,7 @@ export default class UIScene extends Phaser.Scene {
     this._dlgLines      = lines;
     this._dlgLineIdx    = 0;
     this._dlgOnComplete = onComplete ?? null;
+    this._repositionDialogue();
     this._dlgStaticEls.forEach(el => el.setVisible(true));
     this._dlgBtnShop.setVisible(false);
     this._dlgBtnLeave.setVisible(false);

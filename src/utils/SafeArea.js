@@ -1,16 +1,16 @@
 /**
- * SafeArea — 모바일 안전영역(노치·홈 인디케이터) 측정 유틸
+ * SafeArea — 화면 하단이 가려지는 양을 게임 좌표 단위로 측정
  *
- * Scale.FIT 캔버스는 게임 좌표(390×844)와 실제 화면 CSS 픽셀의 배율이 기종마다 다르다.
- * `env(safe-area-inset-*)` 는 CSS 픽셀 단위이므로, 게임 좌표로 환산해야 UI 패널 마진에 쓸 수 있다.
+ * 모바일에서 대화 패널 하단이 잘리는 원인은 두 가지가 섞여 있다:
+ *   1. 노치 기기의 홈 인디케이터·제스처바 (env(safe-area-inset-bottom))
+ *   2. 100vh 로 잡힌 캔버스가 브라우저 툴바/제스처 영역 아래로 뻗어 보이는 영역 밖으로 나감
+ * 일반 브라우저에선 (1)이 0으로 보고되므로 env() 만으로는 (2)를 못 잡는다.
  *
- * 동작:
- *   1. 숨김 probe 엘리먼트로 `env(safe-area-inset-bottom)` 의 실제 CSS px 값을 읽는다.
- *   2. 캔버스의 화면상 실제 위치(getBoundingClientRect)로 캔버스 하단~화면 하단 여백을 구한다.
- *      → letterbox(상하 검은 띠)로 이미 띄워진 만큼은 안전영역과 겹치지 않으므로 차감.
- *   3. 남은 겹침(px)을 displayScale.y(게임좌표/CSS px)로 곱해 게임 좌표 단위로 환산.
+ * 그래서 env() 에 의존하지 않고 "캔버스의 실제 하단 위치(getBoundingClientRect.bottom)"를
+ * "실제로 보이는 영역의 안전한 하단(visualViewport 높이 − 안전영역 인셋)"과 직접 비교한다.
+ * 캔버스 하단이 그 선을 넘은 만큼이 가려진 양이며, Scale.FIT 배율로 게임 좌표로 환산한다.
  *
- * 전제: index.html 의 viewport 메타에 `viewport-fit=cover` 가 있어야 env() 가 0이 아닌 값을 준다.
+ * 전제: index.html viewport 메타에 viewport-fit=cover (노치 인셋이 0이 아니게).
  */
 
 let _probe = null;
@@ -27,25 +27,24 @@ function readInsetCss(side) {
 }
 
 /**
- * 화면 하단 안전영역을 게임 좌표 단위로 환산해 반환.
- * 안전영역이 없거나 letterbox 로 이미 가려지지 않는 기종에서는 0.
+ * 화면 하단이 가려지는 양을 게임 좌표 단위로 반환. 가려지는 곳이 없으면 0.
  * @param {Phaser.Scene} scene
  * @returns {number} 게임 좌표 단위 하단 마진
  */
 export function safeInsetBottom(scene) {
-  const insetCss = readInsetCss('bottom');
-  if (insetCss <= 0) return 0;
-
   const canvas = scene.game.canvas;
   const rect   = canvas.getBoundingClientRect();
   if (rect.height <= 0) return 0;
-  // 캔버스 하단과 화면(visual viewport) 하단 사이 여백 — letterbox 띠
-  const gapBelowCss = Math.max(0, window.innerHeight - rect.bottom);
-  // letterbox 로 이미 띄워진 만큼 빼고 남은 실제 겹침
-  const overlapCss  = Math.max(0, insetCss - gapBelowCss);
-  if (overlapCss <= 0) return 0;
 
-  // 게임좌표/CSS px 배율 = 게임 높이 / 캔버스 실제 CSS 높이 (displayScale.y 와 동일하나 초기화 타이밍 무관)
+  // 실제로 보이는 영역 높이 (visualViewport 가 키보드·툴바 반영해 더 정확)
+  const vpH = window.visualViewport?.height ?? window.innerHeight;
+  // 보이는 영역 중 안전한 하단 경계 (홈 인디케이터 인셋 제외)
+  const safeBottomCss = vpH - readInsetCss('bottom');
+  // 캔버스 하단이 안전 경계를 넘어 가려진 양 (뷰포트 밖 + 인셋 겹침 통합)
+  const hiddenCss = Math.max(0, rect.bottom - safeBottomCss);
+  if (hiddenCss <= 0) return 0;
+
+  // 게임좌표/CSS px 배율 = 게임 높이 / 캔버스 실제 CSS 높이
   const scaleY = scene.scale.gameSize.height / rect.height;
-  return overlapCss * scaleY;
+  return hiddenCss * scaleY;
 }

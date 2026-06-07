@@ -27,14 +27,15 @@
 
     #game-container {
       width: 100%;
-      height: 100%;
+      /* dvh = 동적 뷰포트 높이: 모바일 브라우저 툴바/제스처 영역을 제외한 '실제로 보이는' 높이.
+         100% / 100vh 는 툴바 아래까지 포함해 캔버스가 화면 밖으로 넘쳐 하단이 잘린다. */
+      height: 100vh;
+      height: 100dvh;
     }
 
     /* Phaser canvas */
     #game-container canvas {
       display: block;
-      /* safe area inset 대응 (노치, 홈바) */
-      max-height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
     }
   </style>
 </head>
