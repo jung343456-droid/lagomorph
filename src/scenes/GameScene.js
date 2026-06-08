@@ -216,6 +216,19 @@ export default class GameScene extends Phaser.Scene {
       delay: 10000, loop: true, callback: () => this._autosave(),
     });
 
+    // 백그라운드 전환 시 즉시 저장 — 모바일(Android WebView) 대응.
+    //   앱이 백그라운드로 가면 rAF 가 멈춰 주기 타이머가 안 돌고, OS 가 clean shutdown 없이
+    //   프로세스를 죽일 수 있다. visibilitychange(hidden)/pagehide 시점에 동기 저장으로 진행분을 보존한다.
+    //   localStorage.setItem 은 동기라 페이지 freeze 전에 확실히 flush 된다.
+    this._onAppHide = () => { if (document.hidden) this._saveOnBackground(); };
+    this._onPageHide = () => this._saveOnBackground();
+    document.addEventListener('visibilitychange', this._onAppHide);
+    window.addEventListener('pagehide', this._onPageHide);
+    this.events.once('shutdown', () => {
+      document.removeEventListener('visibilitychange', this._onAppHide);
+      window.removeEventListener('pagehide', this._onPageHide);
+    });
+
     // 복원 완료 — 이후부터 자동저장 허용
     this._restoring = false;
   }
@@ -225,6 +238,14 @@ export default class GameScene extends Phaser.Scene {
     if (this._restoring) return;
     if (this._endScreenEls) return;
     if (this.scene.isPaused()) return;
+    if (!this.player || this.player.hp <= 0) return;
+    saveRunState(this);
+  }
+
+  /** 백그라운드 전환 시 저장 — 일시정지 여부는 무시(멈춘 상태도 보존 대상). */
+  _saveOnBackground() {
+    if (this._restoring) return;
+    if (this._endScreenEls) return;
     if (!this.player || this.player.hp <= 0) return;
     saveRunState(this);
   }
