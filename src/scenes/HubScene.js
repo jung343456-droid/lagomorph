@@ -22,6 +22,7 @@ import Shopkeeper from '../entities/Shopkeeper';
 import Room, { ROOM_W, ROOM_H } from '../world/Room';
 import UnlockMenu from '../ui/UnlockMenu';
 import { getMetaCores, getShopDiscovered, resetAllProgress, getGrimIntroShown, markGrimIntroShown } from '../data/MetaProgress';
+import { hasRunSave } from '../data/SaveManager';
 import { safeInsetBottom } from '../utils/SafeArea';
 
 const DLG_BOTTOM_PAD = 16;  // 대화 패널 하단 추가 여백 (floor 위에 더하는 숨 쉴 공간)
@@ -101,6 +102,9 @@ export default class HubScene extends Phaser.Scene {
 
     // 중앙 기상 기계
     this._buildMachine();
+
+    // 저장된 런이 있으면 "이어하기" 버튼 노출 (기계 하단)
+    if (hasRunSave()) this._buildContinueButton();
 
     // 메타 코어 상단 표시 (HUD 영역 위쪽 절반)
     this._buildHud();
@@ -427,6 +431,38 @@ export default class HubScene extends Phaser.Scene {
     this.cameras.main.fadeOut(450, 0, 0, 0);
     this.cameras.main.once('camerafadeoutcomplete', () => {
       this.scene.start('GameScene');
+    });
+  }
+
+  /** 이어하기 — 저장된 런을 복원하며 GameScene 진입. */
+  _continueRun() {
+    if (this._starting) return;
+    this._starting = true;
+    this.cameras.main.fadeOut(450, 0, 0, 0);
+    this.cameras.main.once('camerafadeoutcomplete', () => {
+      this.scene.start('GameScene', { restore: true });
+    });
+  }
+
+  /** 저장된 런이 있을 때만 노출되는 "이어하기" 버튼 — 기상 기계 하단. */
+  _buildContinueButton() {
+    const cx = this._machineX;
+    const cy = this._machineY + MACHINE_H / 2 + 58;
+
+    const btn = this.add.rectangle(cx, cy, 168, 40, 0x141c30)
+      .setStrokeStyle(2, 0x88aaff, 0.95).setDepth(7)
+      .setInteractive({ cursor: 'pointer' });
+    const txt = this.add.text(cx, cy, '▶ 이어하기', {
+      fontSize: '15px', color: '#aaccff', fontFamily: 'monospace', fontStyle: 'bold',
+    }).setOrigin(0.5).setDepth(8);
+
+    btn.on('pointerover', () => btn.setFillStyle(0x1e2a44));
+    btn.on('pointerout',  () => btn.setFillStyle(0x141c30));
+    btn.on('pointerdown', () => this._continueRun());
+
+    this.tweens.add({
+      targets: [btn, txt], alpha: 0.7,
+      duration: 700, yoyo: true, repeat: -1, ease: 'Sine.InOut',
     });
   }
 }

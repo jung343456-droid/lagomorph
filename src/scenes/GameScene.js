@@ -10,6 +10,7 @@ import { ROOM_W, ROOM_H } from '../world/Room';
 import PassiveItem, { ITEM_DEFS } from '../entities/PassiveItem';
 import Shopkeeper from '../entities/Shopkeeper';
 import { getMetaCores, beginMetaRun, commitMetaRun, addRunPickup } from '../data/MetaProgress';
+import { saveRunState, loadRunSave, clearRunSave } from '../data/SaveManager';
 
 const GRIM_FIRST_LINES = [
   '잠깐. 거기 서봐.',
@@ -23,42 +24,50 @@ export default class GameScene extends Phaser.Scene {
     super({ key: 'GameScene' });
   }
 
-  create() {
+  create(data) {
     // scene.restart() 시 Phaser 3.60 은 이 씬의 이벤트 리스너를 자동 정리하지 않는다.
     // 이 씬에서 등록한 사용자 이벤트들을 명시적으로 비워야 listener 중복 등록을 막을 수 있다.
     ['boss-cleared', 'floor-exit-ready', 'room-entered', 'shop-open-requested', 'floor-changed', 'all-enemies-dead', 'elite-killed']
       .forEach(e => this.events.off(e));
     if (this.roomManager) this.roomManager.destroy();
 
+    // 이어하기 — data.restore + 유효 저장본이 있을 때만 복원 모드. _restoring 동안 자동저장 차단.
+    const save = data?.restore ? loadRunSave() : null;
+    this._restoring = !!save;
+
     this.player        = new Player(this, ROOM_W / 2, ROOM_H / 2);
     this.input$        = new InputManager(this);
     this.enemyManager  = new EnemyManager(this, this.player);
     this.attackManager = new AttackManager(this, this.player);
 
-    // 기본 제공 코어 + 점화의 잔해 추가 코어를 메타 픽업에 합산
-    addRunPickup(this.enemyManager.coreCount);
-    if (this.player.startingCores > 0) {
-      this.enemyManager.coreCount += this.player.startingCores;
-      addRunPickup(this.player.startingCores);
+    // 기본 제공 코어 + 점화의 잔해 추가 코어를 메타 픽업에 합산 (신규 런만 — 복원은 코어를 저장값으로 덮어씀)
+    if (!save) {
+      addRunPickup(this.enemyManager.coreCount);
+      if (this.player.startingCores > 0) {
+        this.enemyManager.coreCount += this.player.startingCores;
+        addRunPickup(this.player.startingCores);
+      }
     }
 
-    this.currentFloor = 1;
+    this.currentFloor = save ? save.currentFloor : 1;
 
-    // 던전 생성 → 첫 방 진입
+    // 던전 생성 → 첫 방 진입 (복원 모드는 아래 복원 블록에서 저장된 던전으로 진입)
     this.roomManager = new RoomManager(this, this.player, this.enemyManager);
     this.roomManager.setFloor(this.currentFloor);
-    this.roomManager.init(generateDungeon(
-      this.currentFloor, undefined, this._ownedItemIds(),
-      this.player.shopSlotBonus ?? 0, this.player.shopPriceMult ?? 1,
-    ));
+    if (!save) {
+      this.roomManager.init(generateDungeon(
+        this.currentFloor, undefined, this._ownedItemIds(),
+        this.player.shopSlotBonus ?? 0, this.player.shopPriceMult ?? 1,
+      ));
+    }
 
     // 상점방 NPC (현재 방이 'shop' 일 때만 살아 있음)
     this._shopkeeper = null;
-    this._grimMet    = false;  // 런 단위 첫 만남 플래그
+    this._grimMet    = save ? !!save.grimMet : false;  // 런 단위 첫 만남 플래그
 
-    // 시작 방 — 이전 런에서 한 번이라도 획득한 아이템 중 랜덤 1개
+    // 시작 방 아이템 — 신규 런만. 복원 시 저장된 바닥 아이템은 복원 블록에서 재생성
     this._passiveItems = [];
-    this._spawnStartRoomItem();
+    if (!save) this._spawnStartRoomItem();
 
     // 계단 상태 (아래층 진입 트리거 — A 버튼 입력 필요)
     this._stairs           = null;
@@ -69,8 +78,10 @@ export default class GameScene extends Phaser.Scene {
 
     // 엔드 스크린 — scene.restart() 시 게임 오브젝트는 파괴되지만 인스턴스 프로퍼티는 잔존하므로 명시 리셋
     this._endScreenEls    = null;
-    // 런 시작 — 픽업 카운터 리셋. 픽업분은 종료 시 commitMetaRun() 으로 정산(보존율 모델).
+    // 런 픽업 카운터 — 신규 런은 0으로 리셋, 복원 런은 저장된 픽업분을 복구.
+    // 픽업분은 종료 시 commitMetaRun() 으로 정산(보존율 모델).
     beginMetaRun();
+    if (save) addRunPickup(save.meta?.runPicked ?? 0);
 
     // 보스 클리어: 랜덤 아이템 드롭(보유 패시브 + 미수집 월드 아이템 제외) + 계단 표시 / 구역 클리어
     //   1~4·6~9: 일반 보스방 클리어 → 계단
@@ -136,6 +147,9 @@ export default class GameScene extends Phaser.Scene {
           this, ROOM_W / 2, ROOM_H * 0.32, roomData.shopSlots,
         );
       }
+
+      // 방 이동 시 자동 저장 (다음 틱 — 방 구성/적 주입 완료 후)
+      this.time.delayedCall(0, () => this._autosave());
     });
 
     // 상점 열기 요청 (Shopkeeper NPC 근접 시 발행)
@@ -155,6 +169,23 @@ export default class GameScene extends Phaser.Scene {
     // 카메라 뷰포트를 HUD 아래 영역으로 제한 → 게임/HUD 영역 시각적 분리
     this.cameras.main.setViewport(0, HUD_H, GAME_W, GAME_H - HUD_H);
     this.cameras.main.startFollow(this.player.gameObject, true, 0.08, 0.08);
+
+    // ── 이어하기 복원 ──
+    // 이벤트 핸들러 등록 이후(room-entered 로 상점 NPC/미니맵 동기화) + UIScene launch 이전에 수행.
+    // 순서: 방 진입(적 스폰 안 함) → 플레이어 좌표/스탯 적용 → 적 주입 → 트랩 복원 → 바닥 아이템/계단.
+    if (save) {
+      this.roomManager.restore(save.dungeon, save.currentRoomId);
+      this.player.applySave(save.player);
+      this.enemyManager.restoreFromSave(save.enemyState);
+      this.attackManager.restoreFromSave(save.attackState);
+      for (const it of save.floorPassiveItems ?? []) {
+        this._passiveItems.push(new PassiveItem(this, it.x, it.y, it.id));
+      }
+      if (save.stairs) {
+        this._markStairs(save.stairs.roomId, save.stairs.x, save.stairs.y);
+        this._stairsTriggered = !!save.stairs.triggered;
+      }
+    }
 
     this.scene.launch('UIScene', { gameScene: this });
 
@@ -179,6 +210,23 @@ export default class GameScene extends Phaser.Scene {
       this.attackManager.disable();
       this.time.delayedCall(400, () => this._showGameOver());
     });
+
+    // 10초 주기 자동 저장 (씬 일시정지 중에는 time 클럭이 멈춰 자동으로 스킵됨)
+    this._autosaveTimer = this.time.addEvent({
+      delay: 10000, loop: true, callback: () => this._autosave(),
+    });
+
+    // 복원 완료 — 이후부터 자동저장 허용
+    this._restoring = false;
+  }
+
+  /** 현재 런 상태를 저장. 복원 중·엔드스크린·일시정지·사망 상태에서는 스킵. */
+  _autosave() {
+    if (this._restoring) return;
+    if (this._endScreenEls) return;
+    if (this.scene.isPaused()) return;
+    if (!this.player || this.player.hp <= 0) return;
+    saveRunState(this);
   }
 
   _showGameOver() {
@@ -211,6 +259,8 @@ export default class GameScene extends Phaser.Scene {
    * - 단일 "허브로 돌아가기" 버튼
    */
   _buildRunSummary({ title, titleColor, subtitle, showCause, survived }) {
+    // 런 종료(사망 / ZONE CLEAR) — 임시 저장본 삭제 (이어하기 불가)
+    clearRunSave();
     this._endScreenEls = [];
     const push = (...els) => this._endScreenEls.push(...els);
     // 픽업분 정산 — 클리어=전량, 사망=보존율(Player.metaRetainRate)만 영속 적립

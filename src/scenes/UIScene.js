@@ -2,6 +2,8 @@ import Phaser from 'phaser';
 import { GAME_W, GAME_H, HUD_H } from '../constants';
 import PassiveItem, { ITEM_DEFS } from '../entities/PassiveItem';
 import { safeInsetBottom } from '../utils/SafeArea';
+import { saveRunState, clearRunSave } from '../data/SaveManager';
+import { commitMetaRun } from '../data/MetaProgress';
 
 const DLG_BOTTOM_PAD = 16;  // 패널 하단 추가 여백 (floor 위에 더하는 숨 쉴 공간)
 // 측정값이 0이어도 보장하는 최소 하단 확보량(게임 좌표). 일반 브라우저 탭에선 홈 인디케이터·
@@ -88,6 +90,7 @@ export default class UIScene extends Phaser.Scene {
     this._dlgTyping      = false;
     this._dlgFullText    = '';
     this._dlgTypeTimer   = null;
+    this._pauseOpen      = false;
 
     this._buildTopPanel();
     this._buildChargeGauge();
@@ -101,6 +104,8 @@ export default class UIScene extends Phaser.Scene {
     this._buildDialogueOverlay();
     this._buildMinimapHitArea();
     this._buildMinimapOverlay();
+    this._buildPauseButton();
+    this._buildPauseOverlay();
     this._bindKeys();
 
     this.scene.get('GameScene').events.on(
@@ -134,7 +139,7 @@ export default class UIScene extends Phaser.Scene {
   }
 
   update() {
-    if (this._bagOpen || this._shopOpen || this._minimapOpen || this._dialogueOpen) return;
+    if (this._bagOpen || this._shopOpen || this._minimapOpen || this._dialogueOpen || this._pauseOpen) return;
     const { player, attackManager, enemyManager } = this.gameScene ?? {};
     if (player)        this._updateHP(player.hp, player.maxHp);
     if (attackManager) this._updateChargeGauge(attackManager);
@@ -1077,6 +1082,8 @@ export default class UIScene extends Phaser.Scene {
       else if (this._shopOpen)     this.closeShop();
       else if (this._minimapOpen)  this._closeMinimap();
       else if (this._dialogueOpen) this.closeDialogue();
+      else if (this._pauseOpen)    this._closePause();
+      else                         this._openPause();
     });
   }
 
@@ -1086,6 +1093,92 @@ export default class UIScene extends Phaser.Scene {
     this.tweens.killTweensOf(rect);
     rect.setAlpha(1);
     this.tweens.add({ targets: rect, alpha: 0.8, duration: 200, ease: 'Quad.In' });
+  }
+
+  // ── 일시정지 메뉴 ─────────────────────────────────────
+
+  /** HUD 좌상단 ⏸ 버튼 — 터치 환경(ESC 불가)에서 일시정지 메뉴 토글. */
+  _buildPauseButton() {
+    const cx = 15, cy = 12;
+    const btn = this.add.rectangle(cx, cy, 22, 18, 0x0e0e1e)
+      .setStrokeStyle(1.5, 0x445588, 0.9).setDepth(60)
+      .setInteractive({ cursor: 'pointer' });
+    const g = this.add.graphics().setDepth(61);
+    g.fillStyle(0x7788bb, 1);
+    g.fillRect(cx - 4, cy - 5, 3, 10);
+    g.fillRect(cx + 1, cy - 5, 3, 10);
+    btn.on('pointerdown', () => { if (this._pauseOpen) this._closePause(); else this._openPause(); });
+    btn.on('pointerover', () => btn.setFillStyle(0x1e1e3e));
+    btn.on('pointerout',  () => btn.setFillStyle(0x0e0e1e));
+  }
+
+  _buildPauseOverlay() {
+    const cx = GAME_W / 2, cy = GAME_H / 2;
+    const panelW = 280, panelH = 280;
+
+    const backdrop = this.add.rectangle(0, 0, GAME_W, GAME_H, 0x000000, 0.84)
+      .setOrigin(0, 0).setDepth(110).setInteractive();
+    const panel = this.add.rectangle(cx, cy, panelW, panelH, 0x0c0c18)
+      .setStrokeStyle(2, 0x445588, 0.9).setDepth(111).setInteractive();
+    const title = this.add.text(cx, cy - panelH / 2 + 30, '일시정지', {
+      fontSize: '18px', color: '#99aabb', fontFamily: 'monospace', fontStyle: 'bold',
+    }).setOrigin(0.5).setDepth(112);
+
+    this._pauseEls = [backdrop, panel, title];
+
+    const mkBtn = (label, oy, lineColor, textColor, onClick) => {
+      const r = this.add.rectangle(cx, cy + oy, 210, 46, 0x1a1a2e)
+        .setStrokeStyle(2, lineColor).setDepth(112)
+        .setInteractive({ cursor: 'pointer' });
+      const t = this.add.text(cx, cy + oy, label, {
+        fontSize: '15px', color: textColor, fontFamily: 'monospace', fontStyle: 'bold',
+      }).setOrigin(0.5).setDepth(113);
+      r.on('pointerover', () => r.setFillStyle(0x26263e));
+      r.on('pointerout',  () => r.setFillStyle(0x1a1a2e));
+      r.on('pointerdown', onClick);
+      this._pauseEls.push(r, t);
+    };
+
+    mkBtn('계속하기',     -36, 0x4ecca3, '#4ecca3', () => this._closePause());
+    mkBtn('저장 후 종료',  22, 0x88aaff, '#88aaff', () => this._saveAndQuit());
+    mkBtn('포기',          80, 0xff6666, '#ff6666', () => this._abandonRun());
+
+    this._pauseEls.forEach(el => el.setVisible(false));
+  }
+
+  _openPause() {
+    if (this._pauseOpen) return;
+    this._pauseOpen = true;
+    this._pauseEls.forEach(el => el.setVisible(true));
+    this.scene.get('GameScene').scene.pause();
+  }
+
+  _closePause() {
+    if (!this._pauseOpen) return;
+    this._pauseOpen = false;
+    this._pauseEls.forEach(el => el.setVisible(false));
+    this.scene.get('GameScene').scene.resume();
+  }
+
+  /** 현재 상태를 저장하고 허브로 — 이어하기로 같은 지점 재개 가능. */
+  _saveAndQuit() {
+    const gs = this.scene.get('GameScene');
+    this._pauseOpen = false;
+    this._pauseEls.forEach(el => el.setVisible(false));
+    saveRunState(gs);
+    gs.scene.stop();              // GameScene 종료
+    this.scene.start('HubScene'); // UIScene(self) 종료 + Hub 시작
+  }
+
+  /** 런 포기 — 저장본 삭제 + 메타 픽업 보존율 정산 후 허브로. */
+  _abandonRun() {
+    const gs = this.scene.get('GameScene');
+    this._pauseOpen = false;
+    this._pauseEls.forEach(el => el.setVisible(false));
+    clearRunSave();
+    commitMetaRun(false, gs.player?.metaRetainRate ?? 0.25);
+    gs.scene.stop();
+    this.scene.start('HubScene');
   }
 
   // ── NPC 대화 오버레이 ─────────────────────────────────

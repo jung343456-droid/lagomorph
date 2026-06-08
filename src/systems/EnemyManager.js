@@ -37,6 +37,16 @@ const ENEMY_CLASSES = {
   bat: Bat, boar: Boar, spider: Spider, bear: Bear, toad: Toad,
 };
 
+// 보스 클래스 — 임시 저장 복원용 타입 매핑에 포함 (스폰 테이블엔 들어가지 않음)
+const BOSS_CLASSES = { fang: Fang, wolf: Wolf, blackbear: BlackBear, owlking: OwlKing };
+
+// 복원 시 사용하는 type↔Class 양방향 매핑 (일반 적 + 보스 전부 포함)
+const ALL_CLASSES   = { ...ENEMY_CLASSES, ...BOSS_CLASSES };
+const CLASS_TO_TYPE = new Map(Object.entries(ALL_CLASSES).map(([type, Cls]) => [Cls, type]));
+
+// 적 스칼라 스냅샷에서 제외할 키 — Phaser 객체/HP바/타이머 참조 (순환참조 방지)
+const SNAPSHOT_SKIP = new Set(['scene', 'gameObject', '_hpBg', '_hpFill', '_blinkEvent', '_eliteCleanup']);
+
 // 층별 스폰 풀 — 층이 내려갈수록 적 종류가 점진적으로 추가됨.
 //   1~5: 구역 1 (풀숲) / 6~10: 구역 2 (더 깊은 숲)
 const FLOOR_SPAWN_TABLES = {
@@ -448,6 +458,117 @@ export default class EnemyManager {
     this.scene.events.off('attack-fired', this._onAttackFired, this);
   }
 
+  // ── 임시 저장 ─────────────────────────────────────────
+
+  /** 현재 적·드롭·상태이상·코어 카운트를 평문 객체로 직렬화. */
+  serialize() {
+    const live = this.enemies.filter(e => e.alive && !e.destroyed);
+    return {
+      coreCount:  this.coreCount,
+      floorNum:   this.floorNum,
+      hadEnemies: this._hadEnemies,
+      enemies:    live.map(e => this._snapshotEnemy(e)),
+      cores:      this.cores.filter(c => c.alive).map(c => ({ x: c.x, y: c.y })),
+      rareItems:  this.rareItems.filter(r => r.alive).map(r => ({ x: r.x, y: r.y })),
+      status: {
+        poisoned: this._serializeStatus(this._poisoned, live),
+        burned:   this._serializeStatus(this._burned, live),
+        frozen:   this._serializeStatus(this._frozen, live),
+      },
+    };
+  }
+
+  /** 저장본으로부터 적·드롭·상태이상을 재구성. (투사체는 단명하므로 복원하지 않음) */
+  restoreFromSave(data) {
+    if (!data) return;
+    this._clearAll();
+    this.coreCount = data.coreCount ?? this.coreCount;
+    this.floorNum  = data.floorNum ?? this.floorNum;
+
+    for (const snap of data.enemies ?? []) this._restoreEnemy(snap);
+    this._hadEnemies = this.enemies.length > 0;
+    this.boss = this.enemies.find(e => e.isBoss) ?? null;
+
+    for (const c of data.cores ?? [])     this.cores.push(new Core(this.scene, c.x, c.y));
+    for (const r of data.rareItems ?? []) this.rareItems.push(new RareItem(this.scene, r.x, r.y));
+
+    this._restoreStatus(data.status?.poisoned, this._poisoned, 0xaa44ff);
+    this._restoreStatus(data.status?.burned,   this._burned,   0xff4422);
+    this._restoreStatus(data.status?.frozen,   this._frozen,   0x88ccff);
+  }
+
+  /** 적 1마리의 타입 + 좌표/속도 + 스칼라 프로퍼티(평면 {x,y} 포함)를 추출. */
+  _snapshotEnemy(e) {
+    const props = {};
+    for (const k of Object.keys(e)) {
+      if (SNAPSHOT_SKIP.has(k)) continue;
+      const v = e[k];
+      const t = typeof v;
+      if (t === 'number' || t === 'string' || t === 'boolean') {
+        props[k] = v;
+      } else if (v && t === 'object') {
+        // facingDir 등 평면 {x,y} 만 보존 — 적 인스턴스 등 참조는 제외
+        const keys = Object.keys(v);
+        if (keys.length && keys.every(kk => (kk === 'x' || kk === 'y') && typeof v[kk] === 'number')) {
+          props[k] = { ...v };
+        }
+      }
+    }
+    const body = e.gameObject.body;
+    return {
+      type: CLASS_TO_TYPE.get(e.constructor) ?? 'fox',
+      x: e.gameObject.x,
+      y: e.gameObject.y,
+      vx: body?.velocity.x ?? 0,
+      vy: body?.velocity.y ?? 0,
+      props,
+    };
+  }
+
+  _restoreEnemy(snap) {
+    const Cls   = ALL_CLASSES[snap.type] ?? Fox;
+    const isBoss = snap.type in BOSS_CLASSES;
+    const enemy = new Cls(this.scene, snap.x, snap.y);
+    Object.assign(enemy, snap.props);
+
+    const body = enemy.gameObject.body;
+    body.setMaxVelocity(isBoss ? 500 : 350, isBoss ? 500 : 350);
+    body.setCollideWorldBounds(true);
+    enemy.gameObject.setPosition(snap.x, snap.y);
+    body.reset(snap.x, snap.y);
+    body.setVelocity(snap.vx, snap.vy);
+
+    if (enemy.isElite) this._applyEliteTint(enemy);
+
+    // HP바/스프라이트는 다음 GameScene.update 프레임(~16ms)에 자동 동기화된다.
+    // 여기서 update(0) 를 강제 호출하면 보스 AI 부수효과(howl 소환 등)가 즉발될 수 있어 호출하지 않는다.
+
+    this.enemies.push(enemy);
+    this.enemyGroup.add(enemy.gameObject);
+    return enemy;
+  }
+
+  /** 상태이상 Map<enemy,entry> → [{ idx, ...entry }] (idx = live 배열 인덱스). */
+  _serializeStatus(map, live) {
+    const out = [];
+    for (const [enemy, entry] of map) {
+      const idx = live.indexOf(enemy);
+      if (idx === -1) continue;
+      out.push({ idx, ...entry });
+    }
+    return out;
+  }
+
+  _restoreStatus(arr, map, hpFillColor) {
+    for (const s of arr ?? []) {
+      const enemy = this.enemies[s.idx];
+      if (!enemy) continue;
+      const { idx, ...entry } = s;
+      map.set(enemy, entry);
+      enemy._hpFill?.setFillStyle(hpFillColor);
+    }
+  }
+
   // ── private ─────────────────────────────────────────
 
   _pickType(table) {
@@ -507,9 +628,11 @@ export default class EnemyManager {
     if (typeof enemy.speed === 'number') enemy.speed *= 2;
     enemy.coreDrops = Math.max(8, (enemy.coreDrops ?? 3) * 5);
     enemy.isElite = true;
+    this._applyEliteTint(enemy);
+  }
 
-
-    // 붉은 틴트 적용 — clearTint 오버라이드로 stun 종료 후에도 재적용
+  /** 엘리트 시각 효과(붉은 틴트 + clearTint 오버라이드)만 적용 — 신규 변환과 저장 복원에서 공용. */
+  _applyEliteTint(enemy) {
     const go = enemy.gameObject;
     go.setTint(ELITE_TINT_COLOR);
     const origClearTint = go.clearTint.bind(go);

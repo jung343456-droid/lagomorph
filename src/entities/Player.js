@@ -39,6 +39,10 @@
  *   invulnDurationMult 1    피격 후 무적 깜빡임 지속 배율 (영구 해금 '잔영의 가호' ×1.25) — takeDamage 일반 분기 tween duration 에 적용
  *   hasMapReveal     false 현재 층 전체 방을 지도에 표시 (던전의 감각)
  *   metaRetainRate   0.25   사망 시 메타 픽업분 보존율 (영구 해금 '잔해 회수 I~IV' +0.05 씩 → 최대 0.45) — MetaProgress.commitMetaRun 참조
+ *
+ * 임시 저장: serialize() 로 좌표·스탯·플래그·인벤토리를 평문 객체로 추출, applySave(data) 로 복원한다.
+ *   복원 시 저장된 스탯으로 전부 덮어쓴다 — 런 중 패시브 아이템이 변경한 값까지 반영하기 위함
+ *   (생성자 applyUnlocksToPlayer 효과는 이미 저장값에 녹아 있으므로 이중 적용 없음).
  */
 import { showDamageNumber, showHealNumber } from '../utils/DamageNumbers';
 import { applyUnlocksToPlayer } from '../data/MetaProgress';
@@ -55,6 +59,17 @@ const DIR_ROW = {
   bottom: 0, 'bottom-left': 1, left: 2, 'top-left': 3,
   top: 4, 'top-right': 5, right: 6, 'bottom-right': 7,
 };
+
+// 임시 저장 대상 스탯 키 — 런 중 패시브 아이템/해금으로 변동되는 값 일체.
+// (위치·HP·방향·인벤토리는 별도 처리, 타이머/무적 등 전이성 상태는 복원 시 리셋)
+const SAVE_STAT_KEYS = [
+  'meleeRadiusMult', 'meleeDamageMult', 'critRate', 'critMult', 'critHealAmount',
+  'hasPoison', 'hasFire', 'hasIce', 'hasThunder', 'healOnKill', 'chargeSpeedMult',
+  'hasFireDisguise', 'hasIceDisguise', 'hasPoisonDisguise', 'trapCostBonus', 'trapSizeMult',
+  'healItemMult', 'coreDropMult', 'hpPerRoomClear', 'shopSlotBonus', 'armor', 'damageReduction',
+  'trapMaxBonus', 'startingCores', 'invulnDurationMult', 'hasMapReveal', 'extraLives',
+  'extraStartItems', 'shopPriceMult', 'metaRetainRate',
+];
 
 export default class Player {
   constructor(scene, x, y) {
@@ -304,6 +319,54 @@ export default class Player {
 
   get x() { return this.gameObject.x; }
   get y() { return this.gameObject.y; }
+
+  // ── 임시 저장 ─────────────────────────────────────────
+
+  /** 복원에 필요한 전체 상태를 평문 객체로 추출. */
+  serialize() {
+    const stats = {};
+    for (const k of SAVE_STAT_KEYS) stats[k] = this[k];
+    return {
+      x: this.gameObject.x,
+      y: this.gameObject.y,
+      hp: this.hp,
+      maxHp: this.maxHp,
+      baseSpeed: this.baseSpeed,
+      dir: this._dir,
+      facingDir: { ...this.facingDir },
+      lastDamageSource: this.lastDamageSource,
+      inventory: (this.inventory ?? []).map(it => ({ ...it })),
+      stats,
+    };
+  }
+
+  /** serialize() 결과를 현재 인스턴스에 적용. 전이성 상태(무적·넉백·슬로우)는 리셋한다. */
+  applySave(data) {
+    if (!data) return;
+    this.hp        = data.hp;
+    this.maxHp     = data.maxHp;
+    this.baseSpeed = data.baseSpeed ?? this.baseSpeed;
+    this.speed     = this.baseSpeed; // 전이성 슬로우는 복원하지 않음
+    this._dir      = data.dir ?? 'bottom';
+    this._row      = DIR_ROW[this._dir] ?? DIR_ROW.bottom;
+    this.facingDir = { ...(data.facingDir ?? { x: 0, y: 1 }) };
+    this.lastDamageSource = data.lastDamageSource ?? null;
+    this.inventory = (data.inventory ?? []).map(it => ({ ...it }));
+    if (data.stats) for (const k of SAVE_STAT_KEYS) {
+      if (data.stats[k] !== undefined) this[k] = data.stats[k];
+    }
+
+    this._invincible     = false;
+    this._knockbackTimer = 0;
+    this._slowTimer      = 0;
+    this._animFrame      = 0;
+    this._animTimer      = 0;
+
+    this.gameObject.setPosition(data.x, data.y);
+    this.gameObject.body.reset(data.x, data.y);
+    this.gameObject.setAlpha(1);
+    this.gameObject.setFrame(this._row * 4, false, false);
+  }
 
   // ── private ─────────────────────────────────────────
 

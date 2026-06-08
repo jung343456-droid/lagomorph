@@ -155,6 +155,42 @@ export default class AttackManager {
     }
   }
 
+  // ── 임시 저장 ─────────────────────────────────────────
+
+  /** B 쿨다운과 설치 트랩을 직렬화. (전이성 충전 상태는 저장하지 않음 — 복원 시 리셋) */
+  serialize() {
+    return {
+      bCooldown: this._bCooldown,
+      poops: this._poops
+        .filter(p => p.go.active)
+        .map(p => ({ x: p.go.x, y: p.go.y, damage: p.damage })),
+    };
+  }
+
+  /** 저장본으로부터 트랩·쿨다운을 복원. roomManager.restore(room-entered) 이후에 호출해야 한다. */
+  restoreFromSave(data) {
+    if (!data) return;
+    this._poops.forEach(p => { if (p.go.active) this._poopGroup.remove(p.go, true, true); });
+    this._poops = [];
+    for (const t of data.poops ?? []) this._restorePoop(t.x, t.y, t.damage);
+    this._bCooldown          = data.bCooldown ?? 0;
+    this.bCooldownNormalized = this._bCooldown > 0 ? this._bCooldown / POOP_COOLDOWN : 0;
+  }
+
+  /** 저장된 좌표에 트랩 1개 재생성 — _placePoop 의 물리 셋업과 동일(코어 소모·링 이펙트 제외). */
+  _restorePoop(x, y, damage) {
+    const size = POOP_SIZE * this.player.trapSizeMult;
+    const go = this.scene.add.image(x, y, 'poop_circle').setTint(POOP_COLOR);
+    go.setDisplaySize(size, size);
+    go.setDepth(5);
+    this.scene.physics.add.existing(go);
+    go.body.setCircle(40);
+    go.body.setImmovable(true);
+    go.body.setAllowGravity(false);
+    this._poops.push({ go, damage: damage ?? POOP_DMG, size });
+    this._poopGroup.add(go);
+  }
+
   // ── 포인터 바인딩 ────────────────────────────────────
 
   _bindPointers() {

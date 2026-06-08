@@ -44,6 +44,13 @@ export default class RoomManager {
     this._enterRoom(dungeonData.rooms[dungeonData.startId], null);
   }
 
+  /** 임시 저장 복원 — 저장된 던전/현재 방으로 진입하되 적은 스폰하지 않는다(EnemyManager 가 주입). */
+  restore(dungeonData, currentRoomId) {
+    this.dungeonData = dungeonData;
+    const room = dungeonData.rooms[currentRoomId] ?? dungeonData.rooms[dungeonData.startId];
+    this._enterRoom(room, null, { skipSpawn: true });
+  }
+
   update() {
     if (this._transitioning || !this._room) return;
     if (!this.currentRoomData.cleared) return;
@@ -70,7 +77,7 @@ export default class RoomManager {
     return this._normalRoomCount() + 2;
   }
 
-  _enterRoom(roomData, fromDir) {
+  _enterRoom(roomData, fromDir, opts = {}) {
     // 기존 물리 콜라이더 제거 → 기존 방 파괴
     this._wallColliders.forEach(c => c.destroy());
     this._wallColliders = [];
@@ -121,6 +128,14 @@ export default class RoomManager {
     this.player.speed = (roomData.cleared && wasVisited)
       ? this.player.baseSpeed * 1.5
       : this.player.baseSpeed;
+
+    // 임시 저장 복원: 적은 EnemyManager 가 주입하므로 스폰하지 않고 문 잠금만 결정
+    if (opts.skipSpawn) {
+      if (roomData.cleared) this._room.unlockDoors();
+      else                  this._room.lockDoors();
+      this.scene.events.emit('room-entered', { roomData, dungeonData: this.dungeonData });
+      return;
+    }
 
     // 적 스폰 또는 즉시 개방
     if (roomData.cleared) {
