@@ -1,9 +1,11 @@
-import { GAME_W, GAME_H, HUD_H } from '../constants';
+import { GAME_W, GAME_H, HUD_H, zoneOf } from '../constants';
 
 export const ROOM_W = GAME_W;           // 방 너비 = 캔버스 너비
 export const ROOM_H = GAME_H - HUD_H;  // 방 높이 = 게임플레이 뷰포트 높이 (스크롤 없음)
 export const WALL_T = 20;   // 벽 두께 (px)
 export const DOOR_W = 80;   // 문 통로 너비 (px) — 플레이어 body(55×53) 가 여유롭게 통과하도록 80
+
+// 구역 3·4(층 11~20) 보라톤 — BootScene 가 hue-rotate 로 만든 '_p' 텍스처를 _tex()로 선택(새 에셋 없음).
 
 const WALL_COLOR     = 0x3a3a5e; // 벽 색상 (진한 남색)
 const OBSTACLE_COLOR = 0x2a2a50; // 장애물 색상
@@ -15,9 +17,10 @@ export const DOOR_HX = (ROOM_W - DOOR_W) / 2;   // 수평 문(상·하) 좌측 x
 export const DOOR_VY = (ROOM_H - DOOR_W) / 2;   // 수직 문(좌·우) 상단 y 좌표 (= 392)
 
 export default class Room {
-  constructor(scene, data) {
+  constructor(scene, data, floorNum = 1) {
     this.scene = scene;
     this.data  = data;
+    this._purple = zoneOf(floorNum) >= 3;  // 구역 3·4 → 보라톤 틴트
 
     this.wallGroup      = scene.physics.add.staticGroup();
     this.obstacleGroup  = scene.physics.add.staticGroup();
@@ -36,7 +39,7 @@ export default class Room {
       if (nid === null || this._doorBlocks[dir]) return;
       const a = this._doorArea(dir);
       // 벽과 동일한 fence 텍스처로 채워 zone 톤과 자연스럽게 이어지게 한다.
-      const block = this.scene.add.tileSprite(a.cx, a.cy, a.w, a.h, 'obstacle_fence');
+      const block = this.scene.add.tileSprite(a.cx, a.cy, a.w, a.h, this._tex('obstacle_fence'));
       block.setDepth(3);
       this.scene.physics.add.existing(block, true);
       this.wallGroup.add(block);
@@ -100,6 +103,11 @@ export default class Room {
 
   // ── private ─────────────────────────────────────────
 
+  /** 구역 3·4 방이면 '_p'(보라톤) 텍스처 키로 치환 (BootScene 가 hue-rotate 로 생성) */
+  _tex(key) {
+    return this._purple ? `${key}_p` : key;
+  }
+
   _buildFloor() {
     const T = 40;
     // 가중치: grass_floor 50%, grass_floor_b 35%, grass_floor_flowers 10%, grass_floor_path 5%
@@ -115,7 +123,7 @@ export default class Room {
     // 인접 타일의 어두운 가장자리가 마주쳐 검은 격자선이 도드라진다. 그대로 둔다.
     for (let row = 0; row * T < ROOM_H; row++) {
       for (let col = 0; col * T < ROOM_W; col++) {
-        const key = POOL[Math.floor(Math.random() * POOL.length)];
+        const key = this._tex(POOL[Math.floor(Math.random() * POOL.length)]);
         const img = this.scene.add.image(col * T + T / 2, row * T + T / 2, key).setDepth(0);
         this._gfx.push(img);
       }
@@ -126,7 +134,7 @@ export default class Room {
     const { doors } = this.data;
     const add = (x1, y1, x2, y2) => {
       const w = x2 - x1, h = y2 - y1;
-      const sprite = this.scene.add.tileSprite(x1 + w / 2, y1 + h / 2, w, h, 'obstacle_fence');
+      const sprite = this.scene.add.tileSprite(x1 + w / 2, y1 + h / 2, w, h, this._tex('obstacle_fence'));
       sprite.setDepth(2);
       this.scene.physics.add.existing(sprite, true);
       this.wallGroup.add(sprite);
@@ -230,7 +238,7 @@ export default class Room {
       // 구 포맷({x,y,w,h}) 호환: type이 없으면 bush 로 폴백
       const def = TYPES[type] || TYPES.bush;
       const s   = scale ?? (w && h ? Math.max(w / def.w, h / def.h) : 1);
-      const obs = this.scene.add.image(x, y, def.key).setDepth(2).setScale(s);
+      const obs = this.scene.add.image(x, y, this._tex(def.key)).setDepth(2).setScale(s);
       this.scene.physics.add.existing(obs, true);
       this.obstacleGroup.add(obs);
       this._gfx.push(obs);

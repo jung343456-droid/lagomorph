@@ -17,9 +17,10 @@
 | 수동 "저장 후 종료" | `UIScene._saveAndQuit` | 저장 후 허브 복귀 |
 | 백그라운드 전환 | `visibilitychange`(hidden) / `pagehide` → `GameScene._saveOnBackground` | **모바일 필수** (아래 참조) |
 
-**삭제**는 런이 실제로 끝날 때만:
-- 사망 / ZONE CLEAR → `GameScene._buildRunSummary` 진입 시 `clearRunSave()`
-- "포기" → `UIScene._abandonRun` (`clearRunSave` + 보존율 정산)
+**삭제**는 런이 실제로 끝날 때만, 모두 `GameScene._buildRunSummary` 진입 시 `clearRunSave()` 로 일원화:
+- 사망 → `_showGameOver`
+- ZONE CLEAR → `_showZoneClear`
+- "포기" → `UIScene._abandonRun` 이 `GameScene.abandonRun()` 호출 → **사망과 동일한 결과 정산 화면**(`survived:false`, 보존율 정산). UIScene 가 직접 허브로 보내지 않는다.
 
 > **정책(확정)**: 앱을 닫거나 "저장 후 종료"해도 저장본은 **유지**된다 — 같은 지점에서 이어하기 가능. 로그라이크 영속사망과 충돌할 수 있으나 의도된 동작이다. 신규 런을 시작하면 첫 자동저장이 기존 저장본을 덮어쓴다.
 
@@ -69,6 +70,8 @@
 
 타입 매핑은 `ALL_CLASSES`(일반 적 + 보스 `fang/wolf/blackbear/owlking`)와 역방향 `CLASS_TO_TYPE`. 적 클래스를 **추가하면 매핑에도 반영**해야 복원된다.
 
+> **구역 3·4 강화(`_applyZoneBuff`, 층 11~20)는 별도 처리 불필요.** ×1.4/×1.1 변형 결과가 `maxHp·hp·damage·speedMult·baseSpeedMult·zoneBuffed`라는 number/boolean 인스턴스 프로퍼티에 그대로 남아 스냅샷에 보존되고, `Object.assign`으로 복원된다. 복원 경로에서 버프를 **재적용하지 않으므로 중복 강화 없음**. `currentFloor`는 1~20 범위로 저장된다.
+
 ### 3. 상태이상 Map은 인덱스로
 `_poisoned/_burned/_frozen`은 `Map<enemy, entry>`라 인스턴스 키를 직렬화할 수 없다. **live 배열 인덱스**로 변환해 저장하고, 복원 시 같은 순서로 재구성한 `enemies[idx]`를 키로 Map을 재구축한다. → 적 직렬화/복원 순서가 동일해야 idx가 유효.
 
@@ -106,6 +109,7 @@
 
 - **허브 "이어하기"** (`HubScene._buildContinueButton`): `hasRunSave()`일 때만 기상 기계 하단에 노출 → `scene.start('GameScene', { restore: true })`.
 - **일시정지 메뉴** (`UIScene`): ESC 또는 좌상단 ⏸ 버튼 → 계속하기 / 저장 후 종료 / 포기. 기존 오버레이 패턴(`GameScene.scene.pause()`/`resume()`, `update()` 가드)을 재사용.
+  - **포기**: `gs.scene.resume()`(결과 버튼 입력용) 후 `gs.abandonRun()` → 사망과 동일한 결과 화면. 결과 화면이 뜨면 `GameScene.update()`가 `_endScreenEls` 가드로 게임플레이를 정지(포기 후 잔여 적 접촉으로 결과창 중복 생성 방지).
 
 ---
 
@@ -117,7 +121,7 @@ src/entities/Player.js      serialize / applySave
 src/systems/EnemyManager.js serialize / restoreFromSave / _snapshotEnemy / _restoreEnemy
 src/systems/AttackManager.js serialize / restoreFromSave / _restorePoop
 src/world/RoomManager.js    restore / _enterRoom(skipSpawn)
-src/scenes/GameScene.js     create(data) 복원 분기 · _autosave · _saveOnBackground · 종료 시 clearRunSave
-src/scenes/UIScene.js       일시정지 메뉴 · _saveAndQuit · _abandonRun
+src/scenes/GameScene.js     create(data) 복원 분기 · _autosave · _saveOnBackground · abandonRun · 종료 시 clearRunSave · update() _endScreenEls 가드
+src/scenes/UIScene.js       일시정지 메뉴 · _saveAndQuit · _abandonRun(→ GameScene.abandonRun)
 src/scenes/HubScene.js      _buildContinueButton · _continueRun
 ```

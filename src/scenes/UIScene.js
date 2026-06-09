@@ -1,9 +1,8 @@
 import Phaser from 'phaser';
-import { GAME_W, GAME_H, HUD_H } from '../constants';
+import { GAME_W, GAME_H, HUD_H, zoneOf, displayFloor } from '../constants';
 import PassiveItem, { ITEM_DEFS } from '../entities/PassiveItem';
 import { safeInsetBottom } from '../utils/SafeArea';
-import { saveRunState, clearRunSave } from '../data/SaveManager';
-import { commitMetaRun } from '../data/MetaProgress';
+import { saveRunState } from '../data/SaveManager';
 
 const DLG_BOTTOM_PAD = 16;  // 패널 하단 추가 여백 (floor 위에 더하는 숨 쉴 공간)
 // 측정값이 0이어도 보장하는 최소 하단 확보량(게임 좌표). 일반 브라우저 탭에선 홈 인디케이터·
@@ -50,9 +49,9 @@ const BAG_H  = 24;
 const BOSS_BAR_W = 300;
 const BOSS_BAR_H = 18;
 
-// 구역 메타 — 구역 1: 1~5층(풀숲), 구역 2: 6~10층(더 깊은 숲)
-const ZONE_NAMES = { 1: '풀숲', 2: '깊은 숲', 3: '인간' };
-function zoneOf(floor) { return floor <= 5 ? 1 : floor <= 10 ? 2 : 3; }
+// 구역 메타 — 1: 풀숲(1~5) / 2: 깊은 숲(6~10) / 3: 뒤틀린 숲(11~15) / 4: 심연(16~20)
+// 구역 3·4는 1·2구역 적 혼합·강화 + 보라톤. zoneOf/displayFloor 는 constants 공용 헬퍼.
+const ZONE_NAMES = { 1: '풀숲', 2: '깊은 숲', 3: '뒤틀린 숲', 4: '심연' };
 
 export default class UIScene extends Phaser.Scene {
   constructor() {
@@ -82,7 +81,7 @@ export default class UIScene extends Phaser.Scene {
     this._minimapStaticEls   = [];
     this._currentDungeonData = null;
     this._currentRoomId      = null;
-    this._currentFloor       = 1;
+    this._currentFloor       = this.gameScene?.currentFloor ?? 1;  // 복원 시 저장된 층 반영
     this._dialogueOpen   = false;
     this._dlgLines       = [];
     this._dlgLineIdx     = 0;
@@ -122,7 +121,7 @@ export default class UIScene extends Phaser.Scene {
       'floor-changed',
       (floor) => {
         this._currentFloor = floor;
-        this._floorText.setText(`Z${zoneOf(floor)} · F${floor}`);
+        this._floorText.setText(`Z${zoneOf(floor)} · F${displayFloor(floor)}`);
         if (this._minimapOpen) this._refreshLargeMinimap();
       },
       this,
@@ -157,8 +156,8 @@ export default class UIScene extends Phaser.Scene {
     this.add.rectangle(0, TOP_H, GAME_W, 2, 0x3366aa, 1).setOrigin(0, 0);
     // 상태 | 맵 구분선
     this.add.rectangle(DIVIDER_X, TOP_H / 2 + 6, 1, TOP_H - 16, 0x334466, 0.9).setOrigin(0.5, 0.5);
-    // 구역·층 표시기 (미니맵 상단 위 빈 공간)
-    this._floorText = this.add.text(272, 10, 'Z1 · F1', {
+    // 구역·층 표시기 (미니맵 상단 위 빈 공간) — 복원 시 저장된 층으로 초기화
+    this._floorText = this.add.text(272, 10, `Z${zoneOf(this._currentFloor)} · F${displayFloor(this._currentFloor)}`, {
       fontSize: '10px', color: '#4ecca3', fontFamily: 'monospace', fontStyle: 'bold',
     }).setOrigin(0.5, 0.5);
   }
@@ -362,7 +361,7 @@ export default class UIScene extends Phaser.Scene {
     const floor    = this._currentFloor;
     const zone     = zoneOf(floor);
     const zoneName = ZONE_NAMES[zone] ?? '';
-    this._mmOverlayTitleText.setText(`ZONE ${zone}${zoneName ? ' · ' + zoneName : ''}   ·   FLOOR ${floor}`);
+    this._mmOverlayTitleText.setText(`ZONE ${zone}${zoneName ? ' · ' + zoneName : ''}   ·   FLOOR ${displayFloor(floor)}`);
 
     const { rooms, gridCols, gridRows } = this._currentDungeonData;
     const totalW = gridCols * MM_LARGE_CW;
@@ -1170,15 +1169,13 @@ export default class UIScene extends Phaser.Scene {
     this.scene.start('HubScene'); // UIScene(self) 종료 + Hub 시작
   }
 
-  /** 런 포기 — 저장본 삭제 + 메타 픽업 보존율 정산 후 허브로. */
+  /** 런 포기 — 사망과 동일한 결과 정산 화면을 GameScene 에 띄운다(저장본 삭제·보존율 정산은 그 안에서). */
   _abandonRun() {
     const gs = this.scene.get('GameScene');
     this._pauseOpen = false;
     this._pauseEls.forEach(el => el.setVisible(false));
-    clearRunSave();
-    commitMetaRun(false, gs.player?.metaRetainRate ?? 0.25);
-    gs.scene.stop();
-    this.scene.start('HubScene');
+    gs.scene.resume();   // 결과 화면 버튼이 입력을 받도록 씬 재개
+    gs.abandonRun();
   }
 
   // ── NPC 대화 오버레이 ─────────────────────────────────

@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { GAME_W, GAME_H, HUD_H } from '../constants';
+import { GAME_W, GAME_H, HUD_H, zoneOf, displayFloor } from '../constants';
 import Player from '../entities/Player';
 import InputManager from '../utils/InputManager';
 import AttackManager from '../systems/AttackManager';
@@ -84,10 +84,10 @@ export default class GameScene extends Phaser.Scene {
     if (save) addRunPickup(save.meta?.runPicked ?? 0);
 
     // 보스 클리어: 랜덤 아이템 드롭(보유 패시브 + 미수집 월드 아이템 제외) + 계단 표시 / 구역 클리어
-    //   1~4·6~9: 일반 보스방 클리어 → 계단
-    //   3 / 8 : 중간보스(Wolf×2 / BlackBear×1) — 레어 아이템 추가 드롭
-    //   5    : 구역 1 보스(FANG) 클리어 → 계단(다음 구역 진입)
-    //   10   : 구역 2 보스(OWL KING) 클리어 → ZONE 2 CLEAR
+    //   일반 출구방              → 계단
+    //   3·8·13·18 (중간보스)     → 레어 아이템 추가 드롭 + 계단
+    //   5·10·15 (구역 최종보스)  → 계단 + "ZONE N 진입" (다음 구역으로)
+    //   20 (구역 4 최종 OWL KING) → ZONE 4 CLEAR (런 종료)
     this.events.on('boss-cleared', ({ x, y, floor, roomId }) => {
       const excluded = new Set([
         ...this._ownedItemIds(),
@@ -99,14 +99,19 @@ export default class GameScene extends Phaser.Scene {
         const safe = this.roomManager?.findSafeDropPos(x, y) ?? { x, y };
         this._passiveItems.push(new PassiveItem(this, safe.x, safe.y, id));
       }
-      if (floor === 10) {
-        this.time.delayedCall(1500, () => this._showZoneClear(2));
+      if (floor === 20) {
+        // 구역 4 최종 보스 처치 → 런 종료
+        this.time.delayedCall(1500, () => this._showZoneClear(4));
       } else {
-        // 중간보스(층 3, 8): 회복 레어 아이템 추가 드롭
-        if (floor === 3 || floor === 8) this.enemyManager.dropRareItem(x - 40, y);
+        // 중간보스(층 3·8·13·18): 회복 레어 아이템 추가 드롭
+        if (floor === 3 || floor === 8 || floor === 13 || floor === 18) {
+          this.enemyManager.dropRareItem(x - 40, y);
+        }
         this.time.delayedCall(800, () => this._markStairs(roomId, x, y + 90));
-        // 구역 경계 통과 시 차용 텍스트 — 5층 → 6층 = 구역 1 → 2 진입
-        if (floor === 5) this.time.delayedCall(1200, () => this._showZoneTransition(2));
+        // 구역 경계 통과 안내 — 5→6(구역2), 10→11(구역3), 15→16(구역4)
+        if (floor === 5)  this.time.delayedCall(1200, () => this._showZoneTransition(2));
+        if (floor === 10) this.time.delayedCall(1200, () => this._showZoneTransition(3));
+        if (floor === 15) this.time.delayedCall(1200, () => this._showZoneTransition(4));
       }
     });
 
@@ -205,6 +210,13 @@ export default class GameScene extends Phaser.Scene {
       this._advanceFloor();
     });
 
+    // 디버그: 숫자 5 → 11층 즉시 점프 (구역 3 시작)
+    this.input.keyboard.on('keydown-FIVE', () => {
+      if (this.currentFloor >= 11) return;
+      this.currentFloor = 10;  // _advanceFloor() 가 +1 하여 11 도달
+      this._advanceFloor();
+    });
+
     this.events.once('player-dead', () => {
       this.input$.disable();
       this.attackManager.disable();
@@ -260,6 +272,20 @@ export default class GameScene extends Phaser.Scene {
     });
   }
 
+  /** 일시정지 메뉴 "포기" — 사망과 동일하게 보존율 정산 결과 화면을 띄운다 (UIScene 가 호출). */
+  abandonRun() {
+    if (this._endScreenEls) return;
+    this.input$.disable();
+    this.attackManager.disable();
+    this._buildRunSummary({
+      title:      '포기',
+      titleColor: '#ffaa44',
+      subtitle:   '런을 포기했다',
+      showCause:  false,
+      survived:   false,
+    });
+  }
+
   _showZoneClear(zone = 1) {
     this._buildRunSummary({
       title:      `ZONE ${zone} CLEAR`,
@@ -311,8 +337,8 @@ export default class GameScene extends Phaser.Scene {
     }
 
     // 사망 위치
-    const zoneN = this.currentFloor <= 5 ? 1 : this.currentFloor <= 10 ? 2 : 3;
-    push(this.add.text(GAME_W / 2, y, `구역 ${zoneN}  ·  ${this.currentFloor}층`, {
+    const zoneN = zoneOf(this.currentFloor);
+    push(this.add.text(GAME_W / 2, y, `구역 ${zoneN}  ·  ${displayFloor(this.currentFloor)}층`, {
       fontSize: '13px', color: '#cccccc', fontFamily: 'monospace',
     }).setOrigin(0.5).setScrollFactor(0).setDepth(101));
     y += 22;
@@ -437,8 +463,8 @@ export default class GameScene extends Phaser.Scene {
   }
 
   _advanceFloor() {
-    // 10층 이후로는 계단 트리거 자체가 발생하지 않지만 방어용 가드
-    if (this.currentFloor >= 10) return;
+    // 20층 이후로는 계단 트리거 자체가 발생하지 않지만 방어용 가드
+    if (this.currentFloor >= 20) return;
     this._disposeStairs();
     this._stairsRoomId    = null;
     this._stairsPos       = null;
@@ -526,7 +552,7 @@ export default class GameScene extends Phaser.Scene {
   }
 
   _showFloorBanner(floor) {
-    const txt = this.add.text(ROOM_W / 2, ROOM_H / 2, `FLOOR ${floor}`, {
+    const txt = this.add.text(ROOM_W / 2, ROOM_H / 2, `FLOOR ${displayFloor(floor)}`, {
       fontSize: '36px', color: '#4ecca3', fontFamily: 'monospace', fontStyle: 'bold',
     }).setOrigin(0.5).setScrollFactor(0).setDepth(90).setAlpha(0);
     this.tweens.add({
@@ -543,6 +569,10 @@ export default class GameScene extends Phaser.Scene {
   }
 
   update(_time, delta) {
+    // 결과 화면(사망/클리어/포기)이 떠 있으면 게임플레이 갱신 정지 — 포기 후 잔여 적 접촉으로
+    // player-dead 가 추가로 발생해 결과창이 중복 생성되는 것을 막는다.
+    if (this._endScreenEls) return;
+
     this.player.update(this.input$.getDirection(), delta);
     this.attackManager.update(delta);
     this.enemyManager.update(delta);

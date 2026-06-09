@@ -218,19 +218,20 @@ export default class Wolf {
       const ex = e.x - this.gameObject.x;
       const ey = e.y - this.gameObject.y;
       if (ex * ex + ey * ey <= AURA_R * AURA_R) {
-        e.speedMult = AURA_MULT;
+        // baseSpeedMult(구역 3·4 강화 시 1.1, 평소 1.0) 기준으로 곱한다.
+        e.speedMult = (e.baseSpeedMult ?? 1.0) * AURA_MULT;
         newTargets.add(e);
       }
     }
     for (const e of this._auraTargets) {
-      if (!newTargets.has(e) && e.alive) e.speedMult = 1.0;
+      if (!newTargets.has(e) && e.alive) e.speedMult = e.baseSpeedMult ?? 1.0;
     }
     this._auraTargets = newTargets;
   }
 
   _restoreAura() {
     for (const e of this._auraTargets) {
-      if (e.alive) e.speedMult = 1.0;
+      if (e.alive) e.speedMult = e.baseSpeedMult ?? 1.0;
     }
     this._auraTargets.clear();
   }

@@ -30,6 +30,13 @@ const ELITE_CHANCE           = 0.01; // 방당 엘리트 등장 확률 (1%)
 const ELITE_TINT_COLOR       = 0xffaaaa; // 엘리트 스프라이트 틴트 (붉은 계열)
 const MIN_SPAWN_DIST         = 160;      // 플레이어 진입 위치와 적 스폰 최소 거리 (px)
 
+// 구역 3·4(층 11~20) 강화 배수 — 1구역 기준 적 스탯 대비. 보스 포함 모든 스폰에 적용.
+const ZONE34_FLOOR     = 11;  // 이 층 이상에서 강화 적용
+const ZONE34_HP_MULT   = 1.4; // HP ×1.4
+const ZONE34_DMG_MULT  = 1.4; // 공격력 ×1.4
+const ZONE34_SPD_MULT  = 1.1; // 이동속도 ×1.1 (speedMult / baseSpeedMult 경유)
+const ZONE34_CORE_MULT = 1.5; // 코어 드롭 ×1.5 (적이 더 단단해진 만큼 보상 상향)
+
 const ENEMY_CLASSES = {
   // 구역 1
   fox: Fox, rat: Rat, weasel: Weasel, hedgehog: Hedgehog, squirrel: Squirrel,
@@ -109,6 +116,21 @@ const FLOOR_SPAWN_TABLES = {
     { type: 'bear',     weight: 2 },
   ],
 };
+
+// 구역 3·4(층 11~20) 혼합 풀 — 1·2구역 적 10종을 랜덤 배치. 모든 층 동일 풀 재사용.
+const MIXED_POOL = [
+  { type: 'rat',      weight: 2 },
+  { type: 'weasel',   weight: 2 },
+  { type: 'fox',      weight: 2 },
+  { type: 'squirrel', weight: 2 },
+  { type: 'hedgehog', weight: 1 },
+  { type: 'bat',      weight: 2 },
+  { type: 'boar',     weight: 2 },
+  { type: 'spider',   weight: 2 },
+  { type: 'toad',     weight: 2 },
+  { type: 'bear',     weight: 1 },
+];
+for (let f = 11; f <= 20; f++) FLOOR_SPAWN_TABLES[f] = MIXED_POOL;
 
 // 3마리 묶음 스폰되는 타입 — Rat(들쥐), Bat(박쥐)
 const PACK_TYPES = new Set(['rat', 'bat']);
@@ -381,22 +403,26 @@ export default class EnemyManager {
     const enemy = new Cls(this.scene, x, y);
     enemy.gameObject.body.setMaxVelocity(350, 350);
     enemy.gameObject.body.setCollideWorldBounds(true);
+    if (this.floorNum >= ZONE34_FLOOR) this._applyZoneBuff(enemy);
     this.enemies.push(enemy);
     this.enemyGroup.add(enemy.gameObject);
     return enemy;
   }
 
   /** 중간보스방:
-   *   층 3 (구역 1): Wolf 2마리 (수행원은 Wolf 자체 howl 소환)
-   *   층 8 (구역 2): BlackBear 1마리 (포효 시 멧돼지 2 소환)
+   *   층 3·13: Wolf 2마리 (수행원은 Wolf 자체 howl 소환)
+   *   층 8·18: BlackBear 1마리 (포효 시 멧돼지 2 소환)
+   *   층 13·18(구역 3·4)은 ZONE34 배수로 강화.
    */
   spawnMidBoss(x, y) {
     this._clearAll();
     this._hadEnemies = true;
-    if (this.floorNum === 8) {
+    const buffed = this.floorNum >= ZONE34_FLOOR;
+    if (this.floorNum === 8 || this.floorNum === 18) {
       const bb = new BlackBear(this.scene, x, y);
       bb.gameObject.body.setMaxVelocity(350, 350);
       bb.gameObject.body.setCollideWorldBounds(true);
+      if (buffed) this._applyZoneBuff(bb);
       this.enemies.push(bb);
       this.enemyGroup.add(bb.gameObject);
       this.boss = bb;
@@ -406,6 +432,7 @@ export default class EnemyManager {
         const wolf = new Wolf(this.scene, x + off, y);
         wolf.gameObject.body.setMaxVelocity(350, 350);
         wolf.gameObject.body.setCollideWorldBounds(true);
+        if (buffed) this._applyZoneBuff(wolf);
         this.enemies.push(wolf);
         this.enemyGroup.add(wolf.gameObject);
       });
@@ -416,16 +443,18 @@ export default class EnemyManager {
   setFloor(n) { this.floorNum = n; }
 
   /** 보스방 진입 시 호출:
-   *   층 5  (구역 1): FANG
-   *   층 10 (구역 2): OWL KING
+   *   층 5·15 : FANG
+   *   층 10·20: OWL KING
+   *   층 15·20(구역 3·4)은 ZONE34 배수로 강화.
    */
   spawnBoss(x, y) {
     this._clearAll();
     this._hadEnemies = true;
-    const BossCls = this.floorNum === 10 ? OwlKing : Fang;
+    const BossCls = (this.floorNum === 10 || this.floorNum === 20) ? OwlKing : Fang;
     const boss = new BossCls(this.scene, x, y);
     boss.gameObject.body.setMaxVelocity(500, 500);
     boss.gameObject.body.setCollideWorldBounds(true);
+    if (this.floorNum >= ZONE34_FLOOR) this._applyZoneBuff(boss);
     this.enemies.push(boss);
     this.enemyGroup.add(boss.gameObject);
     this.boss = boss;
@@ -621,6 +650,26 @@ export default class EnemyManager {
   }
 
   /** 적 1마리를 엘리트로 변환: HP 4배, 나머지 능력치 2배, 코어 드롭 5배(최소 8), 붉은 틴트로 외형 강조 */
+  /** 구역 3·4(층 11~20) 적 강화 — 1구역 기준 대비 HP·공격력 ×1.4, 이동속도 ×1.1, 코어 드롭 ×1.5.
+   *  변형값(maxHp·hp·damage·coreDrops·speedMult·baseSpeedMult·zoneBuffed)은 모두 숫자/불리언
+   *  인스턴스 프로퍼티라 _snapshotEnemy/_restoreEnemy 로 자동 보존·복원된다(중복 적용 없음). */
+  _applyZoneBuff(enemy) {
+    enemy.maxHp  = Math.round(enemy.maxHp  * ZONE34_HP_MULT);
+    enemy.hp     = enemy.maxHp;
+    enemy.damage = Math.round((enemy.damage ?? 0) * ZONE34_DMG_MULT);
+    if (typeof enemy.coreDrops === 'number') {
+      enemy.coreDrops = Math.round(enemy.coreDrops * ZONE34_CORE_MULT);
+    }
+    if (typeof enemy.speedMult === 'number') {
+      // baseSpeedMult: Wolf 오라가 이 값을 기준으로 곱한다(오라 밖에선 이 값으로 복귀).
+      enemy.baseSpeedMult = ZONE34_SPD_MULT;
+      enemy.speedMult     = ZONE34_SPD_MULT;
+    } else if (typeof enemy.speed === 'number') {
+      enemy.speed *= ZONE34_SPD_MULT; // speedMult 없는 보스 폴백
+    }
+    enemy.zoneBuffed = true;
+  }
+
   _makeElite(enemy) {
     enemy.maxHp  *= 4;
     enemy.hp      = enemy.maxHp;

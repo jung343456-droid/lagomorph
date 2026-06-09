@@ -90,7 +90,34 @@ export default class BootScene extends Phaser.Scene {
 
   create() {
     this._generateTextures();
+    this._generatePurpleTiles();
     this.scene.start('HubScene');
+  }
+
+  // 구역 3·4 보라톤 타일 — grass/장애물 텍스처를 색조 회전(hue-rotate)으로 변형해 '_p' 키로 등록.
+  // setTint(곱연산)는 초록 채널이 남아 칙칙·어둡지만, hue-rotate 는 초록→보라로 실제 색상을 옮기고
+  // brightness 로 더 밝게 만든다. 새 에셋 파일 없이 런타임 생성.
+  _generatePurpleTiles() {
+    const KEYS = [
+      'grass_floor', 'grass_floor_b', 'grass_floor_flowers', 'grass_floor_path',
+      'obstacle_fence', 'obstacle_bush', 'obstacle_stump', 'obstacle_tree',
+    ];
+    // 초록(≈120°) → 어두운 진보라: +170° 회전. 채도 높이고 명도를 더 낮춰 깊고 어두운 보라톤.
+    const FILTER = 'hue-rotate(170deg) saturate(1.7) brightness(0.7)';
+    KEYS.forEach(key => {
+      if (!this.textures.exists(key)) return;
+      const src = this.textures.get(key).getSourceImage();
+      if (!src || !src.width) return;
+      const cv = document.createElement('canvas');
+      cv.width  = src.width;
+      cv.height = src.height;
+      const ctx = cv.getContext('2d');
+      ctx.filter = FILTER;
+      ctx.drawImage(src, 0, 0);
+      const pkey = `${key}_p`;
+      if (this.textures.exists(pkey)) this.textures.remove(pkey);
+      this.textures.addCanvas(pkey, cv);
+    });
   }
 
   // 외부 에셋 없이 실행할 수 있도록 프로그래밍 방식으로 텍스처 생성
