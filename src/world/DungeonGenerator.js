@@ -177,7 +177,7 @@ export function generateDungeon(
   bfsDist.forEach((d, id) => { if (d > maxD) { maxD = d; bossId = id; } });
   rooms[bossId].type = 'boss';
 
-  // 상점방 1개 — 구역 1: 2·4층 / 구역 2: 7·9층 / 구역 3: 12·14층 / 구역 4: 17·19층
+  // 상점방 1개 — 구역 1: 2·4·7·9층 / 구역 2: 12·14·17·19층
   if (floorNum === 2 || floorNum === 4 || floorNum === 7 || floorNum === 9
       || floorNum === 12 || floorNum === 14 || floorNum === 17 || floorNum === 19) {
     const cand = rooms

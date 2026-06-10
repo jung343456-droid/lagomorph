@@ -30,7 +30,8 @@ const ELITE_CHANCE           = 0.01; // 방당 엘리트 등장 확률 (1%)
 const ELITE_TINT_COLOR       = 0xffaaaa; // 엘리트 스프라이트 틴트 (붉은 계열)
 const MIN_SPAWN_DIST         = 160;      // 플레이어 진입 위치와 적 스폰 최소 거리 (px)
 
-// 구역 3·4(층 11~20) 강화 배수 — 1구역 기준 적 스탯 대비. 보스 포함 모든 스폰에 적용.
+// 구역 2(층 11~20) 강화 배수 — 1구역 기준 적 스탯 대비. 보스 포함 모든 스폰에 적용.
+// (ZONE34_* 네이밍은 구버전 4구역 잔재 — 실제 조건은 floorNum >= 11)
 const ZONE34_FLOOR     = 11;  // 이 층 이상에서 강화 적용
 const ZONE34_HP_MULT   = 1.4; // HP ×1.4
 const ZONE34_DMG_MULT  = 1.4; // 공격력 ×1.4
@@ -117,7 +118,7 @@ const FLOOR_SPAWN_TABLES = {
   ],
 };
 
-// 구역 3·4(층 11~20) 혼합 풀 — 1·2구역 적 10종을 랜덤 배치. 모든 층 동일 풀 재사용.
+// 구역 2(층 11~20) 혼합 풀 — 구역 1 적 10종을 랜덤 배치. 모든 층 동일 풀 재사용.
 const MIXED_POOL = [
   { type: 'rat',      weight: 2 },
   { type: 'weasel',   weight: 2 },
@@ -412,7 +413,7 @@ export default class EnemyManager {
   /** 중간보스방:
    *   층 3·13: Wolf 2마리 (수행원은 Wolf 자체 howl 소환)
    *   층 8·18: BlackBear 1마리 (포효 시 멧돼지 2 소환)
-   *   층 13·18(구역 3·4)은 ZONE34 배수로 강화.
+   *   층 13·18(구역 2)은 ZONE34 배수로 강화.
    */
   spawnMidBoss(x, y) {
     this._clearAll();
@@ -445,7 +446,7 @@ export default class EnemyManager {
   /** 보스방 진입 시 호출:
    *   층 5·15 : FANG
    *   층 10·20: OWL KING
-   *   층 15·20(구역 3·4)은 ZONE34 배수로 강화.
+   *   층 15·20(구역 2)은 ZONE34 배수로 강화.
    */
   spawnBoss(x, y) {
     this._clearAll();
@@ -650,7 +651,7 @@ export default class EnemyManager {
   }
 
   /** 적 1마리를 엘리트로 변환: HP 4배, 나머지 능력치 2배, 코어 드롭 5배(최소 8), 붉은 틴트로 외형 강조 */
-  /** 구역 3·4(층 11~20) 적 강화 — 1구역 기준 대비 HP·공격력 ×1.4, 이동속도 ×1.1, 코어 드롭 ×1.5.
+  /** 구역 2(층 11~20) 적 강화 — 1구역 기준 대비 HP·공격력 ×1.4, 이동속도 ×1.1, 코어 드롭 ×1.5.
    *  변형값(maxHp·hp·damage·coreDrops·speedMult·baseSpeedMult·zoneBuffed)은 모두 숫자/불리언
    *  인스턴스 프로퍼티라 _snapshotEnemy/_restoreEnemy 로 자동 보존·복원된다(중복 적용 없음). */
   _applyZoneBuff(enemy) {

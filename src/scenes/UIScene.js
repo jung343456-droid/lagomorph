@@ -49,9 +49,9 @@ const BAG_H  = 24;
 const BOSS_BAR_W = 300;
 const BOSS_BAR_H = 18;
 
-// 구역 메타 — 1: 풀숲(1~5) / 2: 깊은 숲(6~10) / 3: 뒤틀린 숲(11~15) / 4: 심연(16~20)
-// 구역 3·4는 1·2구역 적 혼합·강화 + 보라톤. zoneOf/displayFloor 는 constants 공용 헬퍼.
-const ZONE_NAMES = { 1: '풀숲', 2: '깊은 숲', 3: '뒤틀린 숲', 4: '심연' };
+// 구역 메타 — 1: 숲(1~10) / 2: 심연(11~20, 1구역 적 혼합·강화 + 보라톤).
+// zoneOf/displayFloor 는 constants 공용 헬퍼. 각 구역은 화면에 1~10층으로 표시.
+const ZONE_NAMES = { 1: '숲', 2: '심연' };
 
 export default class UIScene extends Phaser.Scene {
   constructor() {

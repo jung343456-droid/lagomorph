@@ -65,7 +65,7 @@ export default class RoomManager {
   /** 일반 전투방 적 수:
    *   구역 1 — 층1=2~3, 층2=3~4, 층3=3~4, 층4=4~5, 층5=4~5
    *   구역 2 — 층6=3~4, 층7=3~4, 층8=4~5, 층9=4~5, 층10=4~5
-   *   구역 3·4(11~20) — 구역 2와 동일 분포 (적은 ZONE34 배수로 강화됨)
+   *   구역 2(11~20) — 구역 1 후반과 동일 분포 (적은 ZONE34 배수로 강화됨)
    */
   _normalRoomCount() {
     const baseByFloor = {
@@ -87,7 +87,7 @@ export default class RoomManager {
     this._wallColliders = [];
     if (this._room) this._room.destroy();
 
-    // 새 방 생성 (floorNum → 구역 3·4 보라톤 틴트 판단용)
+    // 새 방 생성 (floorNum → 구역 2(11층+) 보라톤 틴트 판단용)
     this._room = new Room(this.scene, roomData, this.floorNum);
     this.currentRoomData = roomData;
     const wasVisited = roomData.visited;
@@ -153,10 +153,10 @@ export default class RoomManager {
     } else if (roomData.type === 'boss') {
       this._room.lockDoors();
       if (this.floorNum === 5 || this.floorNum === 10 || this.floorNum === 15 || this.floorNum === 20) {
-        // 최종 보스 — 층 5·15: FANG / 층 10·20: OWL KING (구역 3·4는 강화)
+        // 최종 보스 — 층 5·15: FANG / 층 10·20: OWL KING (11층 이상 강화)
         this.enemyManager.spawnBoss(ROOM_W / 2, ROOM_H / 3);
       } else if (this.floorNum === 3 || this.floorNum === 8 || this.floorNum === 13 || this.floorNum === 18) {
-        // 중간 보스 — 층 3·13: Wolf 2마리 / 층 8·18: BlackBear (구역 3·4는 강화)
+        // 중간 보스 — 층 3·13: Wolf 2마리 / 층 8·18: BlackBear (11층 이상 강화)
         this.enemyManager.spawnMidBoss(ROOM_W / 2, ROOM_H / 3);
       } else {
         // 그 외 출구방: 보스 없음 — 일반 적 +2~3마리 (항상 3종)

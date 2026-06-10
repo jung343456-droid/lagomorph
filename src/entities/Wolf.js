@@ -218,7 +218,7 @@ export default class Wolf {
       const ex = e.x - this.gameObject.x;
       const ey = e.y - this.gameObject.y;
       if (ex * ex + ey * ey <= AURA_R * AURA_R) {
-        // baseSpeedMult(구역 3·4 강화 시 1.1, 평소 1.0) 기준으로 곱한다.
+        // baseSpeedMult(구역 2/11층+ 강화 시 1.1, 평소 1.0) 기준으로 곱한다.
         e.speedMult = (e.baseSpeedMult ?? 1.0) * AURA_MULT;
         newTargets.add(e);
       }

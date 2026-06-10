@@ -94,7 +94,7 @@ export default class BootScene extends Phaser.Scene {
     this.scene.start('HubScene');
   }
 
-  // 구역 3·4 보라톤 타일 — grass/장애물 텍스처를 색조 회전(hue-rotate)으로 변형해 '_p' 키로 등록.
+  // 구역 2(11~20층) 보라톤 타일 — grass/장애물 텍스처를 색조 회전(hue-rotate)으로 변형해 '_p' 키로 등록.
   // setTint(곱연산)는 초록 채널이 남아 칙칙·어둡지만, hue-rotate 는 초록→보라로 실제 색상을 옮기고
   // brightness 로 더 밝게 만든다. 새 에셋 파일 없이 런타임 생성.
   _generatePurpleTiles() {
