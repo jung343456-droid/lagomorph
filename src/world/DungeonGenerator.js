@@ -92,6 +92,79 @@ function _generateShopSlots(ownedItemIds = [], extraSlots = 0, priceMult = 1) {
   return slots;
 }
 
+// ── 비밀방 헬퍼 ───────────────────────────────────────
+
+const OPP_DIR = { up: 'down', down: 'up', left: 'right', right: 'left' };
+const SECRET_CACHE_CHANCE_BASE = 0.3;  // 1층 보물방 출현 확률
+const SECRET_CACHE_CHANCE_MAX  = 0.6;  // 출현 확률 상한 (60%)
+const SECRET_CACHE_CHANCE_STEP = 0.03; // 층당 증가폭 — 11층부터 상한 도달
+// 기억 보관실 고정 층 — 구역 1 후반(6층) / 구역 2 후반(16층)
+const VAULT_FLOOR_MAP = { 6: 0, 16: 1 };
+
+/** combat 방에서 도어가 없는 방향 중 하나를 무작위 반환. 없으면 null. */
+function _getFreeWallDir(room) {
+  const free = ['up', 'down', 'left', 'right'].filter(
+    d => room.doors[d] === null && room.secretDoor?.dir !== d,
+  );
+  return free.length ? free[Math.floor(Math.random() * free.length)] : null;
+}
+
+/** 보물방 보상 아이템 선정 (미보유 패시브 우선, 없으면 회복) */
+function _pickCacheReward(ownedItemIds) {
+  const ids = Object.keys(ITEM_DEFS).filter(id => !(ownedItemIds ?? []).includes(id));
+  if (ids.length === 0) return { kind: 'heal', amount: 30 };
+  return { kind: 'item', id: ids[Math.floor(Math.random() * ids.length)] };
+}
+
+/** 비밀방(secret_cache / secret_vault)을 rooms 배열에 추가하고 부모 방에 secretDoor 프로퍼티를 부여 */
+function _addSecretRooms(rooms, floorNum, ownedItemIds) {
+  function makeSecretRoom(parent, dir, type, extra) {
+    const r = {
+      id: rooms.length, col: null, row: null,
+      type, doors: { up: null, down: null, left: null, right: null },
+      cleared: false, visited: false,
+      secretEntry: { parentId: parent.id, fromDir: dir },
+      ...extra,
+    };
+    r.doors[OPP_DIR[dir]] = parent.id;
+    rooms.push(r);
+    parent.secretDoor = { dir, roomId: r.id, targetType: type };
+  }
+
+  // 보물방 — 층 진행에 따라 20% → 30%(상한)
+  const cacheChance = Math.min(
+    SECRET_CACHE_CHANCE_MAX,
+    SECRET_CACHE_CHANCE_BASE + (floorNum - 1) * SECRET_CACHE_CHANCE_STEP,
+  );
+  if (Math.random() < cacheChance) {
+    const pool = rooms
+      .filter(r => r.type === 'combat')
+      .map(r => ({ r, dir: _getFreeWallDir(r) }))
+      .filter(({ dir }) => dir !== null);
+    if (pool.length > 0) {
+      const { r: parent, dir } = pool[Math.floor(Math.random() * pool.length)];
+      // 보물방(loot) / 제단방(altar) / 엘리트방(elite) = 각 1/3
+      const roll = Math.random();
+      const subtype = roll < 1 / 3 ? 'loot' : roll < 2 / 3 ? 'altar' : 'elite';
+      const reward  = subtype === 'loot' ? _pickCacheReward(ownedItemIds) : null;
+      makeSecretRoom(parent, dir, 'secret_cache', { cacheSubtype: subtype, cacheReward: reward });
+    }
+  }
+
+  // 기억 보관실 — 특정 층 고정
+  const vaultIdx = VAULT_FLOOR_MAP[floorNum];
+  if (vaultIdx !== undefined) {
+    const pool = rooms
+      .filter(r => r.type === 'combat' && !r.secretDoor)
+      .map(r => ({ r, dir: _getFreeWallDir(r) }))
+      .filter(({ dir }) => dir !== null);
+    if (pool.length > 0) {
+      const { r: parent, dir } = pool[Math.floor(Math.random() * pool.length)];
+      makeSecretRoom(parent, dir, 'secret_vault', { vaultIdx });
+    }
+  }
+}
+
 /**
  * 랜덤 워크로 9~12개 방을 배치하고 인접 연결.
  * floorNum 이 2 또는 4 일 때 일반 전투방 하나를 상점방으로 치환.
@@ -192,6 +265,8 @@ export function generateDungeon(
       picked.r.shopSlots = _generateShopSlots(ownedItemIds, extraShopSlots, shopPriceMult);
     }
   }
+
+  _addSecretRooms(rooms, floorNum, ownedItemIds);
 
   return { rooms, startId: 0, grid, gridCols: GRID_COLS, gridRows: GRID_ROWS };
 }

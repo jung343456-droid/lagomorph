@@ -38,6 +38,7 @@
  *   startingCores    0      런 시작 코어 추가 (영구 해금 '점화의 잔해' +10) — GameScene.create 에서 enemyManager.coreCount 에 합산
  *   invulnDurationMult 1    피격 후 무적 깜빡임 지속 배율 (영구 해금 '잔영의 가호' ×1.25) — takeDamage 일반 분기 tween duration 에 적용
  *   hasMapReveal     false 현재 층 전체 방을 지도에 표시 (던전의 감각)
+ *   hasSecretSense   false 비밀 방 입구 벽 투명도 0.2 로 뚜렷하게 비침 (예리한 후각) — Room._buildSecretWall
  *   metaRetainRate   0.25   사망 시 메타 픽업분 보존율 (영구 해금 '잔해 회수 I~IV' +0.05 씩 → 최대 0.45) — MetaProgress.commitMetaRun 참조
  *   autoCollectCores false  방 클리어 시 남은 코어 전량 자석 흡수 — 기본 해제, 패시브 아이템으로 활성화 (EnemyManager._collectAllCores 게이팅)
  *   corePickupRange  55     코어 자동 흡수 시작 반경(px) — 해금 '코어 흡수 I~III' +15 씩 (→ 70/85/100)
@@ -69,7 +70,7 @@ const SAVE_STAT_KEYS = [
   'hasPoison', 'hasFire', 'hasIce', 'hasThunder', 'healOnKill', 'chargeSpeedMult',
   'hasFireDisguise', 'hasIceDisguise', 'hasPoisonDisguise', 'trapCostBonus', 'trapSizeMult',
   'healItemMult', 'coreDropMult', 'hpPerRoomClear', 'shopSlotBonus', 'armor', 'damageReduction',
-  'trapMaxBonus', 'startingCores', 'invulnDurationMult', 'hasMapReveal', 'extraLives',
+  'trapMaxBonus', 'startingCores', 'invulnDurationMult', 'hasMapReveal', 'hasSecretSense', 'extraLives',
   'extraStartItems', 'shopPriceMult', 'metaRetainRate', 'autoCollectCores', 'corePickupRange',
 ];
 
@@ -113,6 +114,7 @@ export default class Player {
     this.startingCores    = 0;   // 점화의 잔해 +10 (GameScene.create 에서 enemyManager.coreCount 에 합산)
     this.invulnDurationMult = 1; // 잔영의 가호 ×1.25 (takeDamage 일반 분기 tween duration 에 적용)
     this.hasMapReveal     = false; // 던전의 감각 — 현재 층 전체 방을 지도에 표시
+    this.hasSecretSense   = false; // 예리한 후각 — 비밀 방 입구 벽이 뚜렷하게 비쳐 감지 쉬움 (Room._buildSecretWall)
     this.extraLives       = 0;   // 최후의 발버둥 해금 시 +1 (takeDamage 치명 흡수)
     this.extraStartItems  = 0;   // 기억 단편화 해금 시 +1 (GameScene._spawnStartRoomItem 참조)
     this.shopPriceMult    = 1;   // 상인의 신용 해금 시 ×0.9 (DungeonGenerator._generateShopSlots 참조)

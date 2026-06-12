@@ -1,5 +1,5 @@
 /**
- * 패시브 아이템 픽업 — 총 22종
+ * 패시브 아이템 픽업 — 총 23종
  * 수집 시 플레이어 스탯에 영구 적용 (런 내 유지), 획득 이력 localStorage 저장
  *
  * 근거리 강화: wide_claws(반경), sharp_claws(데미지), quick_claws(충전속도)
@@ -10,7 +10,7 @@
  *           bulletproof_vest(방어력)
  * 트랩 위장(스플래시+상태이상): fire_disguise(화상), ice_disguise(빙결), poison_disguise(중독)
  * 트랩 강화: frugal_instinct(코어소모↓), big_trap(크기)
- * 탐색/편의: map_sense(전체 지도 공개), core_affinity(방 클리어 시 코어 자동 수집)
+ * 탐색/편의: map_sense(전체 지도 공개), secret_sense(비밀 벽 가시화), core_affinity(방 클리어 시 코어 자동 수집)
  *
  * 스폰 규칙:
  *   시작 방 — 해금된 아이템 중 랜덤 1개 (첫 런은 미스폰)
@@ -151,6 +151,12 @@ export const ITEM_DEFS = {
     desc:  '이 층의 모든 방이 지도에 표시됨',
     color: 0x33bbdd,
     apply: (player) => { player.hasMapReveal = true; },
+  },
+  secret_sense: {
+    name:  '예리한 후각',
+    desc:  '비밀 방 입구 벽이 뚜렷하게 드러남',
+    color: 0xbb88ee,
+    apply: (player) => { player.hasSecretSense = true; },
   },
   core_affinity: {
     name:  '코어 체질',

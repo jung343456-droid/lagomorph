@@ -50,9 +50,17 @@
 | 컴포넌트 | 직렬화 | 복원 | 보존 내용 |
 |---|---|---|---|
 | `Player` | `serialize()` | `applySave(data)` | 좌표·HP·전체 스탯·인벤토리·방향. 복원 시 저장값으로 **덮어씀**(런 중 아이템 변경분 반영) |
-| `EnemyManager` | `serialize()` | `restoreFromSave(data)` | 적·코어·레어·상태이상·코어카운트·보스 |
+| `EnemyManager` | `serialize()` | `restoreFromSave(data)` | 적·코어·레어·상태이상·코어카운트·보스·**제단 누진 카운트(`altarPurchases`)** |
 | `AttackManager` | `serialize()` | `restoreFromSave(data)` | B쿨다운·설치 트랩(`_poops`) |
 | `RoomManager` | — (dungeonData는 GameScene 레벨) | `restore(dungeon, roomId)` | 저장된 방으로 진입(적 스폰 안 함) |
+
+> **코어 제단 강화**: 제단으로 산 런 한정 강화(최대HP·근접피해·충전속도·덫·근접범위)는 모두 `Player`의
+> 기존 스탯 필드를 갱신하므로 `Player.serialize()`가 그대로 보존한다 — 별도 처리 없음. 가격 누진 상태만
+> `EnemyManager.serialize().altarPurchases`로 저장한다.
+>
+> **제단 엔티티 자체**는 저장하지 않는다. 제단은 비밀방(`secret_cache`, `cacheSubtype='altar'`)에 속하고
+> 방 종류는 dungeonData에 직렬화되므로, 복원 후 그 방에 (재)진입하면 `GameScene` room-entered 핸들러가
+> `Altar`를 다시 스폰한다. 제단방에서 저장→복원 시에도 `restore()`가 `room-entered`를 발행해 즉시 재생성된다.
 
 ---
 
@@ -60,6 +68,10 @@
 
 ### 1. 던전은 통째로 직렬화
 `DungeonGenerator`는 비결정적(랜덤워크)이라 시드 재생성이 불가능하다. 대신 `dungeonData`가 이미 순수 데이터(방 배열에 `cleared/visited/doors/shopSlots/obstacleLayout`)라 그대로 JSON 가능.
+
+비밀방(`secret_cache` / `secret_vault`)은 생성 시 `rooms` 배열에 추가되고, 부모 방에 `secretDoor: { dir, roomId, targetType }` 프로퍼티가 붙는다. 비밀 벽이 파괴되면 `parentRoom.doors[dir] = secretRoomId`가 set되어 저장본에 반영된다. 복원 시:
+- `doors[dir] !== null`이면 `Room._buildSecretWall()`이 벽을 생성하지 않고 개구부만 유지 → 깨진 벽 상태 정확 복원.
+- `doors[dir] === null`이면 비밀 벽이 살아 있는 상태로 복원 → `attack-fired` 리스너 재등록.
 
 ### 2. 적 — 제네릭 스칼라 스냅샷
 적 15종마다 `serialize()`를 쓰지 않고, 인스턴스의 평범한 프로퍼티만 추출한다 (`EnemyManager._snapshotEnemy`):

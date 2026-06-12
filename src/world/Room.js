@@ -1,3 +1,4 @@
+import Phaser from 'phaser';
 import { GAME_W, GAME_H, HUD_H } from '../constants';
 
 export const ROOM_W = GAME_W;           // 방 너비 = 캔버스 너비
@@ -9,6 +10,8 @@ export const DOOR_W = 80;   // 문 통로 너비 (px) — 플레이어 body(55×
 
 const WALL_COLOR     = 0x3a3a5e; // 벽 색상 (진한 남색)
 const OBSTACLE_COLOR = 0x2a2a50; // 장애물 색상
+const SECRET_WALL_ALPHA = 0.65;  // 비밀 벽 투명도 — 일반 벽(1.0)보다 확실히 비쳐 구분되되, 얼핏 보면 지나치기 쉽게
+const SECRET_WALL_REVEAL_ALPHA = 0.2; // '예리한 후각' 패시브 보유 시 — 벽이 뚜렷하게 비쳐 쉽게 감지
 const DOOR_LOCKED    = 0x111133; // 잠긴 문 블록 색상
 const DOOR_OPEN_HINT = 0x1e1e3a; // 열린 문 어두운 배경 색상
 
@@ -26,11 +29,14 @@ export default class Room {
     this.obstacleGroup  = scene.physics.add.staticGroup();
     this._doorBlocks    = {};  // dir → rect
     this._gfx           = [];  // 비물리 시각 오브젝트
+    this._secretWallData = null; // 비밀 벽 상태
+    this._onAttackFired  = null; // 이벤트 리스너 참조 (정리용)
 
     this._buildFloor();
     this._buildWalls();
     this._buildObstacles();
     if (data.type === 'shop') this._buildShopAmbience();
+    if (data.secretDoor) this._buildSecretWall(data.secretDoor.dir, data.secretDoor.targetType);
   }
 
   /** 전투방 진입 시 모든 연결 문을 물리 블록으로 막음 */
@@ -96,6 +102,10 @@ export default class Room {
   }
 
   destroy() {
+    if (this._onAttackFired) {
+      this.scene.events.off('attack-fired', this._onAttackFired, this);
+      this._onAttackFired = null;
+    }
     this.wallGroup.destroy(true);
     this.obstacleGroup.destroy(true);
     this._gfx.forEach(g => { if (g?.active) g.destroy(); });
@@ -132,6 +142,7 @@ export default class Room {
 
   _buildWalls() {
     const { doors } = this.data;
+    const sd = this.data.secretDoor?.dir ?? null; // 비밀 벽이 차지하는 방향 (개구부 처리)
     const add = (x1, y1, x2, y2) => {
       const w = x2 - x1, h = y2 - y1;
       const sprite = this.scene.add.tileSprite(x1 + w / 2, y1 + h / 2, w, h, this._tex('obstacle_fence'));
@@ -142,35 +153,34 @@ export default class Room {
     };
 
     // 상단
-    if (doors.up !== null) {
+    if (doors.up !== null || sd === 'up') {
       add(0, 0, DOOR_HX, WALL_T);
       add(DOOR_HX + DOOR_W, 0, ROOM_W, WALL_T);
     } else { add(0, 0, ROOM_W, WALL_T); }
 
     // 하단
-    if (doors.down !== null) {
+    if (doors.down !== null || sd === 'down') {
       add(0, ROOM_H - WALL_T, DOOR_HX, ROOM_H);
       add(DOOR_HX + DOOR_W, ROOM_H - WALL_T, ROOM_W, ROOM_H);
     } else { add(0, ROOM_H - WALL_T, ROOM_W, ROOM_H); }
 
     // 좌측
-    if (doors.left !== null) {
+    if (doors.left !== null || sd === 'left') {
       add(0, 0, WALL_T, DOOR_VY);
       add(0, DOOR_VY + DOOR_W, WALL_T, ROOM_H);
     } else { add(0, 0, WALL_T, ROOM_H); }
 
     // 우측
-    if (doors.right !== null) {
+    if (doors.right !== null || sd === 'right') {
       add(ROOM_W - WALL_T, 0, ROOM_W, DOOR_VY);
       add(ROOM_W - WALL_T, DOOR_VY + DOOR_W, ROOM_W, ROOM_H);
     } else { add(ROOM_W - WALL_T, 0, ROOM_W, ROOM_H); }
   }
 
   _buildObstacles() {
-    // 상점방·시작방: 장애물 없음
-    //  - 상점: NPC·구매 동선 방해 방지
-    //  - 시작방: 플레이어 등장 지점(중앙·문 근처)에 장애물이 겹쳐 stuck 되는 사고 방지
-    if (this.data.type === 'shop' || this.data.type === 'start') {
+    // 상점방·시작방·비밀방: 장애물 없음
+    if (this.data.type === 'shop' || this.data.type === 'start'
+        || this.data.type === 'secret_cache' || this.data.type === 'secret_vault') {
       this.data.obstacleLayout = [];
       return;
     }
@@ -247,9 +257,9 @@ export default class Room {
 
   _drawOpenDoorHints() {
     const hints = [
-      { dir: 'up',    x: ROOM_W / 2,         y: WALL_T / 2 },
-      { dir: 'down',  x: ROOM_W / 2,         y: ROOM_H - WALL_T / 2 },
-      { dir: 'left',  x: WALL_T / 2,         y: ROOM_H / 2 },
+      { dir: 'up',    x: ROOM_W / 2,          y: WALL_T / 2 },
+      { dir: 'down',  x: ROOM_W / 2,          y: ROOM_H - WALL_T / 2 },
+      { dir: 'left',  x: WALL_T / 2,          y: ROOM_H / 2 },
       { dir: 'right', x: ROOM_W - WALL_T / 2, y: ROOM_H / 2 },
     ];
     const arrowChar = { up: '▲', down: '▼', left: '◀', right: '▶' };
@@ -263,12 +273,135 @@ export default class Room {
     });
   }
 
+  /** 비밀 문 개방 후 해당 방향 화살표만 단독 추가 — 기존 힌트 중복 방지 */
+  drawSecretDoorHint(dir) {
+    const POS = {
+      up:    { x: ROOM_W / 2,          y: WALL_T / 2 },
+      down:  { x: ROOM_W / 2,          y: ROOM_H - WALL_T / 2 },
+      left:  { x: WALL_T / 2,          y: ROOM_H / 2 },
+      right: { x: ROOM_W - WALL_T / 2, y: ROOM_H / 2 },
+    };
+    const arrowChar = { up: '▲', down: '▼', left: '◀', right: '▶' };
+    const { x, y } = POS[dir];
+    const t = this.scene.add.text(x, y, arrowChar[dir], {
+      fontSize: '12px', color: '#88aaff', fontFamily: 'monospace',
+    }).setOrigin(0.5).setDepth(5);
+    this._gfx.push(t);
+  }
+
   /** 상점방 한정: 따뜻한 톤 오버레이 (원형 글로우는 상호작용 범위로 오인되어 제거) */
   _buildShopAmbience() {
     const overlay = this.scene.add.rectangle(
       ROOM_W / 2, ROOM_H / 2, ROOM_W, ROOM_H, 0x3a2818, 0.22,
     ).setDepth(0.5);
     this._gfx.push(overlay);
+  }
+
+  // ── 비밀 벽 (BREAKABLE WALL) ─────────────────────────
+
+  /**
+   * 비밀 방 입구 벽 생성 — 도어 개구부(DOOR_W × WALL_T 또는 WALL_T × DOOR_W)를 채우는
+   * 타일스프라이트 + 공격 타격 감지 리스너.
+   * 일반 울타리 텍스처를 그대로 쓰되 약한 투명도(SECRET_WALL_ALPHA)만 적용 — 색조·맥동 없이,
+   * 자세히 보면 미묘하게 비치지만 얼핏 지나치기 쉽게 한다.
+   * '예리한 후각'(player.hasSecretSense) 보유 시 SECRET_WALL_REVEAL_ALPHA(0.2)로 뚜렷하게 비친다.
+   * 벽이 이미 파괴된(저장 복원 시 doors[dir] !== null) 경우는 건너뜀.
+   */
+  _buildSecretWall(dir, targetType) {
+    if (this.data.doors[dir] !== null) return; // 이미 파괴된 벽 — 개구부만 열린 상태로 유지
+
+    const isVault = targetType === 'secret_vault';
+    const maxHits = isVault ? 5 : 3;
+    const restAlpha = this.scene.player?.hasSecretSense ? SECRET_WALL_REVEAL_ALPHA : SECRET_WALL_ALPHA;
+
+    const a = this._doorArea(dir);
+    const go = this.scene.add.tileSprite(a.cx, a.cy, a.w, a.h, this._tex('obstacle_fence'));
+    go.setDepth(2).setAlpha(restAlpha); // 일반 벽(depth 2)과 동일 톤, 투명도만 미세하게
+    this.scene.physics.add.existing(go, true);
+    this.wallGroup.add(go);
+    this._gfx.push(go);
+
+    const crackGfx = this.scene.add.graphics().setDepth(4);
+    this._gfx.push(crackGfx);
+
+    this._secretWallData = { go, crackGfx, pulseTween: null, hits: 0, maxHits, dir, restAlpha };
+
+    this._onAttackFired = ({ tierData, playerX, playerY }) => {
+      if (!this._secretWallData) return;
+      const dist = Phaser.Math.Distance.Between(playerX, playerY, go.x, go.y);
+      if (dist <= (tierData.radius ?? 60) + 32) this._hitSecretWall();
+    };
+    this.scene.events.on('attack-fired', this._onAttackFired, this);
+  }
+
+  _hitSecretWall() {
+    const d = this._secretWallData;
+    if (!d || d.hits >= d.maxHits) return;
+    d.hits++;
+
+    // 피격 플래시 — 잠깐 흐려졌다 원래 투명도로 복귀
+    this.scene.tweens.add({
+      targets: d.go, alpha: { from: 0.3, to: d.restAlpha }, duration: 100,
+    });
+
+    this._updateCrackVisual(d);
+
+    if (d.hits >= d.maxHits) {
+      this.scene.time.delayedCall(120, () => this._breakSecretWall());
+    }
+  }
+
+  _updateCrackVisual(d) {
+    const { crackGfx, go, hits, maxHits } = d;
+    crackGfx.clear();
+    if (hits === 0) return;
+
+    const cx = go.x, cy = go.y;
+    const prog = hits / maxHits;
+    // 균열선 — 진행도에 따라 단계적으로 추가
+    const lines = [
+      [[-4, -3, 3, 2]],
+      [[-4, -3, 3, 2], [2, 4, -3, -1]],
+      [[-4, -3, 3, 2], [2, 4, -3, -1], [-1, 3, 5, -4]],
+      [[-4, -3, 3, 2], [2, 4, -3, -1], [-1, 3, 5, -4], [-5, 1, 4, -2]],
+      [[-4, -3, 3, 2], [2, 4, -3, -1], [-1, 3, 5, -4], [-5, 1, 4, -2], [0, -5, -2, 4]],
+    ];
+    const stage = Math.min(hits - 1, lines.length - 1);
+    lines[stage].forEach(([x1, y1, x2, y2], i) => {
+      crackGfx.lineStyle(1.5, 0xffffff, 0.4 + prog * 0.5);
+      crackGfx.beginPath();
+      crackGfx.moveTo(cx + x1 * 3, cy + y1 * 3);
+      crackGfx.lineTo(cx + x2 * 3, cy + y2 * 3);
+      crackGfx.strokePath();
+    });
+  }
+
+  _breakSecretWall() {
+    const d = this._secretWallData;
+    if (!d) return;
+    this._secretWallData = null;
+
+    if (this._onAttackFired) {
+      this.scene.events.off('attack-fired', this._onAttackFired, this);
+      this._onAttackFired = null;
+    }
+
+    d.pulseTween?.stop();
+    if (d.go.body) { d.go.body.enable = false; this.wallGroup.remove(d.go, false, false); }
+    d.crackGfx?.destroy();
+
+    // 붕괴 연출 — 밝게 터진 후 페이드아웃
+    this.scene.tweens.add({
+      targets: d.go, alpha: { from: 1, to: 0 }, scaleX: 1.3, scaleY: 1.3,
+      duration: 320, ease: 'Quad.Out',
+      onComplete: () => { if (d.go.active) d.go.destroy(); },
+    });
+
+    this.scene.events.emit('secret-door-opened', {
+      roomId:       this.data.id,
+      dir:          d.dir,
+      targetRoomId: this.data.secretDoor.roomId,
+    });
   }
 
   /** 문 블록의 물리 영역 (center-x, center-y, width, height) */

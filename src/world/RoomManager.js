@@ -21,11 +21,13 @@ export default class RoomManager {
     this._clearedAt       = 0;
     this.floorNum         = 1;  // 현재 층 번호 (1~20 선형 카운터, 구역 = ceil/5)
 
-    scene.events.on('all-enemies-dead', this._onRoomCleared, this);
+    scene.events.on('all-enemies-dead',   this._onRoomCleared,      this);
+    scene.events.on('secret-door-opened', this._onSecretDoorOpened, this);
   }
 
   destroy() {
-    this.scene.events.off('all-enemies-dead', this._onRoomCleared, this);
+    this.scene.events.off('all-enemies-dead',   this._onRoomCleared,      this);
+    this.scene.events.off('secret-door-opened', this._onSecretDoorOpened, this);
   }
 
   setFloor(n) {
@@ -53,7 +55,10 @@ export default class RoomManager {
 
   update() {
     if (this._transitioning || !this._room) return;
-    if (!this.currentRoomData.cleared) return;
+    // 엘리트 비밀방은 미클리어 상태에서도 이탈 가능 (도망 가능 설계)
+    const isEliteCache = this.currentRoomData.type === 'secret_cache'
+                      && this.currentRoomData.cacheSubtype === 'elite';
+    if (!this.currentRoomData.cleared && !isEliteCache) return;
     const now = this.scene.time.now;
     if (now - this._enteredAt < ENTER_GRACE_MS) return;
     if (this._clearedAt > 0 && now - this._clearedAt < CLEAR_GRACE_MS) return;
@@ -135,8 +140,9 @@ export default class RoomManager {
 
     // 임시 저장 복원: 적은 EnemyManager 가 주입하므로 스폰하지 않고 문 잠금만 결정
     if (opts.skipSpawn) {
-      if (roomData.cleared) this._room.unlockDoors();
-      else                  this._room.lockDoors();
+      const isSecretRoom = roomData.type === 'secret_cache' || roomData.type === 'secret_vault';
+      if (roomData.cleared || isSecretRoom) this._room.unlockDoors();
+      else                                  this._room.lockDoors();
       this.scene.events.emit('room-entered', { roomData, dungeonData: this.dungeonData });
       return;
     }
@@ -162,6 +168,34 @@ export default class RoomManager {
         // 그 외 출구방: 보스 없음 — 일반 적 +2~3마리 (항상 3종)
         this.enemyManager.spawnForRoom(this._exitRoomCount(), true);
       }
+    } else if (roomData.type === 'secret_vault') {
+      // 기억 보관실: 전투 없음, 즉시 클리어, 첫 방문에만 텍스트 표시
+      roomData.cleared = true;
+      this._room.unlockDoors();
+      if (!wasVisited) {
+        this.scene.events.emit('vault-entered', { vaultIdx: roomData.vaultIdx });
+      }
+    } else if (roomData.type === 'secret_cache') {
+      if (roomData.cacheSubtype === 'loot') {
+        // 보관함 방: 전투 없음, 즉시 클리어, 첫 방문에만 아이템 스폰
+        roomData.cleared = true;
+        this._room.unlockDoors();
+        if (!wasVisited) {
+          this.scene.events.emit('secret-cache-entered', {
+            x: ROOM_W / 2, y: ROOM_H / 2, reward: roomData.cacheReward,
+          });
+        }
+      } else if (roomData.cacheSubtype === 'altar') {
+        // 제단 방: 전투 없음, 즉시 클리어. 제단 엔티티는 GameScene 가 room-entered 에서 스폰/정리
+        roomData.cleared = true;
+        this._room.unlockDoors();
+      } else {
+        // 엘리트 방: 출구 열린 상태 유지(도망 가능), 미클리어 상태면 엘리트 스폰
+        this._room.unlockDoors();
+        if (!roomData.cleared) {
+          this.enemyManager.spawnSecretElite(ROOM_W / 2, ROOM_H / 2);
+        }
+      }
     } else {
       // 일반 전투방
       this._room.lockDoors();
@@ -169,6 +203,13 @@ export default class RoomManager {
     }
 
     this.scene.events.emit('room-entered', { roomData, dungeonData: this.dungeonData });
+  }
+
+  _onSecretDoorOpened({ roomId, dir, targetRoomId }) {
+    // 현재 방의 비밀 벽이 파괴됨 — 문 데이터에 연결 추가 (이후 도어 트리거가 정상 작동)
+    if (this.currentRoomData?.id !== roomId) return;
+    this.currentRoomData.doors[dir] = targetRoomId;
+    this._room?.drawSecretDoorHint(dir);
   }
 
   _onRoomCleared() {

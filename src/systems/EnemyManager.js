@@ -18,6 +18,7 @@ import RareItem, { PICKUP_R as RARE_PICKUP_R, MAGNET_SPEED as RARE_MAGNET_SPEED,
 import { ROOM_W, ROOM_H, WALL_T } from '../world/Room';
 import { showDamageNumber } from '../utils/DamageNumbers';
 import { addRunPickup } from '../data/MetaProgress';
+import { altarCostFor } from '../data/AltarPool';
 
 const CORE_PICKUP_R          = 55;  // 코어 자동 흡수 시작 반경 기본값 (px) — 해금으로 player.corePickupRange 증가
 const CORE_MAGNET_SPEED      = 400; // 코어 자석 이동 속도 (px/s)
@@ -148,6 +149,7 @@ export default class EnemyManager {
     this.cores      = [];
     this.rareItems  = [];
     this.coreCount  = 30;
+    this._altarPurchases = 0; // 코어 제단 런 누적 구매 수 — 가격 누진 기준 (AltarPool.altarCostFor)
     this.boss       = null; // 현재 보스 참조 (UIScene에서 HP 표시용)
     this.floorNum   = 1;    // 현재 층 — _pickType()이 참조하는 스폰 풀 키
 
@@ -472,6 +474,16 @@ export default class EnemyManager {
     return boss;
   }
 
+  /** 비밀 엘리트 방: 현재 층 풀에서 1마리 선택 후 엘리트 변이. 도망용 출구는 항상 열려 있음. */
+  spawnSecretElite(x, y) {
+    this._clearAll();
+    this._hadEnemies = true;
+    const table = this._buildRoomTable(false);
+    const type  = this._pickType(table);
+    const enemy = this.spawnEnemy(type, x, y);
+    this._makeElite(enemy);
+  }
+
   dropRareItem(x, y) {
     ({ x, y } = this.scene.roomManager?.findSafeDropPos(x, y) ?? { x, y });
     this.rareItems.push(new RareItem(this.scene, x, y));
@@ -497,6 +509,12 @@ export default class EnemyManager {
     return true;
   }
 
+  /** 코어 제단 현재 가격 — 런 누적 구매 수 기준 누진. */
+  altarCost() { return altarCostFor(this._altarPurchases); }
+
+  /** 제단 구매 1회 기록 — 이후 모든 제단 가격이 상승. */
+  recordAltarPurchase() { this._altarPurchases++; }
+
   destroy() {
     this.scene.events.off('attack-fired', this._onAttackFired, this);
   }
@@ -508,6 +526,7 @@ export default class EnemyManager {
     const live = this.enemies.filter(e => e.alive && !e.destroyed);
     return {
       coreCount:  this.coreCount,
+      altarPurchases: this._altarPurchases,
       floorNum:   this.floorNum,
       hadEnemies: this._hadEnemies,
       enemies:    live.map(e => this._snapshotEnemy(e)),
@@ -526,6 +545,7 @@ export default class EnemyManager {
     if (!data) return;
     this._clearAll();
     this.coreCount = data.coreCount ?? this.coreCount;
+    this._altarPurchases = data.altarPurchases ?? this._altarPurchases;
     this.floorNum  = data.floorNum ?? this.floorNum;
 
     for (const snap of data.enemies ?? []) this._restoreEnemy(snap);

@@ -34,7 +34,8 @@
 | `precision_strike` | 정밀 일격 | 황금 `0xddcc22` | 치명타율 +10%, 치명타 피해 +50% | `player.critRate += 0.10; player.critMult += 0.5` |
 | `savage_strike` | 광폭한 일격 | 짙은빨강 `0x8b0000` | 치명타 피해 +100% (×1.5→×2.5) | `player.critMult += 1.0` |
 | `blood_feast` | 피의 향연 | 자홍 `0xaa0033` | 치명타 명중 시 HP +2 (근거리·트랩 직격·트랩 스플래시 모두) | `player.critHealAmount += 2` |
-| `map_sense` | 던전의 감각 | 청색 `0x33bbdd` | 이 층의 모든 방이 지도에 표시됨 (미방문 포함) | `player.hasMapReveal = true` |
+| `map_sense` | 던전의 감각 | 청색 `0x33bbdd` | 이 층의 모든 방이 지도에 표시됨 (미방문 포함, 비밀방 제외) | `player.hasMapReveal = true` |
+| `secret_sense` | 예리한 후각 | 연보라 `0xbb88ee` | 비밀 방 입구 벽이 뚜렷하게 드러남 (투명도 0.65→0.2, `Room._buildSecretWall`) | `player.hasSecretSense = true` |
 | `core_affinity` | 코어 체질 | 청록 `0x00d4aa` | 방 클리어 시 남은 코어 전량 자동 흡수 (없으면 코어는 바닥에 남아 직접 근처로 가야 수집) | `player.autoCollectCores = true` |
 
 ---
@@ -61,7 +62,8 @@
 | `critRate` | `0.15` | 치명타율 (0~1). `rollAttackDamage` 가 매 공격마다 굴림 |
 | `critMult` | `1.5` | 치명타 피해 배율 (damage × critMult) |
 | `critHealAmount` | `0` | 치명타 명중 시 즉시 회복할 HP량 (근거리/트랩 직격/스플래시 모두) |
-| `hasMapReveal` | `false` | 현재 층 전체 방을 지도에 표시 (던전의 감각) |
+| `hasMapReveal` | `false` | 현재 층 전체 방을 지도에 표시 (던전의 감각, 비밀방 제외) |
+| `hasSecretSense` | `false` | 비밀 방 입구 벽 투명도 0.2 로 뚜렷하게 비침 (예리한 후각, Room._buildSecretWall) |
 | `autoCollectCores` | `false` | 방 클리어 시 남은 코어 전량 자석 흡수 (EnemyManager._collectAllCores 게이팅) |
 
 ---

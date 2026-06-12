@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { GAME_W, GAME_H, HUD_H, zoneOf, displayFloor } from '../constants';
 import PassiveItem, { ITEM_DEFS } from '../entities/PassiveItem';
+import { ALTAR_POOL } from '../data/AltarPool';
 import { safeInsetBottom } from '../utils/SafeArea';
 import { saveRunState } from '../data/SaveManager';
 
@@ -73,6 +74,7 @@ export default class UIScene extends Phaser.Scene {
     this._itemScrollOffset = 0;
     this._itemMaskGfx    = null;
     this._shopOpen       = false;
+    this._shopMode       = 'shop'; // 'shop' | 'altar' — 상점 오버레이 공용, 제단은 누진가·반복구매
     this._shopCardEls    = [];
     this._shopStaticEls  = [];
     this._shopSlots      = null;
@@ -222,6 +224,20 @@ export default class UIScene extends Phaser.Scene {
 
   // ── 미니맵 ───────────────────────────────────────────
 
+  /**
+   * 미니맵 표시용 격자 셀 좌표 반환. 일반 방은 자기 col/row.
+   * 비밀방(col=null)은 부모 방의 비밀문 방향 옆 칸으로 환산(방문 후 표시용). 환산 불가 시 null.
+   */
+  _mmCell(r, rooms) {
+    if (r.col !== null) return { col: r.col, row: r.row };
+    const se = r.secretEntry;
+    const parent = se ? rooms.find(p => p.id === se.parentId) : null;
+    if (!parent || parent.col === null) return null;
+    const off = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }[se.fromDir];
+    if (!off) return null;
+    return { col: parent.col + off[0], row: parent.row + off[1] };
+  }
+
   _refreshMinimap(dungeonData, currentId) {
     this._mmCells.forEach(c => c?.destroy());
     this._mmCells = [];
@@ -238,11 +254,15 @@ export default class UIScene extends Phaser.Scene {
       .rectangle(ox - MM_PAD, oy - MM_PAD, totalW + MM_PAD * 2, totalH + MM_PAD * 2, 0x000000, 0.65)
       .setOrigin(0, 0);
 
-    rooms.filter(r => r.visited || mapReveal).forEach(r => {
-      const cx = ox + r.col * MM_CW + MM_CW / 2;
-      const cy = oy + r.row * MM_CH + MM_CH / 2;
+    // 비밀방(col=null)은 '던전의 감각' 미리보기에선 숨기고, 방문(visited) 후에만 부모 옆에 표시
+    rooms.filter(r => (r.col === null) ? r.visited : (r.visited || mapReveal)).forEach(r => {
+      const pos = this._mmCell(r, rooms);
+      if (!pos) return;
+      const cx = ox + pos.col * MM_CW + MM_CW / 2;
+      const cy = oy + pos.row * MM_CH + MM_CH / 2;
       const unvisited = mapReveal && !r.visited;
       const color = r.id === currentId ? 0x4ecca3
+        : r.col === null      ? 0x9b59d0
         : r.type === 'start'  ? 0x888844
         : r.type === 'shop'   ? 0xddcc22
         : r.type === 'boss'   ? (r.cleared ? 0x554444 : 0xff2222)
@@ -377,12 +397,17 @@ export default class UIScene extends Phaser.Scene {
     ).setOrigin(0, 0).setDepth(102);
     this._mmLargeCells.push(bg);
 
-    rooms.filter(r => r.visited || mapReveal).forEach(r => {
-      const cx = ox + r.col * MM_LARGE_CW + MM_LARGE_CW / 2;
-      const cy = oy + r.row * MM_LARGE_CH + MM_LARGE_CH / 2;
+    // 비밀방(col=null)은 '던전의 감각' 미리보기에선 숨기고, 방문(visited) 후에만 부모 옆에 표시
+    rooms.filter(r => (r.col === null) ? r.visited : (r.visited || mapReveal)).forEach(r => {
+      const pos = this._mmCell(r, rooms);
+      if (!pos) return;
+      const cx = ox + pos.col * MM_LARGE_CW + MM_LARGE_CW / 2;
+      const cy = oy + pos.row * MM_LARGE_CH + MM_LARGE_CH / 2;
       const isCurrent = r.id === this._currentRoomId;
       const unvisited = mapReveal && !r.visited;
+      const isSecret = r.col === null;
       const color = isCurrent           ? 0x4ecca3
+        : isSecret            ? 0x9b59d0
         : r.type === 'start'  ? 0x888844
         : r.type === 'shop'   ? 0xddcc22
         : r.type === 'boss'   ? (r.cleared ? 0x554444 : 0xff2222)
@@ -396,7 +421,8 @@ export default class UIScene extends Phaser.Scene {
 
       // 방 유형 라벨
       let label = '';
-      if (r.type === 'start')      label = 'S';
+      if (isSecret)                label = '?';
+      else if (r.type === 'start') label = 'S';
       else if (r.type === 'shop')  label = '$';
       else if (r.type === 'boss')  label = 'B';
       if (label) {
@@ -819,6 +845,8 @@ export default class UIScene extends Phaser.Scene {
 
   openShop(slots) {
     if (this._shopOpen || !slots) return;
+    this._shopMode = 'shop';
+    this._shopTitle.setText('GRIM 상점');
     this._resizeShopPanelForSlots(slots.length);
     // 슬롯은 던전 생성 시점에 baked 되므로, 그 사이 보스/다른 상점에서 같은 패시브를 획득했을 수 있다.
     // 상점 오픈 시점에 보유 패시브와 충돌하는 'item' 슬롯을 다시 추첨한다.
@@ -828,6 +856,35 @@ export default class UIScene extends Phaser.Scene {
     this._shopStaticEls.forEach(el => el.setVisible(true));
     this._refreshShopCards();
     this.scene.get('GameScene').scene.pause();
+  }
+
+  /**
+   * 코어 제단 오버레이 — 상점 UI 를 재사용. 매 호출마다 ALTAR_POOL 에서 n개를 랜덤 추첨.
+   * 슬롯 가격은 baked 하지 않고 _refreshShopCards 에서 현재 누진가(em.altarCost)로 채운다.
+   * 구매 시 sold 처리하지 않고 누진 카운터만 올려 반복 구매 가능(가격은 매번 상승).
+   */
+  openAltar() {
+    if (this._shopOpen) return;
+    const slots = this._rollAltarSlots(3);
+    this._shopMode = 'altar';
+    this._shopTitle.setText('코어 제단');
+    this._resizeShopPanelForSlots(slots.length);
+    this._shopOpen  = true;
+    this._shopSlots = slots;
+    this._shopStaticEls.forEach(el => el.setVisible(true));
+    this._refreshShopCards();
+    this.scene.get('GameScene').scene.pause();
+  }
+
+  _rollAltarSlots(n) {
+    const ids = Object.keys(ALTAR_POOL);
+    for (let i = ids.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [ids[i], ids[j]] = [ids[j], ids[i]];
+    }
+    return ids.slice(0, Math.min(n, ids.length)).map(id => ({
+      kind: 'upgrade', id, name: ALTAR_POOL[id].name, desc: ALTAR_POOL[id].desc, cost: 0,
+    }));
   }
 
   /** 보유 패시브와 겹치는 'item' 슬롯을 미보유 아이템으로 재추첨. 없으면 sold 처리. */
@@ -878,6 +935,12 @@ export default class UIScene extends Phaser.Scene {
     const em     = this.gameScene.enemyManager;
     const player = this.gameScene.player;
     this._shopCoreText.setText('◆ ' + em.coreCount);
+
+    // 제단: 모든 슬롯 가격을 현재 누진가로 동기화 (구매 시마다 상승)
+    if (this._shopMode === 'altar') {
+      const c = em.altarCost();
+      this._shopSlots.forEach(s => { s.cost = c; });
+    }
 
     const cardW   = this._shopPanelW - 28;
     const cardH   = 110;
@@ -953,7 +1016,9 @@ export default class UIScene extends Phaser.Scene {
 
     em.spendCores(slot.cost);
     this._applyShopSlot(slot, player);
-    slot.sold = true;
+    // 제단: sold 처리 없이 누진 카운터만 올려 반복 구매 가능 / 상점: 1회성 sold
+    if (this._shopMode === 'altar') em.recordAltarPurchase();
+    else                            slot.sold = true;
     // 상점 오픈 중에는 update()가 스킵되므로 HP·코어 카운터를 즉시 반영
     this._updateHP(player.hp, player.maxHp);
     this._coreText.setText(String(em.coreCount));
@@ -961,6 +1026,8 @@ export default class UIScene extends Phaser.Scene {
   }
 
   _applyShopSlot(slot, player) {
+    // 코어 제단 강화 (런 한정) — Player 기존 스탯 필드 갱신, serialize 로 자동 보존
+    if (slot.kind === 'upgrade')   { ALTAR_POOL[slot.id]?.apply(player); return; }
     // 대식가(big_trap) — healItemMult 로 회복량 ×1.1
     if (slot.kind === 'heal')      { player.heal(Math.max(1, Math.round(slot.amount * player.healItemMult))); return; }
     if (slot.kind === 'heal_pct')  { player.heal(Math.floor(player.maxHp * slot.ratio * player.healItemMult)); return; }
@@ -984,6 +1051,7 @@ export default class UIScene extends Phaser.Scene {
   }
 
   _shopDesc(slot, player) {
+    if (slot.kind === 'upgrade')   return slot.desc ?? '';
     if (slot.kind === 'item')      return slot.dynDesc ? slot.dynDesc(player) : (slot.desc ?? '');
     if (slot.kind === 'heal')      return `HP +${slot.amount}`;
     if (slot.kind === 'heal_pct')  return `HP +${Math.floor(player.maxHp * slot.ratio)} (50%)`;
@@ -992,6 +1060,7 @@ export default class UIScene extends Phaser.Scene {
   }
 
   _shopIconColor(slot) {
+    if (slot.kind === 'upgrade')   return 0x00e5ff;
     if (slot.kind === 'item')      return slot.color ?? 0xddaa44;
     if (slot.kind === 'heal_full') return 0xff6688;
     if (slot.kind === 'heal_pct')  return 0xff9966;

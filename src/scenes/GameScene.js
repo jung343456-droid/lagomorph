@@ -9,8 +9,13 @@ import RoomManager from '../world/RoomManager';
 import { ROOM_W, ROOM_H } from '../world/Room';
 import PassiveItem, { ITEM_DEFS } from '../entities/PassiveItem';
 import Shopkeeper from '../entities/Shopkeeper';
+import Altar from '../entities/Altar';
 import { getMetaCores, beginMetaRun, commitMetaRun, addRunPickup, getGrimIntroShown, markGrimIntroShown } from '../data/MetaProgress';
 import { saveRunState, loadRunSave, clearRunSave } from '../data/SaveManager';
+
+// 상점 가격 층 스케일링 — 구역 2(11~20층)는 코어 드롭이 ×1.5 인플레되므로 상점가도 ×1.5 로 대칭.
+// 구역 1 ×1.0 / 구역 2 ×1.5. 영구 해금 할인(player.shopPriceMult)과 곱연산 합성.
+const floorPriceMult = (floor) => 1 + 0.5 * (zoneOf(floor) - 1);
 
 const GRIM_FIRST_LINES = [
   '잠깐. 거기 서봐.',
@@ -27,7 +32,8 @@ export default class GameScene extends Phaser.Scene {
   create(data) {
     // scene.restart() 시 Phaser 3.60 은 이 씬의 이벤트 리스너를 자동 정리하지 않는다.
     // 이 씬에서 등록한 사용자 이벤트들을 명시적으로 비워야 listener 중복 등록을 막을 수 있다.
-    ['boss-cleared', 'floor-exit-ready', 'room-entered', 'shop-open-requested', 'floor-changed', 'all-enemies-dead', 'elite-killed']
+    ['boss-cleared', 'floor-exit-ready', 'room-entered', 'shop-open-requested', 'floor-changed',
+     'all-enemies-dead', 'elite-killed', 'vault-entered', 'secret-cache-entered', 'altar-open-requested']
       .forEach(e => this.events.off(e));
     if (this.roomManager) this.roomManager.destroy();
 
@@ -57,7 +63,8 @@ export default class GameScene extends Phaser.Scene {
     if (!save) {
       this.roomManager.init(generateDungeon(
         this.currentFloor, undefined, this._ownedItemIds(),
-        this.player.shopSlotBonus ?? 0, this.player.shopPriceMult ?? 1,
+        this.player.shopSlotBonus ?? 0,
+        (this.player.shopPriceMult ?? 1) * floorPriceMult(this.currentFloor),
       ));
     }
 
@@ -71,6 +78,7 @@ export default class GameScene extends Phaser.Scene {
 
     // 계단 상태 (아래층 진입 트리거 — A 버튼 입력 필요)
     this._stairs           = null;
+    this._altar            = null;   // 코어 제단 — 제단 비밀방(secret_cache/altar) 진입 시 스폰, 떠나면 정리 (room-entered 핸들러)
     this._stairsRoomId     = null;
     this._stairsPos        = null;
     this._stairsTriggered  = false;
@@ -127,6 +135,21 @@ export default class GameScene extends Phaser.Scene {
       }
     });
 
+    // 기억 보관실 진입: 볼트 텍스트 표시
+    this.events.on('vault-entered', ({ vaultIdx }) => {
+      this._showVaultText(vaultIdx);
+    });
+
+    // 보물방(보관함) 진입: 보상 아이템 스폰
+    this.events.on('secret-cache-entered', ({ x, y, reward }) => {
+      if (!reward) return;
+      if (reward.kind === 'item') {
+        this._passiveItems.push(new PassiveItem(this, x, y, reward.id));
+      } else {
+        this.enemyManager.dropRareItem(x, y);
+      }
+    });
+
     // 보스가 없는 층: 일반 방 클리어 시 그 방에 계단 표시
     this.events.on('floor-exit-ready', ({ x, y, floor, roomId }) => {
       if (floor < 3) this.time.delayedCall(500, () => this._markStairs(roomId, x, y));
@@ -141,6 +164,15 @@ export default class GameScene extends Phaser.Scene {
         } else if (!inStairsRoom && this._stairs) {
           this._disposeStairs();
         }
+      }
+
+      // 코어 제단 방(비밀방 1/3 분기) — 제단방에 있으면 스폰, 떠나면 정리
+      const isAltarRoom = roomData.type === 'secret_cache' && roomData.cacheSubtype === 'altar';
+      if (isAltarRoom && !this._altar) {
+        this._altar = new Altar(this, ROOM_W / 2, ROOM_H / 2);
+      } else if (!isAltarRoom && this._altar) {
+        this._altar.dispose();
+        this._altar = null;
       }
 
       // 상점방 NPC 라이프사이클 — 방 바뀔 때마다 기존 NPC 정리 후 필요 시 재생성
@@ -167,6 +199,13 @@ export default class GameScene extends Phaser.Scene {
       } else {
         ui.openShop?.(slots);
       }
+    });
+
+    // 코어 제단 열기 요청 (Altar 근접 시 발행) — 상점 오버레이 재사용, 런 한정 강화 구매
+    this.events.on('altar-open-requested', () => {
+      if (!this._altar) return;
+      this.player.halt();  // 진입 시 잔여 속도로 미끄러지는 것 방지
+      this.scene.get('UIScene').openAltar?.();
     });
 
     // 카메라 뷰포트를 HUD 아래 영역으로 제한 → 게임/HUD 영역 시각적 분리
@@ -434,6 +473,56 @@ export default class GameScene extends Phaser.Scene {
       .setScrollFactor(0).setDepth(101);
   }
 
+  _showVaultText(vaultIdx) {
+    const VAULT_LINES = [
+      // Vault 01 — 양지
+      [
+        '[ 기억 보관실 01 — 「양지(陽地)」 ]',
+        '벽면이 부서지자, 따뜻한 빛이 새어 나온다.',
+        '풀밭이었다. 바람에 풀이 눕고, 나는 그 사이를 달렸다.\n햇볕이 등에 닿는 감촉, 발밑에서 흙냄새가 올라오던 것까지.',
+        '누군가 내 이름을 불렀다. 그 목소리를 나는 안다.\n너는 너무 빨리 달린다고, 좀 천천히 가도 된다고.',
+        '따뜻했다. 그게 전부였고, 그걸로 충분했다.',
+        '「기록일: 봄.  장소: 양지.  상태: 안정.」\n「기록일: 봄.  장소: 양지.  상태: 안정.」\n\n세 줄 모두 같은 날짜다.',
+      ],
+      // Vault 02 — 열람
+      [
+        '[ 기억 보관실 02 — 「열람(閱覽)」 ]',
+        '벽이 무너지자 빛 대신 차가운 모니터 광이 번진다.',
+        '[ ARCANA 내부 기록 / 분류: 기밀 ]\n피험체 VOSS-7.  기억 주입 3차 완료.',
+        '주입 패킷: 양지_봄_안정.eng\n— 안정성 확보를 위해 동일 단편 반복 적재.',
+        '익숙한 단어다.\n양지. 봄. 안정.\n01 보관실에서 본 그 기억이, 여기서는 파일 이름이다.',
+        '「주의: 피험체가 메타데이터 불일치를 인지할 경우,\n  위화감으로 발현될 수 있음.」\n\n나는 그 풀밭을 기억한다. 분명히 안다고 생각했다.',
+      ],
+    ];
+
+    const lines = VAULT_LINES[vaultIdx] ?? VAULT_LINES[0];
+    const ui = this.scene.get('UIScene');
+    if (ui?.openDialogue) {
+      this.player.halt?.();
+      ui.openDialogue(lines, null);
+      return;
+    }
+
+    // UIScene 다이얼로그 미지원 시 폴백: 인게임 단일 페이지 팝업
+    const depth = 110;
+    const bg = this.add.rectangle(GAME_W / 2, ROOM_H / 2, GAME_W - 40, ROOM_H - 120, 0x080820, 0.92)
+      .setScrollFactor(0).setDepth(depth).setStrokeStyle(1, 0x7733cc, 0.8);
+    const title = this.add.text(GAME_W / 2, 100, lines[0], {
+      fontSize: '12px', color: '#aa66ff', fontFamily: 'monospace', fontStyle: 'bold',
+    }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(depth + 1);
+    const body = this.add.text(GAME_W / 2, 140, lines.slice(1).join('\n\n'), {
+      fontSize: '11px', color: '#ccbbee', fontFamily: 'monospace',
+      wordWrap: { width: GAME_W - 80 }, align: 'left',
+    }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(depth + 1);
+    const hint = this.add.text(GAME_W / 2, ROOM_H - 80, '[ 탭하여 닫기 ]', {
+      fontSize: '11px', color: '#666688', fontFamily: 'monospace',
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(depth + 1);
+
+    const els = [bg, title, body, hint];
+    const close = () => els.forEach(e => { if (e.active) e.destroy(); });
+    this.input.once('pointerdown', close);
+  }
+
   _spawnStartRoomItem() {
     const owned = new Set(this._ownedItemIds());
     const pool  = PassiveItem.getUnlocked().filter(id => !owned.has(id));
@@ -478,7 +567,8 @@ export default class GameScene extends Phaser.Scene {
       this.roomManager.setFloor(this.currentFloor);
       this.roomManager.init(generateDungeon(
         this.currentFloor, undefined, this._ownedItemIds(),
-        this.player.shopSlotBonus ?? 0, this.player.shopPriceMult ?? 1,
+        this.player.shopSlotBonus ?? 0,
+        (this.player.shopPriceMult ?? 1) * floorPriceMult(this.currentFloor),
       ));
       this.events.emit('floor-changed', this.currentFloor);
       cam.fadeIn(500, 0, 0, 0);
@@ -576,6 +666,7 @@ export default class GameScene extends Phaser.Scene {
     this.enemyManager.update(delta);
     this.roomManager.update();
     if (this._shopkeeper) this._shopkeeper.update(this.player);
+    if (this._altar) this._altar.update(this.player);
 
     for (const item of this._passiveItems) {
       if (!item.alive) continue;

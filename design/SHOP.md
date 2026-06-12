@@ -98,6 +98,58 @@ roomData.shopSlots = [
 - **상인의 신용**: 모든 슬롯 가격 `×0.9`, Math.floor (최소 1) — `player.shopPriceMult`
 - `generateDungeon()` 호출 시 `player.shopSlotBonus` / `player.shopPriceMult` 인자로 전달
 
+## 가격 층 스케일링 (구역 2 인플레 대칭)
+
+구역 2(11~20층)는 코어 드롭이 `×1.5`(ZONE34_CORE_MULT) 인플레되므로, 상점 가격도 같은 비율로 올려
+체감 가성비를 일정하게 유지한다.
+
+- `floorPriceMult(floor) = 1 + 0.5 × (zoneOf(floor) - 1)` → **구역 1 ×1.0 / 구역 2 ×1.5** (`src/scenes/GameScene.js`)
+- 해금 할인(`player.shopPriceMult`)과 **곱연산** 합성 후 `generateDungeon(..., shopPriceMult)`에 전달.
+  슬롯 가격은 `_entryToSlot`의 `Math.max(1, Math.floor(raw × mult))`로 적용(기존 플러밍 재사용).
+- 예: 전체 회복 75 → 구역 2 약 112, '상인의 신용' 동반 시 75 × 1.5 × 0.9 ≈ 101.
+
+## 코어 제단 (Core Altar) — 후반 잉여 코어 소모처
+
+**비밀방(보물방)의 제단 분기**로 등장하는 런 한정 강화 제단. 상점이 회복/패시브를
+판다면, 제단은 **코어를 이번 런 한정 스탯 파워로 교환**한다(역할 분리). 비밀방은 보물방/제단방/엘리트방이
+각 1/3 — 제단은 매 층 보장되지 않고 비밀 벽을 찾아 들어가야 확률적으로 만난다(`design/LAGOMORPH_SECRET_ROOMS.md` §3).
+
+- **목적**: 후반엔 공급(코어 드롭)이 늘지만 소모처가 고정이라 코어가 남는다. 제단은 잉여를 흡수하면서
+  "지금 지를까 / 모을까" 결정을 살린다. **메타 적립은 픽업 기준(`_runPicked`)이라
+  제단 소모와 무관** — 소모해도 영구 해금 속도는 줄지 않는다(`design/SAVE_SYSTEM.md` 참조).
+- **등장/정리**: 제단 비밀방(`secret_cache`, `cacheSubtype='altar'`) 진입 시 `GameScene` room-entered
+  핸들러가 `Altar`를 방 중앙에 스폰, 방을 떠나면 정리. 던전 데이터에 방 종류가 직렬화되어 이어하기 복원 시
+  재진입하면 다시 스폰된다.
+- **상호작용**: `Altar` NPC 근접(NEAR_R 70px) 시 `altar-open-requested` 발행 → 상점 오버레이 재사용
+  (`UIScene.openAltar`). 매 오픈마다 `ALTAR_POOL`에서 3개 랜덤 추첨. 슬롯 `kind:'upgrade'`.
+- **가격 누진(escalating)**: `cost(n) = round(ALTAR_BASE 20 × ALTAR_GROWTH 1.5^n)`,
+  `n = EnemyManager._altarPurchases`(런 누적 구매). 한 번 사면 모든 슬롯 가격이 같이 오른다 →
+  20·30·45·68·101·152… 후반일수록(=많이 살수록) 코어를 더 많이 빨아들이고 한계효용이 자연 감소.
+  **sold 없이 반복 구매 가능**(가격만 상승).
+
+### 제단 강화 풀 (`src/data/AltarPool.js`, 런 한정·중복 누적)
+
+| id | 이름 | 효과 |
+|---|---|---|
+| `altar_hp`     | 강철 심장 | 최대 HP +20 (+20 회복) |
+| `altar_melee`  | 예리한 발톱 | 근접 피해 +10% (`meleeDamageMult`) |
+| `altar_charge` | 신속 충전 | 충전 속도 +10% (`chargeSpeedMult`) |
+| `altar_trap`   | 덫 증설 | 설치 덫 최대 +1 (`trapMaxBonus`) |
+| `altar_radius` | 확장 파동 | 근접 범위 +8% (`meleeRadiusMult`) |
+
+> 효과는 Player 기존 스탯 필드를 갱신 → `Player.serialize()`가 자동 보존(임시저장 복원). 누진 카운트만
+> `EnemyManager.serialize().altarPurchases`로 별도 저장.
+
+### 제단 구현 위치
+
+| 역할 | 파일 |
+|---|---|
+| 강화 풀 정의 + 누진 비용 공식 | `src/data/AltarPool.js` (`ALTAR_POOL`, `altarCostFor`) |
+| 제단 NPC(시각·근접 감지) | `src/entities/Altar.js` |
+| 누진 카운터·현재가·기록 | `src/systems/EnemyManager.js` (`altarCost` / `recordAltarPurchase` / `_altarPurchases`) |
+| 오버레이 재사용(제단 모드) | `src/scenes/UIScene.js` (`openAltar`, `_shopMode === 'altar'`) |
+| 계단 동반 스폰/정리, 이벤트 수신 | `src/scenes/GameScene.js` (`_spawnStairs`/`_disposeStairs`, `altar-open-requested`) |
+
 ## 의도적으로 뺀 것
 - 최대 HP 영구 증가 슬롯
 - 재입고/리롤, 상점 도난, NPC 대화 트리
