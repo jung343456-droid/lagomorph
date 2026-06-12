@@ -8,12 +8,16 @@
  *   dash         → 플레이어 방향 484px/s 직진, 벽 충돌까지 최대 사거리 이동
  *                  장애물 충돌 시 장애물 파괴 후 돌진 지속, 벽 충돌 시 220px/s 자기 반동(0.2초 감쇠) + 1.5초 스턴
  *                  안전상 MAX 2.5초 캡 (room diagonal 통과 분)
- *   dash_combo   → 3연속 돌진 (각 dash 사이 재조준)
+ *   dash_combo   → 3연속 고정 거리 직선 돌진 — 각 돌진 사이 재조준 정지(1페 0.25s / 2페 0.18s, 첫 발 포함),
+ *                  거리 = 플레이어까지 + 관통 90px (180~420px 클램프), 벽 충돌 시 wallstun + 콤보 취소
  *   stomp        → 0.6초 예고 후 반경 150px AoE (데미지 20 + 넉백)
- *   roar         → 반경 200px 내 플레이어 0.5초 기절 (데미지 없음)
+ *                  2페이즈: 2연속 — 0.45초 후 반경 195px(×1.3) 2회차
+ *   roar         → 0.35초 예고(주황 틴트) 후 반경 200px 내 플레이어 0.5초 기절 (데미지 없음)
+ *                  명중 시 포효 종료 직후 급습 돌진(단발 콤보 돌진) 연계
  * 2페이즈 (HP 50% 이하) — 패턴 풀: dash_combo×2 + dash + stomp + roar (콤보 40%):
- *   분노 플래시, 이동속도 +22%, dash_combo 5연속
+ *   분노 플래시, 이동속도 +22%, 재조준 정지 단축, stomp 2연속
  *   패턴 간격 30% 단축, 스프라이트 적색 틴트
+ * 패턴 선택: 직전과 같은 패턴이면 1회 재추첨 (연속 반복 완화)
  * 패턴 쿨다운: 1페 1.5~2.5s / 2페 1.05~1.75s
  * 처치: 코어 50개 + 레어 아이템 드롭
  */
@@ -32,11 +36,14 @@ const WALL_BOUNCE_DUR   = 0.2;  // 반동 감쇠 시간
 const HIT_STUN_DUR      = 0.3;
 
 const STOMP_WINDUP      = 0.6;
+const STOMP_WINDUP_2ND  = 0.45;  // 2연속 발구름 2회차 예고 (2페이즈)
 const STOMP_RADIUS      = 150;
+const STOMP_RADIUS2_MULT = 1.3;  // 2회차 반경 배율 (150 → 195)
 const STOMP_DMG         = 20;
 const STOMP_PUSH        = 380;
 const STOMP_PUSH_DUR    = 0.3;
 
+const ROAR_WINDUP       = 0.35;  // 포효 예고 — 반경 밖으로 도망칠 수 있는 반응 창
 const ROAR_RADIUS       = 200;
 const ROAR_STUN_DUR     = 0.5;
 const ROAR_DUR          = 0.8;
@@ -44,8 +51,12 @@ const ROAR_DUR          = 0.8;
 const PATTERN_CD_MIN    = 1.5;
 const PATTERN_CD_MAX    = 2.5;
 const PHASE2_SPEED_MULT = 1.22;       // 198 × 1.22 ≈ 242
-const COMBO_COUNT_P1    = 3;          // 1페 콤보 돌진 횟수
-const COMBO_COUNT_P2    = 5;          // 2페 콤보 돌진 횟수
+const COMBO_COUNT      = 3;           // 콤보 돌진 횟수 (양 페이즈 3연속)
+const COMBO_DASH_MIN   = 180;         // 콤보 돌진 최소 거리 (px)
+const COMBO_DASH_MAX   = 420;         // 콤보 돌진 최대 거리 (px)
+const COMBO_OVERSHOOT  = 90;          // 플레이어 위치를 지나쳐 직진하는 관통 거리
+const COMBO_AIM_P1     = 0.25;        // 콤보 돌진 사이 재조준 정지 (1페)
+const COMBO_AIM_P2     = 0.18;        // 〃 (2페 — 더 빠른 연계)
 const PHASE2_TINT       = 0xff6666;   // 2페이즈 스프라이트 틴트
 
 function calcDir(vx, vy) {
@@ -61,7 +72,7 @@ function calcDir(vx, vy) {
   return 'ne';
 }
 
-// 상태: idle | dash | combo_dash | wallstun | stomp_windup | roar | stun
+// 상태: idle | dash | combo_aim | combo_dash | wallstun | stomp_windup | roar_windup | roar | stun
 export default class Fang {
   constructor(scene, x, y) {
     this.scene = scene;
@@ -89,18 +100,24 @@ export default class Fang {
 
     this._dashDir       = { x: 0, y: 1 };
     this._dashTimer     = 0;
+    this._dashTotal     = DASH_DURATION_MAX; // 현재 돌진 총 시간 (벽 판정 그레이스 계산용)
     this._wallStunTimer = 0;
     this._bounceTimer   = 0;
     this._bounceVx      = 0;
     this._bounceVy      = 0;
 
     this._comboRemaining = 0;
-    this._comboDelay     = 0;
+    this._comboAimTimer  = 0;
 
     this._stompTimer    = 0;
+    this._stompWindupTotal = STOMP_WINDUP; // 현재 예고 길이 (gfx 진행도 계산용)
+    this._stompsLeft    = 0;
+    this._stompRadiusCur = STOMP_RADIUS;
     this._stompGfx      = null;
 
     this._roarTimer     = 0;
+    this._roarHit       = false; // 포효 명중 → 종료 후 급습 돌진 연계
+    this._lastPattern   = '';    // 직전 패턴 — 같은 패턴 연속 시 1회 재추첨
 
     this._knockbackTimer    = 0;
     this._knockbackDuration = 0;
@@ -146,22 +163,28 @@ export default class Fang {
       case 'dash':
         this._dashTimer -= dt;
         this.gameObject.body.setVelocity(this._dashDir.x * DASH_SPEED, this._dashDir.y * DASH_SPEED);
-        if (this._dashTimer < DASH_DURATION_MAX - 0.08 && this._isWallBlocked()) {
+        if (this._dashTimer < this._dashTotal - 0.08 && this._isWallBlocked()) {
           this._startWallStun(); break;
         }
         if (this._dashTimer <= 0) this._endPattern();
         break;
 
+      case 'combo_aim': // 콤보 돌진 사이 재조준 정지 — 다음 직선 경로 예고 창
+        this.gameObject.body.setVelocity(0, 0);
+        this._comboAimTimer -= dt;
+        if (this._comboAimTimer <= 0) this._launchComboDash(player);
+        break;
+
       case 'combo_dash':
         this._dashTimer -= dt;
         this.gameObject.body.setVelocity(this._dashDir.x * DASH_SPEED, this._dashDir.y * DASH_SPEED);
-        if (this._dashTimer < DASH_DURATION_MAX - 0.08 && this._isWallBlocked()) {
+        if (this._dashTimer < this._dashTotal - 0.08 && this._isWallBlocked()) {
           this._comboRemaining = 0; this._startWallStun(); break;
         }
         if (this._dashTimer <= 0) {
           if (this._comboRemaining > 0) {
             this._comboRemaining--;
-            this._aimDashAt(player);
+            this._startComboAim();
           } else {
             this._endPattern();
           }
@@ -183,14 +206,29 @@ export default class Fang {
       case 'stomp_windup':
         this.gameObject.body.setVelocity(0, 0);
         this._stompTimer -= dt;
-        this._updateStompGfx(1 - this._stompTimer / STOMP_WINDUP);
+        this._updateStompGfx(1 - this._stompTimer / this._stompWindupTotal);
         if (this._stompTimer <= 0) this._triggerStomp(player);
+        break;
+
+      case 'roar_windup': // 포효 예고 — 반경 밖으로 도망칠 반응 창
+        this.gameObject.body.setVelocity(0, 0);
+        this._roarTimer -= dt;
+        if (this._roarTimer <= 0) this._triggerRoar(player);
         break;
 
       case 'roar':
         this.gameObject.body.setVelocity(0, 0);
         this._roarTimer -= dt;
-        if (this._roarTimer <= 0) this._endPattern();
+        if (this._roarTimer <= 0) {
+          if (this._roarHit) {
+            // 포효 명중 → 스턴이 풀리는 타이밍에 급습 돌진 연계
+            this._roarHit = false;
+            this._comboRemaining = 0;
+            this._startComboAim();
+          } else {
+            this._endPattern();
+          }
+        }
         break;
 
       case 'stun':
@@ -220,8 +258,8 @@ export default class Fang {
     this.hp = Math.max(0, this.hp - amount);
     if (this.hp <= 0) { this._die(); return true; }
 
-    const isDashing = this.state === 'dash' || this.state === 'combo_dash'
-                   || this.state === 'stomp_windup' || this.state === 'roar';
+    const isDashing = this.state === 'dash' || this.state === 'combo_dash' || this.state === 'combo_aim'
+                   || this.state === 'stomp_windup' || this.state === 'roar' || this.state === 'roar_windup';
     if (!isDashing) {
       if (knockback) {
         const { dx, dy, force, duration } = knockback;
@@ -273,12 +311,24 @@ export default class Fang {
     return b.velocity.length() < DASH_SPEED * 0.4;
   }
 
-  _aimDashAt(player) {
-    const dx  = player.x - this.gameObject.x;
-    const dy  = player.y - this.gameObject.y;
-    const len = Math.sqrt(dx * dx + dy * dy) || 1;
-    this._dashDir = { x: dx / len, y: dy / len };
-    this._dashTimer = DASH_DURATION_MAX;
+  _startComboAim() {
+    this.state = 'combo_aim';
+    this._comboAimTimer = this._phase === 2 ? COMBO_AIM_P2 : COMBO_AIM_P1;
+    this.gameObject.body.setVelocity(0, 0);
+  }
+
+  /** 콤보 돌진 1회 발사 — 벽까지가 아닌 고정 거리 직선 돌진 (플레이어 위치 + 관통 거리) */
+  _launchComboDash(player) {
+    const dx   = player.x - this.gameObject.x;
+    const dy   = player.y - this.gameObject.y;
+    const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+    const len  = Math.max(COMBO_DASH_MIN, Math.min(COMBO_DASH_MAX, dist + COMBO_OVERSHOOT));
+    this._dashDir   = { x: dx / dist, y: dy / dist };
+    this._dashTotal = len / DASH_SPEED;
+    this._dashTimer = this._dashTotal;
+    const cd = calcDir(this._dashDir.x, this._dashDir.y);
+    if (cd) this._lastDir = cd;
+    this.state = 'combo_dash';
   }
 
   _startNextPattern(dx, dy, dist, player) {
@@ -288,31 +338,36 @@ export default class Fang {
     const pool = this._phase === 2
       ? ['dash_combo', 'dash_combo', 'dash', 'stomp', 'roar']
       : ['dash', 'dash', 'dash_combo', 'stomp', 'roar'];
-    const pick = pool[Math.floor(Math.random() * pool.length)];
+    let pick = pool[Math.floor(Math.random() * pool.length)];
+    if (pick === this._lastPattern) pick = pool[Math.floor(Math.random() * pool.length)]; // 연속 반복 1회 재추첨
+    this._lastPattern = pick;
 
     switch (pick) {
-      case 'dash':
+      case 'dash': // 단일 돌진 — 벽까지 직진, 벽 충돌 시 wallstun 응징 창
         this._dashDir = { x: dx / len, y: dy / len };
+        this._dashTotal = DASH_DURATION_MAX;
         this._dashTimer = DASH_DURATION_MAX;
         this.state = 'dash';
         break;
 
-      case 'dash_combo': {
-        const count = this._phase === 2 ? COMBO_COUNT_P2 : COMBO_COUNT_P1;
-        this._comboRemaining = count - 1;
-        this._aimDashAt(player);
-        this.state = 'combo_dash';
+      case 'dash_combo': // 3연속 고정 거리 직선 돌진 — 첫 발도 재조준 정지부터 (예고 창)
+        this._comboRemaining = COMBO_COUNT - 1;
+        this._startComboAim();
         break;
-      }
 
       case 'stomp':
+        this._stompsLeft = this._phase === 2 ? 2 : 1; // 2페: 2연속 발구름
+        this._stompRadiusCur = STOMP_RADIUS;
+        this._stompWindupTotal = STOMP_WINDUP;
         this._stompTimer = STOMP_WINDUP;
         this._spawnStompGfx();
         this.state = 'stomp_windup';
         break;
 
       case 'roar':
-        this._doRoar(dist, player);
+        this.state = 'roar_windup';
+        this._roarTimer = ROAR_WINDUP;
+        this.gameObject.setTint(0xffaa00);
         break;
     }
   }
@@ -343,7 +398,7 @@ export default class Fang {
 
   _updateStompGfx(progress) {
     if (!this._stompGfx?.active) return;
-    const r = STOMP_RADIUS * progress;
+    const r = this._stompRadiusCur * progress;
     const { x, y } = this.gameObject;
     this._stompGfx.clear();
     this._stompGfx.fillStyle(0xff6600, 0.05 + progress * 0.1);
@@ -356,6 +411,7 @@ export default class Fang {
     if (this._stompGfx?.active) { this._stompGfx.destroy(); this._stompGfx = null; }
     this.scene.cameras.main.shake(250, 0.02);
 
+    const radius = this._stompRadiusCur;
     const { x, y } = this.gameObject;
     const gfx = this.scene.add.graphics().setDepth(8);
     const state = { a: 0.7 };
@@ -364,31 +420,40 @@ export default class Fang {
       onUpdate: () => {
         gfx.clear();
         gfx.fillStyle(0xff6600, state.a * 0.3);
-        gfx.fillCircle(x, y, STOMP_RADIUS);
+        gfx.fillCircle(x, y, radius);
         gfx.lineStyle(4, 0xff6600, state.a);
-        gfx.strokeCircle(x, y, STOMP_RADIUS);
+        gfx.strokeCircle(x, y, radius);
       },
       onComplete: () => gfx.destroy(),
     });
 
     const dx = player.x - x, dy = player.y - y;
     const dist = Math.sqrt(dx * dx + dy * dy);
-    if (dist <= STOMP_RADIUS) {
+    if (dist <= radius) {
       const nx = dist > 0 ? dx / dist : 0;
       const ny = dist > 0 ? dy / dist : 0;
       const dead = player.takeDamage(STOMP_DMG, { dx: nx, dy: ny, force: STOMP_PUSH, duration: STOMP_PUSH_DUR });
       if (dead) this.scene.events.emit('player-dead');
     }
 
-    this._endPattern();
+    this._stompsLeft--;
+    if (this._stompsLeft > 0) {
+      // 2연속 발구름 (2페이즈) — 더 넓은 반경으로 한 번 더, 첫 타를 피한 자리를 덮는다
+      this._stompRadiusCur = Math.round(STOMP_RADIUS * STOMP_RADIUS2_MULT);
+      this._stompWindupTotal = STOMP_WINDUP_2ND;
+      this._stompTimer = STOMP_WINDUP_2ND;
+      this._spawnStompGfx(); // state 는 stomp_windup 유지
+    } else {
+      this._endPattern();
+    }
   }
 
   // ── 패턴: 포효 ───────────────────────────────────────
 
-  _doRoar(dist, player) {
+  /** roar_windup 종료 시 발동 — 예고 동안 반경 밖으로 도망치면 회피 가능 */
+  _triggerRoar(player) {
     this.state = 'roar';
     this._roarTimer = ROAR_DUR;
-    this.gameObject.setTint(0xffaa00);
     this.scene.time.delayedCall(250, () => {
       if (!this.alive) return;
       if (this._phase === 2) this.gameObject.setTint(PHASE2_TINT);
@@ -412,7 +477,12 @@ export default class Fang {
       });
     }
 
-    if (dist <= ROAR_RADIUS) player.stun(ROAR_STUN_DUR);
+    const dx = player.x - this.gameObject.x;
+    const dy = player.y - this.gameObject.y;
+    if (Math.sqrt(dx * dx + dy * dy) <= ROAR_RADIUS) {
+      player.stun(ROAR_STUN_DUR);
+      this._roarHit = true; // roar 종료 시 급습 돌진 연계
+    }
   }
 
   // ── 2페이즈 진입 ─────────────────────────────────────
@@ -423,6 +493,8 @@ export default class Fang {
     this.state   = 'idle';
     this.gameObject.body.setVelocity(0, 0);
     if (this._stompGfx?.active) { this._stompGfx.destroy(); this._stompGfx = null; }
+    this._roarHit = false; // 진행 중이던 패턴 잔여 플래그 정리
+    this._comboRemaining = 0;
     this._patternCd = 0.8;
 
     this.gameObject.setTexture('fang-rage').setDisplaySize(FANG_DW, FANG_DH);
@@ -436,7 +508,7 @@ export default class Fang {
   _updateSprite() {
     if (this.state === 'stun' || this.state === 'wallstun') return;
     let key;
-    if (this.state === 'dash' || this.state === 'combo_dash') {
+    if (this.state === 'dash' || this.state === 'combo_dash' || this.state === 'combo_aim') {
       key = 'fang-dash';
     } else if (this.state === 'stomp_windup') {
       key = 'fang-stomp';

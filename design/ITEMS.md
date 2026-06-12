@@ -24,7 +24,7 @@
 | `bulletproof_vest` | 방탄조끼 | 강철 `0x445566` | 방어력 +2 — 받는 피해 -2, 방어력 이하 공격은 통째로 무효 (무적/넉백/숫자 모두 스킵) | `player.armor += 2` |
 | `quick_claws` | 민첩한 발톱 | 노랑 `0xffee00` | 근거리 충전 속도 ×1.5 | `player.chargeSpeedMult *= 1.5` |
 | `thunder_claws` | 감전 발톱 | 황녹 `0xddff22` | 명중 시 25% 확률로 반경 150px 내 다른 적에게 연쇄 (hop마다 직전 데미지의 50%, 데미지 ≥2 유지 시 최대 10hop) | `player.hasThunder = true` |
-| `hunter_instinct` | 사냥꾼의 본능 | 분홍 `0xff6688` | 적 처치 시 HP 5 회복 | `player.healOnKill += 5` |
+| `hunter_instinct` | 사냥꾼의 본능 | 분홍 `0xff6688` | 적 처치 시 HP 3 회복 | `player.healOnKill += 3` |
 | `fire_disguise` | 불꽃 위장 | 주황 `0xff5522` | 설치물 명중 시 반경 40px 스플래시 15 + 50% 확률 화상 | `player.hasFireDisguise = true` |
 | `ice_disguise` | 냉동 위장 | 하늘 `0x66ccff` | 설치물 명중 시 반경 40px 스플래시 15 + 50% 확률 빙결 | `player.hasIceDisguise = true` |
 | `poison_disguise` | 독성 위장 | 연두 `0x88dd44` | 설치물 명중 시 반경 40px 스플래시 15 + 50% 확률 중독 | `player.hasPoisonDisguise = true` |
@@ -35,6 +35,7 @@
 | `savage_strike` | 광폭한 일격 | 짙은빨강 `0x8b0000` | 치명타 피해 +100% (×1.5→×2.5) | `player.critMult += 1.0` |
 | `blood_feast` | 피의 향연 | 자홍 `0xaa0033` | 치명타 명중 시 HP +2 (근거리·트랩 직격·트랩 스플래시 모두) | `player.critHealAmount += 2` |
 | `map_sense` | 던전의 감각 | 청색 `0x33bbdd` | 이 층의 모든 방이 지도에 표시됨 (미방문 포함) | `player.hasMapReveal = true` |
+| `core_affinity` | 코어 체질 | 청록 `0x00d4aa` | 방 클리어 시 남은 코어 전량 자동 흡수 (없으면 코어는 바닥에 남아 직접 근처로 가야 수집) | `player.autoCollectCores = true` |
 
 ---
 
@@ -61,6 +62,7 @@
 | `critMult` | `1.5` | 치명타 피해 배율 (damage × critMult) |
 | `critHealAmount` | `0` | 치명타 명중 시 즉시 회복할 HP량 (근거리/트랩 직격/스플래시 모두) |
 | `hasMapReveal` | `false` | 현재 층 전체 방을 지도에 표시 (던전의 감각) |
+| `autoCollectCores` | `false` | 방 클리어 시 남은 코어 전량 자석 흡수 (EnemyManager._collectAllCores 게이팅) |
 
 ---
 

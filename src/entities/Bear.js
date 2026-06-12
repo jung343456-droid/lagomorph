@@ -5,8 +5,10 @@
  * 패턴:
  *   idle          → chase(282px 이내 탐지)
  *   chase         → 121px/s 추격 (격노 시 165px/s)
- *   swipe_windup  → 80px 이내 접근 시 0.2초 예고
- *   swipe         → 0.2초간 120px 반경 정면 180° 부채꼴 피해 (등 뒤 안전), 시각 잔상 +0.1초
+ *   swipe_windup  → 80px 이내 접근 시 0.2초 예고 (2타째는 0.15초 — 플레이어 방향 재조준)
+ *   swipe         → 0.2초간 120px 반경 정면 120° 부채꼴 피해 (측면·등 뒤 안전), 시각 잔상 +0.1초
+ *                   2회 연속 발동 — 타격마다 휘두르는 방향으로 200px/s 전진(한 걸음 ~40px), 타당 1회 피해
+ *                   피격 스턴 시 콤보 취소(cooldown 으로 복귀)
  *   cooldown      → 1.8초 정지 (격노 시 1.0초)
  *   stun          → 피격 시 0.3초 경직 + 넉백 (i-frame)
  *
@@ -19,10 +21,15 @@ const CHASE_SPEED    = 121;
 const RAGE_SPEED     = 165;
 const SWIPE_RANGE    = 80;
 const SWIPE_RADIUS   = 120;
+const SWIPE_HALF_ANGLE = Math.PI / 3;            // 부채꼴 반각 60° (전체 120°)
+const SWIPE_DOT_MIN  = Math.cos(SWIPE_HALF_ANGLE); // 피해 판정 내적 하한 (0.5)
 const SWIPE_DMG      = 22;
 const SWIPE_PUSH     = 350;
 const SWIPE_PUSH_DUR = 0.25;
 const SWIPE_WINDUP   = 0.2;
+const SWIPE_WINDUP_NEXT = 0.15; // 2타째 예고 — 1타보다 짧게, 플레이어 방향 재조준
+const SWIPE_COUNT    = 2;       // 연속 발동 횟수
+const SWIPE_STEP_SPEED = 200;   // 타격 중 전진 속도 (px/s) — SWIPE_DUR 0.2s 동안 한 걸음 ~40px
 const SWIPE_DUR      = 0.2;
 const SWIPE_AFTERIMAGE = 0.1;  // 시각 잔상 — 피해 판정은 SWIPE_DUR 끝에 종료
 const SWIPE_CD       = 1.8;
@@ -74,6 +81,7 @@ export default class Bear {
     this._swipeDir   = { x: 0, y: 1 };
     this._rage       = false;
     this._swipeHit   = false;  // 단일 swipe 회당 1회 피해
+    this._swipesLeft = 0;      // 남은 연속 타격 수 (chase → windup 진입 시 SWIPE_COUNT 로 초기화)
 
     this._knockbackTimer    = 0;
     this._knockbackDuration = 0;
@@ -115,9 +123,10 @@ export default class Bear {
       case 'chase': {
         if (dist >= DETECT_R) { this.state = 'idle'; break; }
         if (dist < SWIPE_RANGE) {
-          // swipe 시작
+          // swipe 콤보 시작
           const len = dist > 0 ? dist : 1;
           this._swipeDir = { x: dx / len, y: dy / len };
+          this._swipesLeft = SWIPE_COUNT;
           this.state = 'swipe_windup';
           this._stateTimer = SWIPE_WINDUP;
           this.gameObject.body.setVelocity(0, 0);
@@ -140,7 +149,11 @@ export default class Bear {
         break;
 
       case 'swipe': {
-        this.gameObject.body.setVelocity(0, 0);
+        // 타격 중 휘두르는 방향으로 한 걸음 전진
+        this.gameObject.body.setVelocity(
+          this._swipeDir.x * SWIPE_STEP_SPEED,
+          this._swipeDir.y * SWIPE_STEP_SPEED,
+        );
         this._stateTimer -= dt;
         if (!this._swipeHit) {
           // 단일 데미지 적용: 부채꼴 내부 + 거리 이내
@@ -150,8 +163,8 @@ export default class Bear {
           if (pd <= SWIPE_RADIUS && pd > 0) {
             const nx = pdx / pd;
             const ny = pdy / pd;
-            const dot = nx * this._swipeDir.x + ny * this._swipeDir.y; // > 0 → 정면 반구
-            if (dot > 0) {
+            const dot = nx * this._swipeDir.x + ny * this._swipeDir.y; // > cos60° → 정면 120° 부채꼴 내부
+            if (dot > SWIPE_DOT_MIN) {
               this._swipeHit = true;
               const dead = player.takeDamage(SWIPE_DMG, {
                 dx: nx, dy: ny, force: SWIPE_PUSH, duration: SWIPE_PUSH_DUR,
@@ -161,8 +174,18 @@ export default class Bear {
           }
         }
         if (this._stateTimer <= 0) {
-          this.state = 'cooldown';
-          this._stateTimer = this._rage ? SWIPE_CD_RAGE : SWIPE_CD;
+          this._swipesLeft--;
+          if (this._swipesLeft > 0) {
+            // 다음 타: 플레이어 현재 위치로 재조준 후 짧은 예고
+            const len = dist > 0 ? dist : 1;
+            this._swipeDir = { x: dx / len, y: dy / len };
+            this.state = 'swipe_windup';
+            this._stateTimer = SWIPE_WINDUP_NEXT;
+            this.gameObject.body.setVelocity(0, 0);
+          } else {
+            this.state = 'cooldown';
+            this._stateTimer = this._rage ? SWIPE_CD_RAGE : SWIPE_CD;
+          }
         }
         break;
       }
@@ -244,19 +267,21 @@ export default class Bear {
 
   _spawnSwipeGfx() {
     const gfx = this.scene.add.graphics().setDepth(8);
-    const { x, y } = this.gameObject;
+    let { x, y } = this.gameObject;
     const angle = Math.atan2(this._swipeDir.y, this._swipeDir.x);
     const state = { a: 0.6 };
     this.scene.tweens.add({
       targets: state, a: 0, duration: (SWIPE_DUR + SWIPE_AFTERIMAGE) * 1000, ease: 'Quad.Out',
       onUpdate: () => {
+        // 타격 중 전진하므로 부채꼴을 곰 현재 위치에 추종 (피해 판정과 일치)
+        if (this.gameObject?.active) { x = this.gameObject.x; y = this.gameObject.y; }
         gfx.clear();
         gfx.fillStyle(SWIPE_COLOR, state.a * 0.3);
-        gfx.slice(x, y, SWIPE_RADIUS, angle - Math.PI / 2, angle + Math.PI / 2, false);
+        gfx.slice(x, y, SWIPE_RADIUS, angle - SWIPE_HALF_ANGLE, angle + SWIPE_HALF_ANGLE, false);
         gfx.fillPath();
         gfx.lineStyle(2.5, SWIPE_COLOR, state.a);
         gfx.beginPath();
-        gfx.arc(x, y, SWIPE_RADIUS, angle - Math.PI / 2, angle + Math.PI / 2);
+        gfx.arc(x, y, SWIPE_RADIUS, angle - SWIPE_HALF_ANGLE, angle + SWIPE_HALF_ANGLE);
         gfx.strokePath();
       },
       onComplete: () => gfx.destroy(),

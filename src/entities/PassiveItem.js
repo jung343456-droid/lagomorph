@@ -10,7 +10,7 @@
  *           bulletproof_vest(방어력)
  * 트랩 위장(스플래시+상태이상): fire_disguise(화상), ice_disguise(빙결), poison_disguise(중독)
  * 트랩 강화: frugal_instinct(코어소모↓), big_trap(크기)
- * 탐색: map_sense(전체 지도 공개)
+ * 탐색/편의: map_sense(전체 지도 공개), core_affinity(방 클리어 시 코어 자동 수집)
  *
  * 스폰 규칙:
  *   시작 방 — 해금된 아이템 중 랜덤 1개 (첫 런은 미스폰)
@@ -58,7 +58,7 @@ export const ITEM_DEFS = {
   },
   tough_hide: {
     name:  '강인한 가죽',
-    desc:  '최대 HP +50, 즉시 회복',
+    desc:  '최대 HP +50',
     color: 0xff4455,
     apply: (player) => { player.maxHp += 50; player.heal(50); },
   },
@@ -82,9 +82,9 @@ export const ITEM_DEFS = {
   },
   hunter_instinct: {
     name:  '사냥꾼의 본능',
-    desc:  '적 처치 시 HP 5 회복',
+    desc:  '적 처치 시 HP 3 회복',
     color: 0xff6688,
-    apply: (player) => { player.healOnKill += 5; },
+    apply: (player) => { player.healOnKill += 3; },
   },
   fire_disguise: {
     name:  '불꽃 위장',
@@ -151,6 +151,12 @@ export const ITEM_DEFS = {
     desc:  '이 층의 모든 방이 지도에 표시됨',
     color: 0x33bbdd,
     apply: (player) => { player.hasMapReveal = true; },
+  },
+  core_affinity: {
+    name:  '코어 체질',
+    desc:  '방 클리어 시 남은 코어 전량 자동 수집',
+    color: 0x00d4aa,
+    apply: (player) => { player.autoCollectCores = true; },
   },
 };
 

@@ -9,7 +9,7 @@ import RoomManager from '../world/RoomManager';
 import { ROOM_W, ROOM_H } from '../world/Room';
 import PassiveItem, { ITEM_DEFS } from '../entities/PassiveItem';
 import Shopkeeper from '../entities/Shopkeeper';
-import { getMetaCores, beginMetaRun, commitMetaRun, addRunPickup } from '../data/MetaProgress';
+import { getMetaCores, beginMetaRun, commitMetaRun, addRunPickup, getGrimIntroShown, markGrimIntroShown } from '../data/MetaProgress';
 import { saveRunState, loadRunSave, clearRunSave } from '../data/SaveManager';
 
 const GRIM_FIRST_LINES = [
@@ -63,7 +63,7 @@ export default class GameScene extends Phaser.Scene {
 
     // 상점방 NPC (현재 방이 'shop' 일 때만 살아 있음)
     this._shopkeeper = null;
-    this._grimMet    = save ? !!save.grimMet : false;  // 런 단위 첫 만남 플래그
+    this._grimMet    = false;  // 런 단위 상점 재진입 방지 (전체 1회 여부는 MetaProgress 관리)
 
     // 시작 방 아이템 — 신규 런만. 복원 시 저장된 바닥 아이템은 복원 블록에서 재생성
     this._passiveItems = [];
@@ -161,8 +161,8 @@ export default class GameScene extends Phaser.Scene {
       this.player.halt();  // 대화/상점 진입 시 잔여 속도로 미끄러지는 것 방지
       const ui    = this.scene.get('UIScene');
       const slots = this._shopkeeper.shopSlots;
-      if (!this._grimMet) {
-        this._grimMet = true;
+      if (!getGrimIntroShown()) {
+        markGrimIntroShown();
         ui.openDialogue?.(GRIM_FIRST_LINES, () => ui.openShop?.(slots));
       } else {
         ui.openShop?.(slots);

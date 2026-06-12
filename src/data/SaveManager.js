@@ -53,7 +53,6 @@ export function saveRunState(gameScene) {
     stairs: gs._stairsRoomId !== null && gs._stairsPos
       ? { roomId: gs._stairsRoomId, x: gs._stairsPos.x, y: gs._stairsPos.y, triggered: !!gs._stairsTriggered }
       : null,
-    grimMet: !!gs._grimMet,
     floorPassiveItems: (gs._passiveItems ?? [])
       .filter(i => i.alive)
       .map(i => ({ id: i.id, x: i.x, y: i.y })),

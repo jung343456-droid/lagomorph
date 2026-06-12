@@ -40,7 +40,6 @@
   enemyState,         // EnemyManager.serialize()
   attackState,        // AttackManager.serialize()
   stairs,             // { roomId, x, y, triggered } | null
-  grimMet,
   floorPassiveItems,  // [{ id, x, y }] — 바닥에 놓인 PassiveItem
   meta: { runPicked }, // MetaProgress 런 픽업 카운터
 }

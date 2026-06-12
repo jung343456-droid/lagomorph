@@ -3,14 +3,22 @@
  * HP 448 / 속도 176 / 데미지 24(접촉) / 코어 30
  * 크기 70×70px
  *
- * 패턴:
- *   idle  → chase (256px 이내 탐지)
- *   chase → 플레이어 추격 (176px/s)
- *           5초마다 slam, 초기 9초/이후 22초 주기로 roar
- *   slam  → 0.6초 예고 → 반경 180px 충격파 (데미지 18 + 강한 넉백 400px/s)
- *   roar  → 1.8초 포효: 완전 정지 + 경직 취약
- *           종료 시 곰(bear) 4마리 소환 (최대 2회)
- *   stun  → 피격 경직 0.3초 + 넉백 (i-frame)
+ * 패턴 (우선순위: roar > 근거리 slam > 원거리 charge):
+ *   idle   → chase (256px 이내 탐지)
+ *   chase  → 플레이어 추격 (176px/s, 격노 시 202px/s)
+ *            slam 쿨다운 5초(격노 3.5초) — 210px 이내일 때만 발동 (허공 슬램 방지)
+ *            charge 쿨다운 6초(격노 ×0.75, 첫 차지 3초) — 150px 초과 거리에서만 (갭클로저)
+ *            초기 9초/이후 22초 주기로 roar
+ *   slam   → 0.6초 예고 → 반경 180px 충격파 (데미지 18 + 강한 넉백 400px/s)
+ *            격노 시: 돌조각 6발 방사 (150px/s, 데미지 10 — 중거리 카이팅 견제)
+ *   charge → 0.5초 발 구르기 예고(조준 고정 — 옆으로 피하면 빗나감) → 380px/s 직진 최대 0.9초
+ *            (벽 충돌 시 조기 종료) → 멈춘 자리 미니 슬램 (반경 110px, 데미지 14 + 넉백)
+ *   roar   → 1.8초 포효: 완전 정지 + 경직 취약
+ *            종료 시 곰(bear) 4마리 소환 (최대 2회)
+ *   stun   → 피격 경직 0.3초 + 넉백 (i-frame)
+ *
+ * 격노 (HP 40% 이하, 1회): 이동 ×1.15, slam 쿨다운 5→3.5초, charge 쿨다운 ×0.75,
+ *   slam 돌조각 추가, 적갈색 틴트 + 화면 플래시
  *
  * 데미지 오라 (생존 중 상시):
  *   220px 이내 아군 다른 적의 데미지 ×1.25
@@ -25,6 +33,8 @@ const BB_DH         = 88;
 const DETECT_R      = 256;
 const CHASE_SPEED   = 176;
 const SLAM_CD       = 5.0;
+const SLAM_CD_ENRAGE = 3.5;  // 격노 시 슬램 주기 단축
+const SLAM_TRIGGER_R = 210;  // 슬램 발동 거리 — 이내일 때만 (허공 슬램 방지)
 const SLAM_WINDUP   = 0.6;
 const SLAM_RADIUS   = 180;
 const SLAM_DMG      = 18;
@@ -39,6 +49,22 @@ const SUMMON_COUNT  = 4;
 const SUMMON_TYPE   = 'bear';
 const SUMMON_MAX    = 2;
 
+const CHARGE_CD        = 6.0;   // 차지 돌진 쿨다운 (격노 시 ×0.75)
+const CHARGE_TRIGGER_R = 150;   // 이상 떨어져 있을 때만 차지 (갭클로저)
+const CHARGE_WINDUP    = 0.5;   // 차지 예고 — 시작 시 조준 고정, 옆으로 피하면 빗나감
+const CHARGE_SPEED     = 380;
+const CHARGE_DUR_MAX   = 0.9;   // 최대 직진 시간 (벽 충돌 시 조기 종료)
+const CHARGE_END_RADIUS = 110;  // 차지 종료 미니 슬램 반경
+const CHARGE_END_DMG   = 14;
+
+const ENRAGE_HP_RATIO  = 0.4;   // 격노 진입 HP 비율
+const ENRAGE_SPEED_MULT = 1.15;
+const ENRAGE_TINT      = 0xcc5544;
+const SHARD_COUNT      = 6;     // 격노 슬램 시 비산 돌조각 수
+const SHARD_SPEED      = 150;
+const SHARD_DMG        = 10;
+const SHARD_COLOR      = 0x886644;
+
 function calcDir(vx, vy) {
   if (Math.abs(vx) < 1 && Math.abs(vy) < 1) return null;
   const a = Math.atan2(vy, vx) * 180 / Math.PI;
@@ -52,7 +78,7 @@ function calcDir(vx, vy) {
   return 'ne';
 }
 
-// 상태: idle | chase | slam_windup | slam | roar | stun
+// 상태: idle | chase | slam_windup | charge_windup | charge | roar | stun
 export default class BlackBear {
   constructor(scene, x, y) {
     this.scene = scene;
@@ -84,6 +110,11 @@ export default class BlackBear {
     this._auraTargets   = new Map();  // Map<enemy, originalDamage>
     this._roarGfx       = null;
 
+    this._chargeCd    = 3.0; // 첫 차지는 빠르게 — 개전 직후 갭클로저
+    this._chargeDir   = { x: 0, y: 1 };
+    this._chargeTimer = 0;
+    this._enraged     = false; // HP 40% 이하 1회 진입 — 가속·슬램 단축·돌조각
+
     this._knockbackTimer    = 0;
     this._knockbackDuration = 0;
     this._knockbackVx = 0;
@@ -109,6 +140,8 @@ export default class BlackBear {
     const dt = delta / 1000;
     this.attackCooldown = Math.max(0, this.attackCooldown - dt);
 
+    if (!this._enraged && this.hp / this.maxHp <= ENRAGE_HP_RATIO) this._enterEnrage();
+
     const dx   = player.x - this.gameObject.x;
     const dy   = player.y - this.gameObject.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
@@ -127,11 +160,15 @@ export default class BlackBear {
           (dy / len) * this.speed * this.speedMult,
         );
         this._slamCd -= dt;
+        this._chargeCd -= dt;
         this._roarTimer -= dt;
+        // 우선순위: 포효 > 근거리 슬램 > 원거리 차지 (쿨다운은 대기 중에도 준비 상태 유지)
         if (this._roarTimer <= 0) {
           this._startRoar();
-        } else if (this._slamCd <= 0) {
+        } else if (this._slamCd <= 0 && dist <= SLAM_TRIGGER_R) {
           this._startSlam();
+        } else if (this._chargeCd <= 0 && dist > CHARGE_TRIGGER_R) {
+          this._startChargeWindup(dx, dy, dist);
         }
         break;
       }
@@ -143,9 +180,22 @@ export default class BlackBear {
         if (this._slamTimer <= 0) this._triggerSlam(player);
         break;
 
-      case 'slam':
-        // 충격파 표시는 _triggerSlam 에서 처리, 곧장 chase 로
+      case 'charge_windup': // 발 구르기 예고 — 조준은 이미 고정
         this.gameObject.body.setVelocity(0, 0);
+        this._chargeTimer -= dt;
+        if (this._chargeTimer <= 0) {
+          this.state = 'charge';
+          this._chargeTimer = CHARGE_DUR_MAX;
+        }
+        break;
+
+      case 'charge':
+        this._chargeTimer -= dt;
+        this.gameObject.body.setVelocity(this._chargeDir.x * CHARGE_SPEED, this._chargeDir.y * CHARGE_SPEED);
+        if (this._chargeTimer <= CHARGE_DUR_MAX - 0.08 && !this.gameObject.body.blocked.none) {
+          this._endCharge(player); break; // 벽 충돌 — 그 자리에서 미니 슬램
+        }
+        if (this._chargeTimer <= 0) this._endCharge(player);
         break;
 
       case 'roar':
@@ -179,7 +229,8 @@ export default class BlackBear {
     if (!this.alive || this.state === 'stun') return false;
     this.hp -= amount;
     if (this.hp <= 0) { this._die(); return true; }
-    const isAttacking = this.state === 'slam_windup' || this.state === 'slam' || this.state === 'roar';
+    const isAttacking = this.state === 'slam_windup' || this.state === 'roar'
+                     || this.state === 'charge_windup' || this.state === 'charge';
     if (!isAttacking) {
       if (knockback) {
         const { dx, dy, force, duration } = knockback;
@@ -221,6 +272,56 @@ export default class BlackBear {
   get y() { return this.gameObject.y; }
 
   // ── private ─────────────────────────────────────────
+
+  _startChargeWindup(dx, dy, dist) {
+    const len = dist > 0 ? dist : 1;
+    this._chargeDir = { x: dx / len, y: dy / len }; // 예고 시작 시 조준 고정
+    this.state = 'charge_windup';
+    this._chargeTimer = CHARGE_WINDUP;
+    this.gameObject.body.setVelocity(0, 0);
+    const cd = calcDir(this._chargeDir.x, this._chargeDir.y);
+    if (cd) this._lastDir = cd;
+  }
+
+  /** 차지 종료 — 멈춘 자리에서 미니 슬램 (반경 110px, 데미지 14 + 넉백) */
+  _endCharge(player) {
+    this.gameObject.body.setVelocity(0, 0);
+    this._chargeCd = CHARGE_CD * (this._enraged ? 0.75 : 1);
+    this.state = 'chase';
+    this.scene.cameras.main.shake(150, 0.014);
+
+    const { x, y } = this.gameObject;
+    const gfx = this.scene.add.graphics().setDepth(8);
+    const state = { a: 0.6 };
+    this.scene.tweens.add({
+      targets: state, a: 0, duration: 300, ease: 'Quad.Out',
+      onUpdate: () => {
+        gfx.clear();
+        gfx.fillStyle(0xff5522, state.a * 0.25);
+        gfx.fillCircle(x, y, CHARGE_END_RADIUS);
+        gfx.lineStyle(3, 0xff5522, state.a);
+        gfx.strokeCircle(x, y, CHARGE_END_RADIUS);
+      },
+      onComplete: () => gfx.destroy(),
+    });
+
+    const dx = player.x - x, dy = player.y - y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist <= CHARGE_END_RADIUS) {
+      const nx = dist > 0 ? dx / dist : 0;
+      const ny = dist > 0 ? dy / dist : 0;
+      const dead = player.takeDamage(CHARGE_END_DMG, {
+        dx: nx, dy: ny, force: SLAM_PUSH * 0.7, duration: SLAM_PUSH_DUR,
+      });
+      if (dead) this.scene.events.emit('player-dead');
+    }
+  }
+
+  _enterEnrage() {
+    this._enraged = true;
+    this.speed = Math.round(CHASE_SPEED * ENRAGE_SPEED_MULT);
+    this.scene.cameras.main.flash(350, 200, 60, 30, false);
+  }
 
   _startSlam() {
     this.state = 'slam_windup';
@@ -271,8 +372,26 @@ export default class BlackBear {
       if (dead) this.scene.events.emit('player-dead');
     }
 
-    this._slamCd = SLAM_CD;
+    // 격노: 슬램 충격으로 돌조각 비산 — AoE 밖 중거리 카이팅 견제
+    if (this._enraged) this._emitShards(x, y);
+
+    this._slamCd = this._enraged ? SLAM_CD_ENRAGE : SLAM_CD;
     this.state = 'chase';
+  }
+
+  /** 격노 슬램 돌조각 — poop_circle 흰 원 텍스처에 틴트 (Arc 금지 규칙 준수), 수동 이동 투사체 */
+  _emitShards(x, y) {
+    const em = this.scene.enemyManager;
+    if (!em) return;
+    const baseAng = Math.random() * Math.PI * 2;
+    for (let i = 0; i < SHARD_COUNT; i++) {
+      const ang = baseAng + (i / SHARD_COUNT) * Math.PI * 2;
+      const proj = this.scene.add.image(x, y, 'poop_circle')
+        .setTint(SHARD_COLOR)
+        .setDisplaySize(12, 12)
+        .setDepth(8);
+      em.addEnemyProjectile(proj, SHARD_DMG, Math.cos(ang) * SHARD_SPEED, Math.sin(ang) * SHARD_SPEED, '검은곰 돌조각');
+    }
   }
 
   _startRoar() {
@@ -357,8 +476,8 @@ export default class BlackBear {
     let key;
     if (this.state === 'roar') {
       key = 'blackbear-roar';
-    } else if (this.state === 'slam_windup' || this.state === 'slam') {
-      key = 'blackbear-slam';
+    } else if (this.state === 'slam_windup' || this.state === 'charge_windup') {
+      key = 'blackbear-slam'; // 웅크림 자세 공용
     } else {
       const dir = calcDir(this.gameObject.body.velocity.x, this.gameObject.body.velocity.y);
       if (dir) this._lastDir = dir;
@@ -369,6 +488,7 @@ export default class BlackBear {
       this.gameObject.setTexture(key).setDisplaySize(BB_DW, BB_DH);
       this._applyBodySize();
     }
+    if (this._enraged) this.gameObject.setTint(ENRAGE_TINT);
   }
 
   _applyBodySize() {

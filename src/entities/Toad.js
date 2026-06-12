@@ -12,7 +12,7 @@
  *
  * 독 웅덩이: 플레이어가 범위에 진입한 순간 즉시 5 피해, 이후 0.5초마다 5 피해 — 방어력(armor/damageReduction) 관통
  *           두꺼비 1마리당 활성 2개 (초과 시 가장 오래된 것 소멸)
- *           두꺼비 사망 후에도 웅덩이 지속 — 지속시간 만료 또는 dispose 시 소멸
+ *           두꺼비 사망 후에도 웅덩이 지속(매니저에 잔존 hazard 등록) — 지속시간 만료·dispose·방 전환(_clearAll) 시 소멸
  *
  * 시각: toad 스프라이트 + 독초록 틴트, 독 웅덩이는 toad-puddle 텍스처 사용
  * speedMult: Wolf 오라(180px 이내) 적용 시 후퇴 속도 ×1.2
@@ -221,15 +221,22 @@ export default class Toad {
   dispose() {
     if (this.destroyed) return;
     if (this._blinkEvent) { this._blinkEvent.remove(); this._blinkEvent = null; }
-    if (this._sceneUpdateCb) { this.scene.events.off('update', this._sceneUpdateCb); this._sceneUpdateCb = null; }
     if (this._spitProjGfx?.active) this._spitProjGfx.destroy();
     if (this._hpBg?.active)   this._hpBg.destroy();
     if (this._hpFill?.active) this._hpFill.destroy();
-    this._puddles.forEach(p => { if (p.gfx?.active) p.gfx.destroy(); });
-    this._puddles = [];
+    this.disposeHazards();
     this.alive = false;
     this.gameObject.destroy();
     this.destroyed = true;
+  }
+
+  /** 독 웅덩이 + scene update 틱 콜백 정리 — destroyed 여부와 무관하게 동작(사망 후 잔존분 정리용).
+   *  dispose() 및 EnemyManager 방 전환 정리(_clearAll)에서 공용 호출. */
+  disposeHazards() {
+    if (this._sceneUpdateCb) { this.scene.events.off('update', this._sceneUpdateCb); this._sceneUpdateCb = null; }
+    this._puddles.forEach(p => { if (p.gfx?.active) p.gfx.destroy(); });
+    this._puddles = [];
+    this.scene.enemyManager?.unregisterLingeringHazard?.(this);
   }
 
   get x() { return this.gameObject.x; }
@@ -368,13 +375,16 @@ export default class Toad {
       onComplete: () => {
         this.gameObject.destroy();
         this.destroyed = true;
-        // EnemyManager에서 제거된 이후에도 남은 웅덩이를 scene update로 계속 틱
+        // EnemyManager에서 제거된 이후에도 남은 웅덩이를 scene update로 계속 틱.
+        // 방 전환 시 정리되도록 매니저에 잔존 hazard 로 등록한다.
         if (this._puddles.length > 0) {
+          this.scene.enemyManager?.registerLingeringHazard?.(this);
           this._sceneUpdateCb = (time, delta) => {
             if (this._player) this._tickPuddles(delta / 1000, this._player);
             if (this._puddles.length === 0) {
               this.scene.events.off('update', this._sceneUpdateCb);
               this._sceneUpdateCb = null;
+              this.scene.enemyManager?.unregisterLingeringHazard?.(this);
             }
           };
           this.scene.events.on('update', this._sceneUpdateCb);

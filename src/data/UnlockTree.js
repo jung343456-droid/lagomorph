@@ -1,5 +1,5 @@
 /**
- * 영구 해금 트리 — 공격 9(파동 확장 3 포함) / 생존 11(강인한 몸 5 포함) / 특수 11(잔해 회수 4 포함) = 31노드.
+ * 영구 해금 트리 — 공격 9(파동 확장 3 포함) / 생존 11(강인한 몸 5 포함) / 특수 14(잔해 회수 4·코어 흡수 3 포함) = 34노드.
  * 각 단계 N 노드는 단계 N-1 노드의 prereq 를 갖는다 (tier = 선행 깊이 = 표시 순서, 선행 해금 필수).
  * 특수 계열은 비용 오름차순 단일 사슬이며, 잔해 회수도 같은 사슬에 편입되어 있다.
  *
@@ -146,48 +146,66 @@ export const UNLOCK_NODES = {
     apply: (p) => { p.coreDropMult = (p.coreDropMult ?? 1) * 1.15; },
   },
   meta_salvage_2: {
-    branch: 'special', tier: 4, prereq: 'core_collector', cost: 150,
+    branch: 'special', tier: 5, prereq: 'core_reach_1', cost: 150,
     name: '잔해 회수 II', desc: '사망 시 메타 보존율 +5% (→ 35%)',
     dynDesc: (p) => { const cur = Math.round((p.metaRetainRate ?? 0.25) * 100); return `사망 시 메타 보존율 +5% (${cur} → ${cur + 5}%)`; },
     apply: (p) => { p.metaRetainRate = (p.metaRetainRate ?? 0.25) + 0.05; },
   },
   memory_frag: {
-    branch: 'special', tier: 5, prereq: 'meta_salvage_2', cost: 180,
+    branch: 'special', tier: 6, prereq: 'meta_salvage_2', cost: 180,
     name: '기억 단편화', desc: '시작 방 아이템 +1',
     apply: (p) => { p.extraStartItems = (p.extraStartItems ?? 0) + 1; },
   },
   meta_salvage_3: {
-    branch: 'special', tier: 6, prereq: 'memory_frag', cost: 300,
+    branch: 'special', tier: 8, prereq: 'core_reach_2', cost: 300,
     name: '잔해 회수 III', desc: '사망 시 메타 보존율 +5% (→ 40%)',
     dynDesc: (p) => { const cur = Math.round((p.metaRetainRate ?? 0.25) * 100); return `사망 시 메타 보존율 +5% (${cur} → ${cur + 5}%)`; },
     apply: (p) => { p.metaRetainRate = (p.metaRetainRate ?? 0.25) + 0.05; },
   },
   merchant_credit: {
-    branch: 'special', tier: 7, prereq: 'meta_salvage_3', cost: 360,
+    branch: 'special', tier: 9, prereq: 'meta_salvage_3', cost: 360,
     name: '상인의 신용', desc: '상점 가격 -10% (모든 슬롯)',
     apply: (p) => { p.shopPriceMult = (p.shopPriceMult ?? 1) * 0.9; },
   },
   merchant_pact: {
-    branch: 'special', tier: 8, prereq: 'merchant_credit', cost: 500,
+    branch: 'special', tier: 10, prereq: 'merchant_credit', cost: 500,
     name: '상인의 계약', desc: '상점 슬롯 +1 (3 → 4 → 5, merchant_favor 누적)',
     dynDesc: (p) => { const cur = 3 + (p.shopSlotBonus ?? 0); return `상점 슬롯 +1 (${cur} → ${cur + 1})`; },
     apply: (p) => { p.shopSlotBonus = (p.shopSlotBonus ?? 0) + 1; },
   },
   meta_salvage_4: {
-    branch: 'special', tier: 9, prereq: 'merchant_pact', cost: 500,
+    branch: 'special', tier: 11, prereq: 'merchant_pact', cost: 500,
     name: '잔해 회수 IV', desc: '사망 시 메타 보존율 +5% (→ 45%)',
     dynDesc: (p) => { const cur = Math.round((p.metaRetainRate ?? 0.25) * 100); return `사망 시 메타 보존율 +5% (${cur} → ${cur + 5}%)`; },
     apply: (p) => { p.metaRetainRate = (p.metaRetainRate ?? 0.25) + 0.05; },
   },
   bargain_2: {
-    branch: 'special', tier: 10, prereq: 'meta_salvage_4', cost: 700,
+    branch: 'special', tier: 13, prereq: 'core_reach_3', cost: 700,
     name: '흥정 II', desc: '상점 가격 추가 -5% (×0.9 → ×0.855)',
     apply: (p) => { p.shopPriceMult = (p.shopPriceMult ?? 1) * 0.95; },
   },
   golden_touch: {
-    branch: 'special', tier: 11, prereq: 'bargain_2', cost: 900,
+    branch: 'special', tier: 14, prereq: 'bargain_2', cost: 900,
     name: '황금손', desc: '드롭 코어량 추가 ×1.10 (core_collector 누적)',
     apply: (p) => { p.coreDropMult = (p.coreDropMult ?? 1) * 1.10; },
+  },
+  core_reach_1: {
+    branch: 'special', tier: 4, prereq: 'core_collector', cost: 120,
+    name: '코어 흡수 I', desc: '코어 흡수 범위 +15 (55 → 70)',
+    dynDesc: (p) => { const cur = p.corePickupRange ?? 55; return `코어 흡수 범위 +15 (${cur} → ${cur + 15})`; },
+    apply: (p) => { p.corePickupRange = (p.corePickupRange ?? 55) + 15; },
+  },
+  core_reach_2: {
+    branch: 'special', tier: 7, prereq: 'memory_frag', cost: 240,
+    name: '코어 흡수 II', desc: '코어 흡수 범위 +15 (→ 85)',
+    dynDesc: (p) => { const cur = p.corePickupRange ?? 55; return `코어 흡수 범위 +15 (${cur} → ${cur + 15})`; },
+    apply: (p) => { p.corePickupRange = (p.corePickupRange ?? 55) + 15; },
+  },
+  core_reach_3: {
+    branch: 'special', tier: 12, prereq: 'meta_salvage_4', cost: 600,
+    name: '코어 흡수 III', desc: '코어 흡수 범위 +15 (→ 100)',
+    dynDesc: (p) => { const cur = p.corePickupRange ?? 55; return `코어 흡수 범위 +15 (${cur} → ${cur + 15})`; },
+    apply: (p) => { p.corePickupRange = (p.corePickupRange ?? 55) + 15; },
   },
 };
 

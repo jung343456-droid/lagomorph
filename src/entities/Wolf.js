@@ -3,13 +3,18 @@
  * HP 240 / 속도 176 / 데미지 12(접촉) / 코어 드롭 12
  * 크기 32×36px
  *
- * 패턴:
- *   idle  → chase (320px 이내 탐지)
- *   chase → 플레이어 추격 (176px/s)
- *           8초 뒤 첫 포효, 이후 20초마다 반복
- *   howl  → 1.5초 포효: 완전 정지 + 경직 취약
- *           종료 시 족제비(weasel) 2마리 소환
- *   stun  → 피격 경직 0.3초 + 넉백 (이 시간 동안 추가 피격 무시 = i-frame)
+ * 패턴 (무리 사냥형):
+ *   idle   → chase (320px 이내 탐지)
+ *   chase  → 직진 추격 (176px/s) — 200px 이내 접근 시 strafe 전환
+ *            8초 뒤 첫 포효, 이후 20초마다 반복 (chase/strafe 중 타이머 진행)
+ *   strafe → 플레이어 주위 ~140px 링 측면 우회 (150px/s, 개체별 선회 방향 랜덤 — 2마리가 자연 포위,
+ *            벽에 막히면 방향 반전). 260px 이상 벌어지면 chase 복귀
+ *   lunge  → 우회 중 쿨다운(3.2s ±15%)마다: 웅크림 0.3초(조준 고정 — 옆으로 피하면 빗나감)
+ *            → 430px/s × 0.38s 도약(사거리 ≈163px, 도약 중 슈퍼아머: 피해만 받고 경직 무시)
+ *            → 착지 경직 0.35초(응징 창) → 50% 확률 선회 방향 반전 후 복귀
+ *   howl   → 1.5초 포효: 완전 정지 + 경직 취약
+ *            종료 시 족제비(weasel) 2마리 소환 + 3초 광분 (추격·우회 속도 ×1.25, 주황 틴트)
+ *   stun   → 피격 경직 0.3초 + 넉백 (이 시간 동안 추가 피격 무시 = i-frame)
  *
  * 오라 (생존 중 상시):
  *   180px 이내 아군 speedMult ×1.2
@@ -31,6 +36,18 @@ const AURA_MULT     = 1.2;
 const SUMMON_COUNT  = 2;
 const SUMMON_TYPE   = 'weasel'; // howl 소환 적 타입 — 항상 족제비
 
+const STRAFE_ENTER_R = 200;  // 이내로 접근하면 측면 우회 시작
+const STRAFE_EXIT_R  = 260;  // 이상 벌어지면 직진 추격 복귀
+const STRAFE_RING    = 140;  // 우회 선호 반경 (플레이어 기준 링)
+const STRAFE_SPEED   = 150;  // 우회 이동 속도 (px/s)
+const LUNGE_CD       = 3.2;  // 도약 쿨다운 (개체별 ±15% 분산)
+const LUNGE_WINDUP   = 0.3;  // 웅크림 예고 — 시작 시 조준 고정, 옆으로 피하면 빗나감
+const LUNGE_SPEED    = 430;  // 도약 속도 (px/s)
+const LUNGE_DUR      = 0.38; // 도약 시간 — 사거리 ≈163px 고정
+const LUNGE_RECOVER  = 0.35; // 도약 후 경직 (응징 창)
+const FRENZY_DUR     = 3.0;  // 포효 후 광분 지속
+const FRENZY_MULT    = 1.25; // 광분 중 추격·우회 속도 배율
+
 function calcDir(vx, vy) {
   if (Math.abs(vx) < 1 && Math.abs(vy) < 1) return null;
   const a = Math.atan2(vy, vx) * 180 / Math.PI;
@@ -44,7 +61,7 @@ function calcDir(vx, vy) {
   return 'ne';
 }
 
-// 상태: idle | chase | howl | stun
+// 상태: idle | chase | strafe | lunge_windup | lunge | lunge_recover | howl | stun
 export default class Wolf {
   constructor(scene, x, y) {
     this.scene = scene;
@@ -70,6 +87,12 @@ export default class Wolf {
     this._auraTargets = new Set();
     this._howlGfx     = null;
 
+    this._orbitDir    = Math.random() < 0.5 ? 1 : -1;  // 우회 방향 — 2마리가 자연 포위하도록 개체별 랜덤
+    this._lungeCd     = 1.2 + Math.random() * 1.2;     // 첫 도약 분산 (2마리 동시 도약 방지)
+    this._lungeDir    = { x: 0, y: 1 };
+    this._lungeTimer  = 0;
+    this._frenzyTimer = 0;                             // 포효 후 광분 잔여 시간
+
     this._knockbackTimer    = 0;
     this._knockbackDuration = 0;
     this._knockbackVx = 0;
@@ -93,6 +116,11 @@ export default class Wolf {
     if (!this.alive) return;
     const dt = delta / 1000;
     this.attackCooldown = Math.max(0, this.attackCooldown - dt);
+    this._lungeCd = Math.max(0, this._lungeCd - dt);
+    if (this._frenzyTimer > 0) {
+      this._frenzyTimer -= dt;
+      if (this._frenzyTimer <= 0 && this.state !== 'stun') this.gameObject.clearTint();
+    }
 
     const dx   = player.x - this.gameObject.x;
     const dy   = player.y - this.gameObject.y;
@@ -106,15 +134,52 @@ export default class Wolf {
 
       case 'chase': {
         if (dist >= DETECT_R) { this.state = 'idle'; this.gameObject.body.setVelocity(0, 0); break; }
+        if (dist <= STRAFE_ENTER_R) { this.state = 'strafe'; break; }
         const len = dist > 0 ? dist : 1;
-        this.gameObject.body.setVelocity(
-          (dx / len) * this.speed * this.speedMult,
-          (dy / len) * this.speed * this.speedMult,
-        );
+        const spd = this.speed * this.speedMult * this._frenzyMult();
+        this.gameObject.body.setVelocity((dx / len) * spd, (dy / len) * spd);
         this._howlTimer -= dt;
         if (this._howlTimer <= 0) this._startHowl();
         break;
       }
+
+      case 'strafe': { // 측면 우회 — 플레이어 주위 링을 돌며 도약 타이밍을 잰다
+        if (dist > STRAFE_EXIT_R) { this.state = 'chase'; break; }
+        this._strafe(dx, dy, dist);
+        this._howlTimer -= dt;
+        if (this._howlTimer <= 0) { this._startHowl(); break; }
+        if (this._lungeCd <= 0) this._startLungeWindup(dx, dy, dist);
+        break;
+      }
+
+      case 'lunge_windup': // 웅크림 — 조준은 이미 고정, 옆으로 피하면 빗나감
+        this.gameObject.body.setVelocity(0, 0);
+        this._lungeTimer -= dt;
+        if (this._lungeTimer <= 0) {
+          this.state = 'lunge';
+          this._lungeTimer = LUNGE_DUR;
+        }
+        break;
+
+      case 'lunge':
+        this._lungeTimer -= dt;
+        this.gameObject.body.setVelocity(this._lungeDir.x * LUNGE_SPEED, this._lungeDir.y * LUNGE_SPEED);
+        if (this._lungeTimer <= 0 || !this.gameObject.body.blocked.none) {
+          this.gameObject.body.setVelocity(0, 0);
+          this.state = 'lunge_recover';
+          this._lungeTimer = LUNGE_RECOVER;
+        }
+        break;
+
+      case 'lunge_recover': // 착지 경직 — 응징 창
+        this.gameObject.body.setVelocity(0, 0);
+        this._lungeTimer -= dt;
+        if (this._lungeTimer <= 0) {
+          this._lungeCd = LUNGE_CD * (0.85 + Math.random() * 0.3);
+          if (Math.random() < 0.5) this._orbitDir *= -1; // 다음 우회 방향 변주
+          this.state = dist <= STRAFE_EXIT_R ? 'strafe' : 'chase';
+        }
+        break;
 
       case 'howl':
         this._howlDur -= dt;
@@ -147,6 +212,7 @@ export default class Wolf {
     if (!this.alive || this.state === 'stun') return false;
     this.hp -= amount;
     if (this.hp <= 0) { this._die(); return true; }
+    if (this.state === 'lunge') { this._blinkHit(); return false; } // 도약 중 슈퍼아머 — 피해만 적용
     if (knockback) {
       const { dx, dy, force, duration } = knockback;
       this._knockbackTimer    = duration;
@@ -185,6 +251,31 @@ export default class Wolf {
 
   // ── private ─────────────────────────────────────────
 
+  _frenzyMult() { return this._frenzyTimer > 0 ? FRENZY_MULT : 1; }
+
+  /** 측면 우회 — 링 반경 유지(방사) + 선회(접선) 합성. 벽에 막히면 선회 방향 반전 */
+  _strafe(dx, dy, dist) {
+    if (dist < 1) { this.gameObject.body.setVelocity(0, 0); return; }
+    if (!this.gameObject.body.blocked.none) this._orbitDir *= -1;
+    const nx = dx / dist, ny = dy / dist;
+    let radial = 0;
+    if (dist < STRAFE_RING - 25)      radial = -0.6; // 너무 가까우면 벌리고
+    else if (dist > STRAFE_RING + 25) radial =  0.6; // 멀면 좁힌다
+    const tx = -ny * this._orbitDir, ty = nx * this._orbitDir;
+    const spd = STRAFE_SPEED * this.speedMult * this._frenzyMult();
+    this.gameObject.body.setVelocity((nx * radial + tx * 0.85) * spd, (ny * radial + ty * 0.85) * spd);
+  }
+
+  _startLungeWindup(dx, dy, dist) {
+    const len = dist > 0 ? dist : 1;
+    this._lungeDir = { x: dx / len, y: dy / len }; // 웅크림 시작 시 조준 고정
+    this.state = 'lunge_windup';
+    this._lungeTimer = LUNGE_WINDUP;
+    this.gameObject.body.setVelocity(0, 0);
+    const cd = calcDir(this._lungeDir.x, this._lungeDir.y);
+    if (cd) this._lastDir = cd;
+  }
+
   _startHowl() {
     this.state    = 'howl';
     this._howlDur = HOWL_DUR;
@@ -193,6 +284,8 @@ export default class Wolf {
 
   _finishHowl() {
     this._howlTimer = HOWL_CD;
+    this._frenzyTimer = FRENZY_DUR; // 포효 직후 광분 — 추격·우회 가속
+    this.gameObject.setTint(0xffccaa);
     this.state = 'chase';
     this._summonMinions();
   }

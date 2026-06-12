@@ -66,6 +66,13 @@
 | 5 | 상인의 계약 | 상점 슬롯 +1 (4 → 5) (`shopSlotBonus +1`, 상인의 호의 누적) | 500 | ✅ |
 | 6 | 흥정 II | 상점 모든 슬롯 가격 ×0.95 (`shopPriceMult ×= 0.95`, 상인의 신용 누적) | 700 | ✅ |
 | 7 | 황금손 | 드롭 코어량 ×1.10 (`coreDropMult ×= 1.10`, 코어 수집기 누적) | 900 | ✅ |
+| t4 | 코어 흡수 I | 코어 자동 흡수 범위 +15 (`corePickupRange`, 55 → 70) | 120 | ✅ |
+| t7 | 코어 흡수 II | 코어 자동 흡수 범위 +15 (→ 85) | 240 | ✅ |
+| t12 | 코어 흡수 III | 코어 자동 흡수 범위 +15 (→ 100) | 600 | ✅ |
+
+> ⚠️ 위 특수 계열 표는 일부 중간 노드(잔해 회수 II~IV, 상인의 계약 등)가 누락된 구버전 상태다.
+> 코어 흡수 I~III 는 비용 오름차순 단일 사슬 중간에 끼워져 실제 `UnlockTree.js` 상 tier 4·7·12 위치다
+> (각각 코어 수집기·기억 단편화·잔해 회수 IV 직후). 정확한 정의는 코드를 따른다.
 
 > 변경 이력 (설계 정정):
 > - 공격 t3: 관통 각인 → **충전 가속** (3단계 관통 기능 폐기)
@@ -85,6 +92,7 @@
 | 트랩 최대 동시 설치 (덫꾼의 손) | `src/systems/AttackManager.js` `_startPlace` (MAX_POOPS + trapMaxBonus) |
 | 런 시작 코어 (점화의 잔해) | `src/scenes/GameScene.js` `create` (Player 생성 직후 `enemyManager.coreCount += startingCores`) |
 | 강화 외피 (armor) | `src/entities/Player.js` `takeDamage` (평탄 감산, ≤armor 공격 무효) |
+| 코어 흡수 범위 (코어 흡수 I~III) | `src/systems/EnemyManager.js` `update` 자석 분기 (`player.corePickupRange ?? CORE_PICKUP_R`) |
 | 잔영의 가호 (invulnDurationMult) | `src/entities/Player.js` `takeDamage` 일반 분기 무적 tween duration |
 | 진입 트리거 NPC | `src/entities/Shopkeeper.js` (HubScene 인스턴스, GRIM) |
 | 최후의 발버둥 발동 로직 | `src/entities/Player.js` (`takeDamage` 치명 흡수 분기) |

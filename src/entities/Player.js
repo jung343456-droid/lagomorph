@@ -39,6 +39,8 @@
  *   invulnDurationMult 1    피격 후 무적 깜빡임 지속 배율 (영구 해금 '잔영의 가호' ×1.25) — takeDamage 일반 분기 tween duration 에 적용
  *   hasMapReveal     false 현재 층 전체 방을 지도에 표시 (던전의 감각)
  *   metaRetainRate   0.25   사망 시 메타 픽업분 보존율 (영구 해금 '잔해 회수 I~IV' +0.05 씩 → 최대 0.45) — MetaProgress.commitMetaRun 참조
+ *   autoCollectCores false  방 클리어 시 남은 코어 전량 자석 흡수 — 기본 해제, 패시브 아이템으로 활성화 (EnemyManager._collectAllCores 게이팅)
+ *   corePickupRange  55     코어 자동 흡수 시작 반경(px) — 해금 '코어 흡수 I~III' +15 씩 (→ 70/85/100)
  *
  * 임시 저장: serialize() 로 좌표·스탯·플래그·인벤토리를 평문 객체로 추출, applySave(data) 로 복원한다.
  *   복원 시 저장된 스탯으로 전부 덮어쓴다 — 런 중 패시브 아이템이 변경한 값까지 반영하기 위함
@@ -68,7 +70,7 @@ const SAVE_STAT_KEYS = [
   'hasFireDisguise', 'hasIceDisguise', 'hasPoisonDisguise', 'trapCostBonus', 'trapSizeMult',
   'healItemMult', 'coreDropMult', 'hpPerRoomClear', 'shopSlotBonus', 'armor', 'damageReduction',
   'trapMaxBonus', 'startingCores', 'invulnDurationMult', 'hasMapReveal', 'extraLives',
-  'extraStartItems', 'shopPriceMult', 'metaRetainRate',
+  'extraStartItems', 'shopPriceMult', 'metaRetainRate', 'autoCollectCores', 'corePickupRange',
 ];
 
 export default class Player {
@@ -115,6 +117,8 @@ export default class Player {
     this.extraStartItems  = 0;   // 기억 단편화 해금 시 +1 (GameScene._spawnStartRoomItem 참조)
     this.shopPriceMult    = 1;   // 상인의 신용 해금 시 ×0.9 (DungeonGenerator._generateShopSlots 참조)
     this.metaRetainRate   = 0.25; // 사망 시 메타 픽업분 보존율 — 잔해 회수 해금으로 +0.05 씩 (MetaProgress.commitMetaRun 참조)
+    this.autoCollectCores = false; // 방 클리어 시 남은 코어 전량 자석 흡수 — 기본 해제, 패시브 아이템으로 활성화 (EnemyManager._collectAllCores 참조)
+    this.corePickupRange  = 55;  // 코어 자동 흡수 시작 반경(px) — 해금 '코어 흡수 I~III' +15 씩 (EnemyManager update 자석 분기 참조)
     this.inventory        = [];
     this._dir            = 'bottom';
     this._row            = DIR_ROW.bottom; // 현재 방향 행

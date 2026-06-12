@@ -5,20 +5,23 @@
  *
  * 패턴:
  *   idle    → orbit(499px 이내 탐지)
- *   orbit   → 200~240px 거리에서 좌우 흔들리며 선회 (직진하지 않음)
- *   swoop   → 4초마다 가장 가까운 1마리가 0.4초간 직선 강하
- *   recover → 0.6초 정지 후 orbit 복귀
+ *   orbit   → 140~180px 거리에서 좌우 흔들리며 선회 (직진하지 않음)
+ *   swoop   → 쿨다운 4초(개체별 분산)마다: 0.25초 공중 정지 예고 → 발사 순간 조준,
+ *             330px/s 직선 강하 — 플레이어 위치 + 관통 50px 까지 도달 (상한 1.0s, 벽 충돌 시 조기 종료)
+ *   recover → 0.45초 정지 후 orbit 복귀
  *   stun    → 피격 시 0.3초 경직 + 넉백 (i-frame)
  *
  * 시각: 어두운 보라 틴트 (placeholder: rat 스프라이트 재사용)
  * speedMult: Wolf 오라(180px 이내) 적용 시 ×1.2
  */
 const DETECT_R     = 499;
-const PREFER_DIST  = 220;
+const PREFER_DIST  = 160;  // 선회 반경 — swoop 사거리와 연동 (기존 220은 swoop 미도달 거리였음)
 const ORBIT_SPEED  = 176;
-const SWOOP_SPEED  = 242;
-const SWOOP_DUR    = 0.4;
-const RECOVER_DUR  = 0.6;
+const SWOOP_SPEED  = 330;
+const SWOOP_WINDUP = 0.25; // 강하 직전 정지 예고 — 조준은 발사 순간 (비행 중 옆으로 피하면 빗나감)
+const SWOOP_OVERSHOOT = 50; // 플레이어 위치를 지나쳐 직진하는 관통 거리
+const SWOOP_DUR_MAX = 1.0; // 강하 시간 상한 (거리 기반 동적 계산의 안전 캡)
+const RECOVER_DUR  = 0.45;
 const SWOOP_CD     = 4.0;
 const ORBIT_FLIP   = 1.2;
 const BAT_W        = 14;
@@ -40,7 +43,7 @@ function calcDir(vx, vy) {
   return 'ne';
 }
 
-// 상태: idle | orbit | swoop | recover | stun
+// 상태: idle | orbit | swoop_windup | swoop | recover | stun
 export default class Bat {
   constructor(scene, x, y) {
     this.scene = scene;
@@ -107,14 +110,23 @@ export default class Bat {
         if (dist >= DETECT_R) { this.state = 'idle'; break; }
         this._orbitMove(dx, dy, dist, dt);
         this._swoopCd -= dt;
-        if (this._swoopCd <= 0) this._startSwoop(dx, dy, dist);
+        if (this._swoopCd <= 0) {
+          this.state = 'swoop_windup';
+          this._stateTimer = SWOOP_WINDUP;
+        }
         break;
       }
+
+      case 'swoop_windup': // 공중 정지 예고 — 발사 순간 조준
+        this.gameObject.body.setVelocity(0, 0);
+        this._stateTimer -= dt;
+        if (this._stateTimer <= 0) this._launchSwoop(dx, dy, dist);
+        break;
 
       case 'swoop':
         this._stateTimer -= dt;
         this.gameObject.body.setVelocity(this._swoopVx, this._swoopVy);
-        if (this._stateTimer <= 0) {
+        if (this._stateTimer <= 0 || !this.gameObject.body.blocked.none) {
           this.state = 'recover';
           this._stateTimer = RECOVER_DUR;
           this.gameObject.body.setVelocity(0, 0);
@@ -162,7 +174,7 @@ export default class Bat {
       this._knockbackVx = dx * force;
       this._knockbackVy = dy * force;
     }
-    this._prevState = this.state === 'swoop' ? 'orbit' : this.state;
+    this._prevState = (this.state === 'swoop' || this.state === 'swoop_windup') ? 'orbit' : this.state;
     this.state      = 'stun';
     this.stunTimer  = 0.3;
     this._blinkHit();
@@ -216,12 +228,13 @@ export default class Bat {
     }
   }
 
-  _startSwoop(dx, dy, dist) {
+  /** 발사 순간 조준 — 거리 + 관통분을 끝까지 도달하는 동적 강하 시간 (기존 고정 0.4s 는 220px 선회 거리 미도달) */
+  _launchSwoop(dx, dy, dist) {
     const len = dist > 0 ? dist : 1;
     this._swoopVx = (dx / len) * SWOOP_SPEED;
     this._swoopVy = (dy / len) * SWOOP_SPEED;
     this.state = 'swoop';
-    this._stateTimer = SWOOP_DUR;
+    this._stateTimer = Math.min(SWOOP_DUR_MAX, (dist + SWOOP_OVERSHOOT) / SWOOP_SPEED);
     const dir = calcDir(this._swoopVx, this._swoopVy);
     if (dir) this._lastDir = dir;
   }
@@ -229,7 +242,7 @@ export default class Bat {
   _updateSprite() {
     if (this.state === 'stun') return;
     let key;
-    if (this.state === 'swoop') {
+    if (this.state === 'swoop' || this.state === 'swoop_windup') {
       key = 'bat-swoop';
     } else if (this.state === 'idle' || this.state === 'recover') {
       key = 'bat-idle';
