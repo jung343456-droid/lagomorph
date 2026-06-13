@@ -207,7 +207,7 @@ export default class Squirrel {
       .setRotation(Math.atan2(ny, nx))
       .setDepth(8);
     this.scene.enemyManager.addEnemyProjectile(
-      proj, SQUIRREL_DMG, nx * ACORN_SPEED, ny * ACORN_SPEED, '다람쥐 도토리',
+      proj, SQUIRREL_DMG, nx * ACORN_SPEED, ny * ACORN_SPEED, '다람쥐 도토리', this.isElite,
     );
   }
 

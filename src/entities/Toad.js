@@ -289,7 +289,7 @@ export default class Toad {
           p.wasInside = true;
           // 직접 데미지 적용 (인접 invincible 프레임은 player.takeDamage 가 처리)
           // 독 피해는 방어력(armor/damageReduction) 관통
-          player.lastDamageSource = '독 웅덩이';
+          player.lastDamageSource = '독 웅덩이' + (this.isElite ? ' (정예)' : '');
           const dead = player.takeDamage(PUDDLE_DMG, null, { bypassArmor: true });
           if (dead) this.scene.events.emit('player-dead');
         }

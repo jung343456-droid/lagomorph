@@ -202,6 +202,24 @@ export default class PassiveItem {
   get id()    { return this._id; }
   get alive() { return this._alive; }
 
+  /** 근접 시 아이템 이름 라벨 표시/숨김 (픽업 전 식별용) — 라벨은 최초 표시 시 지연 생성 */
+  setLabelVisible(visible) {
+    if (!this._alive) return;
+    if (visible) {
+      if (!this._label) {
+        this._label = this.scene.add.text(
+          this.gameObject.x, this.gameObject.y - ITEM_SIZE - 6,
+          this._def.name,
+          { fontSize: '12px', color: '#ffffff', fontFamily: 'monospace',
+            stroke: '#000000', strokeThickness: 3 },
+        ).setOrigin(0.5, 1).setDepth(60);
+      }
+      this._label.setVisible(true);
+    } else if (this._label) {
+      this._label.setVisible(false);
+    }
+  }
+
   collect(player) {
     if (!this._alive) return;
     this._def.apply(player);
@@ -230,6 +248,7 @@ export default class PassiveItem {
     if (this._glowTween)  { this._glowTween.remove();  this._glowTween  = null; }
     if (this._scaleTween) { this._scaleTween.remove(); this._scaleTween = null; }
     if (this._glowGfx?.active)   this._glowGfx.destroy();
+    if (this._label?.active)     this._label.destroy();
     if (this.gameObject?.active) this.gameObject.destroy();
   }
 

@@ -23,6 +23,7 @@ import Room, { ROOM_W, ROOM_H } from '../world/Room';
 import UnlockMenu from '../ui/UnlockMenu';
 import { getMetaCores, getShopDiscovered, resetAllProgress, getGrimIntroShown, markGrimIntroShown } from '../data/MetaProgress';
 import { hasRunSave } from '../data/SaveManager';
+import { randomGrimTip } from '../data/GrimDialogue';
 import { safeInsetBottom } from '../utils/SafeArea';
 
 const DLG_BOTTOM_PAD = 16;  // 대화 패널 하단 추가 여백 (floor 위에 더하는 숨 쉴 공간)
@@ -34,24 +35,6 @@ const GRIM_START_LINES = [
   '어. 왔군.',
   '왜 여기 있냐고? ...그냥. 바람 좀 쐬러.',
   '코어 생기면 찾아오게. 깊이 들어갈수록 나도 있을 거야.',
-];
-
-const GRIM_TIPS = [
-  ['A를 꾹 눌러봐. 더 강하고 넓은 공격이 나와. 알고 쓰면 꽤 달라져.'],
-  ['저 아이템은 자네가 전에 주운 것 중에서 나와. 처음 보는 게 없어도 이상한 거 아니야.'],
-  ['B버튼 트랩은 사실 똥이야. 뭐... 효과는 있어.'],
-  ['B버튼은 코어가 들어. 근데 적이 밟으면 제법 아파해. 똥치고는 쓸 만하지.'],
-  ['쥐는 항상 셋이야. 왜인진 나도 몰라. 그냥 항상 셋이더라고.'],
-  ['고슴도치가 가시 세우면 건드리지 마. 그때는 무적이거든. 기다리면 돼.'],
-  ['다람쥐는 거리 두고 도토리를 던져. 가까이 붙으면 멈춰.'],
-  ['여우는 끝까지 쫓아와. 진짜로. 질릴 때까지.'],
-  ['나도 한때 싸웠어. 지금 내가 여기서 뭘 팔고 있는지 보면... 그냥 참고만 해.'],
-  ['이 지하에 몇 명이 내려왔는지 알아? 자네한테는 말 안 할게.'],
-  ['살아 돌아온 손님한테 팔아야 돈이 돼. 그래서 나도 이러는 거야. 오해하지 마.'],
-  ['깊이 들어갈수록 뭐가 나올지 몰라. 코어 아끼지 마.'],
-  ['저 짐승들이 왜 지하에 모여 있겠어. 코어 냄새가 나거든. 오래된 본능이야.'],
-  ['기억이 코어라는 말, 들어봤어? 나는 그게 비유가 아니라고 생각해. 그냥 내 생각이야.'],
-  ['코어가 어디로 가는지 생각해봤어? 나는 안 생각하려고 해. 그게 편하더라고.'],
 ];
 
 const MACHINE_W       = 110;
@@ -129,7 +112,7 @@ export default class HubScene extends Phaser.Scene {
       // 첫 인사 대사는 게임 전체에서 딱 1회, 이후로는 랜덤 팁
       const introDone = getGrimIntroShown();
       const lines = introDone
-        ? GRIM_TIPS[Math.floor(Math.random() * GRIM_TIPS.length)]
+        ? randomGrimTip()
         : GRIM_START_LINES;
       if (!introDone) markGrimIntroShown();
       this._showGrimDialogue(lines, () => this._openUnlockMenu());

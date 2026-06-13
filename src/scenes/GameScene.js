@@ -12,6 +12,7 @@ import Shopkeeper from '../entities/Shopkeeper';
 import Altar from '../entities/Altar';
 import { getMetaCores, beginMetaRun, commitMetaRun, addRunPickup, getGrimIntroShown, markGrimIntroShown } from '../data/MetaProgress';
 import { saveRunState, loadRunSave, clearRunSave } from '../data/SaveManager';
+import { randomGrimTip } from '../data/GrimDialogue';
 
 // 상점 가격 층 스케일링 — 구역 2(11~20층)는 코어 드롭이 ×1.5 인플레되므로 상점가도 ×1.5 로 대칭.
 // 구역 1 ×1.0 / 구역 2 ×1.5. 영구 해금 할인(player.shopPriceMult)과 곱연산 합성.
@@ -193,11 +194,15 @@ export default class GameScene extends Phaser.Scene {
       this.player.halt();  // 대화/상점 진입 시 잔여 속도로 미끄러지는 것 방지
       const ui    = this.scene.get('UIScene');
       const slots = this._shopkeeper.shopSlots;
+      // 이 상점 NPC에 처음 다가갔을 때만 대화 — 게임 전체 첫 만남은 인사, 이후엔 랜덤 팁.
+      // 같은 방에서 상점을 닫았다 다시 열면 대화 없이 바로 상점.
+      if (this._shopkeeper._greeted) { ui.openShop?.(slots); return; }
+      this._shopkeeper._greeted = true;
       if (!getGrimIntroShown()) {
         markGrimIntroShown();
         ui.openDialogue?.(GRIM_FIRST_LINES, () => ui.openShop?.(slots));
       } else {
-        ui.openShop?.(slots);
+        ui.openDialogue?.(randomGrimTip(), () => ui.openShop?.(slots));
       }
     });
 
@@ -673,6 +678,8 @@ export default class GameScene extends Phaser.Scene {
       const d = Phaser.Math.Distance.Between(
         this.player.x, this.player.y, item.x, item.y,
       );
+      // 픽업 전 근접 시 아이템 이름 표시 (수집 반경보다 넓은 범위)
+      item.setLabelVisible(d < 80);
       if (d < 30) {
         const wasMapReveal = this.player.hasMapReveal;
         item.collect(this.player);

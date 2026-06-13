@@ -28,10 +28,10 @@ const PLAYER_KNOCKBACK_FORCE = 220; // 적 접촉 시 플레이어 넉백 강도
 const PLAYER_KNOCKBACK_DUR   = 0.18; // 적 접촉 시 플레이어 넉백 지속 시간 (초)
 const PLAYER_AVG_HALF        = 23;  // 플레이어 히트박스 평균 반경 (BODY_W=48, BODY_H=46 → (24+23)/2)
 const ELITE_CHANCE           = 0.01; // 방당 엘리트 등장 확률 (1%)
-const ELITE_TINT_COLOR       = 0xffaaaa; // 엘리트 스프라이트 틴트 (붉은 계열)
+const ELITE_TINT_COLOR       = 0xff8888; // 엘리트 스프라이트 틴트 (붉은 계열)
 const ELITE_HP_MULT          = 4;    // 엘리트 최대 HP ×4
 const ELITE_DMG_MULT         = 2;    // 엘리트 공격력 ×2
-const ELITE_SPD_MULT         = 2;    // 엘리트 이동속도 ×2 (speedMult/baseSpeedMult 경유 — 모든 적 이동이 곱함)
+const ELITE_SPD_MULT         = 1.6;  // 엘리트 이동속도 ×1.6 (speedMult/baseSpeedMult 경유 — 모든 적 이동이 곱함)
 const MIN_SPAWN_DIST         = 160;      // 플레이어 진입 위치와 적 스폰 최소 거리 (px)
 
 // 구역 2(층 11~20) 강화 배수 — 1구역 기준 적 스탯 대비. 보스 포함 모든 스폰에 적용.
@@ -208,7 +208,7 @@ export default class EnemyManager {
         const nx   = d > 0 ? dx / d : 0;
         const ny   = d > 0 ? dy / d : 0;
         // 사망 시 결과창에서 표시할 가해자 이름 — takeDamage 결과가 무적이라 false 반환이어도 마지막 접촉자로 기록
-        this.player.lastDamageSource = e.displayName ?? '적';
+        this.player.lastDamageSource = (e.displayName ?? '적') + (e.isElite ? ' (정예)' : '');
         const dead = this.player.takeDamage(e.damage, {
           dx: nx, dy: ny,
           force:    PLAYER_KNOCKBACK_FORCE,
@@ -234,7 +234,7 @@ export default class EnemyManager {
       const pdy = this.player.y - y;
       const pd  = Math.sqrt(pdx * pdx + pdy * pdy);
       if (pd < 20) {
-        this.player.lastDamageSource = proj.displayName ?? '적 투사체';
+        this.player.lastDamageSource = (proj.displayName ?? '적 투사체') + (proj.isElite ? ' (정예)' : '');
         const dead = this.player.takeDamage(proj.damage, {
           dx: pd > 0 ? pdx / pd : 0,
           dy: pd > 0 ? pdy / pd : 0,
@@ -495,8 +495,8 @@ export default class EnemyManager {
   registerLingeringHazard(owner)   { this._lingeringHazards.add(owner); }
   unregisterLingeringHazard(owner) { this._lingeringHazards.delete(owner); }
 
-  addEnemyProjectile(go, damage, vx, vy, displayName = '적 투사체') {
-    this._enemyProjs.push({ go, damage, vx, vy, displayName });
+  addEnemyProjectile(go, damage, vx, vy, displayName = '적 투사체', isElite = false) {
+    this._enemyProjs.push({ go, damage, vx, vy, displayName, isElite });
   }
 
   /** 층 전환 시 모든 적·투사체·드롭 즉시 정리 */
@@ -711,7 +711,7 @@ export default class EnemyManager {
     enemy.maxHp  = Math.round(enemy.maxHp * ELITE_HP_MULT);
     enemy.hp      = enemy.maxHp;
     enemy.damage = Math.round((enemy.damage ?? 0) * ELITE_DMG_MULT);
-    // 이동속도 ×2 — 모든 적 이동이 speedMult(오라 없을 땐 baseSpeedMult)를 곱하므로
+    // 이동속도 ×1.6 — 모든 적 이동이 speedMult(오라 없을 땐 baseSpeedMult)를 곱하므로
     // 이 체인에 실어 일관 적용한다. Wolf 오라는 baseSpeedMult 기준 재계산하므로 자연히 합산.
     // baseSpeedMult/speedMult 는 스냅샷 대상이라 저장/복원에서도 그대로 유지된다.
     if (typeof enemy.speedMult === 'number') {
