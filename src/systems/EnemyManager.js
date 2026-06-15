@@ -31,7 +31,7 @@ const ELITE_CHANCE           = 0.01; // 방당 엘리트 등장 확률 (1%)
 const ELITE_TINT_COLOR       = 0xff8888; // 엘리트 스프라이트 틴트 (붉은 계열)
 const ELITE_HP_MULT          = 4;    // 엘리트 최대 HP ×4
 const ELITE_DMG_MULT         = 2;    // 엘리트 공격력 ×2
-const ELITE_SPD_MULT         = 1.6;  // 엘리트 이동속도 ×1.6 (speedMult/baseSpeedMult 경유 — 모든 적 이동이 곱함)
+const ELITE_SPD_MULT         = 1.8;  // 엘리트 이동속도 ×1.8 (speedMult/baseSpeedMult 경유 — 모든 적 이동이 곱함)
 const MIN_SPAWN_DIST         = 160;      // 플레이어 진입 위치와 적 스폰 최소 거리 (px)
 
 // 구역 2(층 11~20) 강화 배수 — 1구역 기준 적 스탯 대비. 보스 포함 모든 스폰에 적용.
@@ -495,6 +495,14 @@ export default class EnemyManager {
   registerLingeringHazard(owner)   { this._lingeringHazards.add(owner); }
   unregisterLingeringHazard(owner) { this._lingeringHazards.delete(owner); }
 
+  /** 잔존 위험물(거미줄·독 웅덩이)만 정리 — 적/코어는 건드리지 않는다.
+   *  방 전환(클리어된 방 재진입 포함)마다 호출해 이전 방 hazard 가 좌표 공유로 다음 방에 남는 것을 막는다.
+   *  disposeHazards 가 unregisterLingeringHazard 로 Set 을 수정하므로 스냅샷을 떠 순회한다. */
+  clearLingeringHazards() {
+    [...this._lingeringHazards].forEach(h => h.disposeHazards?.());
+    this._lingeringHazards.clear();
+  }
+
   addEnemyProjectile(go, damage, vx, vy, displayName = '적 투사체', isElite = false) {
     this._enemyProjs.push({ go, damage, vx, vy, displayName, isElite });
   }
@@ -679,8 +687,7 @@ export default class EnemyManager {
     this._enemyProjs.forEach(p => { if (p.go.active) p.go.destroy(); });
     this._enemyProjs = [];
     // 사망 후 남아 틱하던 거미줄·독 웅덩이(this.enemies 에서 이미 빠진 적)도 정리
-    this._lingeringHazards.forEach(h => h.disposeHazards?.());
-    this._lingeringHazards.clear();
+    this.clearLingeringHazards();
     this._poisoned.clear();
     this._burned.clear();
     this._frozen.clear();
@@ -711,7 +718,7 @@ export default class EnemyManager {
     enemy.maxHp  = Math.round(enemy.maxHp * ELITE_HP_MULT);
     enemy.hp      = enemy.maxHp;
     enemy.damage = Math.round((enemy.damage ?? 0) * ELITE_DMG_MULT);
-    // 이동속도 ×1.6 — 모든 적 이동이 speedMult(오라 없을 땐 baseSpeedMult)를 곱하므로
+    // 이동속도 ×1.8 — 모든 적 이동이 speedMult(오라 없을 땐 baseSpeedMult)를 곱하므로
     // 이 체인에 실어 일관 적용한다. Wolf 오라는 baseSpeedMult 기준 재계산하므로 자연히 합산.
     // baseSpeedMult/speedMult 는 스냅샷 대상이라 저장/복원에서도 그대로 유지된다.
     if (typeof enemy.speedMult === 'number') {
@@ -725,17 +732,27 @@ export default class EnemyManager {
     this._applyEliteTint(enemy);
   }
 
-  /** 엘리트 시각 효과(붉은 틴트 + clearTint 오버라이드)만 적용 — 신규 변환과 저장 복원에서 공용. */
+  /** 엘리트 시각 효과(붉은 틴트 + setTint/clearTint 오버라이드)만 적용 — 신규 변환과 저장 복원에서 공용. */
   _applyEliteTint(enemy) {
     const go = enemy.gameObject;
-    go.setTint(ELITE_TINT_COLOR);
     const origClearTint = go.clearTint.bind(go);
+    const origSetTint   = go.setTint.bind(go);
+    // 엘리트인 동안에는 적이 자기 베이스 틴트를 재적용(setTint)하거나 클리어해도 항상 붉은 틴트로 강제.
+    // Bat/Bear/Boar/Spider/Toad 처럼 _updateSprite 에서 매 프레임 setTint(TINT) 로 자기 색을 덧칠하는
+    // 적도 붉게 보이게 한다(이게 없으면 베이스 틴트가 엘리트 색을 덮어 일반 개체처럼 보임).
+    // 흰색 피격 점멸은 setTintFill 이라 이 오버라이드의 영향을 받지 않는다.
+    go.setTint = (...args) => {
+      if (enemy.isElite && enemy.alive) origSetTint(ELITE_TINT_COLOR);
+      else origSetTint(...args);
+    };
     go.clearTint = () => {
       origClearTint();
-      if (enemy.isElite && enemy.alive) go.setTint(ELITE_TINT_COLOR);
+      if (enemy.isElite && enemy.alive) origSetTint(ELITE_TINT_COLOR);
     };
+    origSetTint(ELITE_TINT_COLOR);
 
     enemy._eliteCleanup = () => {
+      go.setTint   = origSetTint;
       go.clearTint = origClearTint;
       origClearTint();
     };

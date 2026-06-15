@@ -13,7 +13,8 @@ dist/
 .env.*.local
 
 # Capacitor
-android/
+# android/ 는 추적한다 — 네이티브 커스터마이징(전체화면 MainActivity 등)을 보존하기 위함.
+#   빌드 산출물·복사된 웹 에셋·생성 config 는 Capacitor 가 만든 android/.gitignore 가 제외한다.
 ios/
 .capacitor/
 

@@ -87,6 +87,11 @@ export default class RoomManager {
   }
 
   _enterRoom(roomData, fromDir, opts = {}) {
+    // 떠나는 방의 잔존 위험물(거미줄·독 웅덩이) 정리 — 모든 전환에서 수행.
+    // 클리어된 방 재진입은 spawnForRoom(→_clearAll)을 타지 않아 여기서 정리하지 않으면
+    // 좌표 공유(모든 방 0~ROOM_W/H)로 이전 방 hazard 가 다음 방에 그대로 남는다.
+    this.enemyManager.clearLingeringHazards();
+
     // 기존 물리 콜라이더 제거 → 기존 방 파괴
     this._wallColliders.forEach(c => c.destroy());
     this._wallColliders = [];
@@ -274,11 +279,16 @@ export default class RoomManager {
     const cam = this.scene.cameras.main;
     cam.fadeOut(220, 0, 0, 0);
     cam.once('camerafadeoutcomplete', () => {
-      this._enterRoom(this.dungeonData.rooms[neighborId], dir);
-      cam.fadeIn(220, 0, 0, 0);
-      cam.once('camerafadeincomplete', () => {
-        this._transitioning = false;
-      });
+      // _enterRoom 이 예외를 던져도 화면이 검은 채로 영구 정지(+ _transitioning 잠김)되지 않도록
+      // 페이드 인 복구는 항상 수행한다.
+      try {
+        this._enterRoom(this.dungeonData.rooms[neighborId], dir);
+      } finally {
+        cam.fadeIn(220, 0, 0, 0);
+        cam.once('camerafadeincomplete', () => {
+          this._transitioning = false;
+        });
+      }
     });
   }
 

@@ -95,9 +95,9 @@ function _generateShopSlots(ownedItemIds = [], extraSlots = 0, priceMult = 1) {
 // ── 비밀방 헬퍼 ───────────────────────────────────────
 
 const OPP_DIR = { up: 'down', down: 'up', left: 'right', right: 'left' };
-const SECRET_CACHE_CHANCE_BASE = 0.3;  // 1층 보물방 출현 확률
-const SECRET_CACHE_CHANCE_MAX  = 0.6;  // 출현 확률 상한 (60%)
-const SECRET_CACHE_CHANCE_STEP = 0.03; // 층당 증가폭 — 11층부터 상한 도달
+const SECRET_CACHE_CHANCE_BASE = 0.5;  // 1층 보물방 출현 확률 (기본 50%)
+const SECRET_CACHE_CHANCE_MAX  = 0.75; // 출현 확률 상한 (75%)
+const SECRET_CACHE_CHANCE_STEP = 0.03; // 층당 증가폭 — 10층부터 상한 도달
 // 기억 보관실 고정 층 — 구역 1 후반(6층) / 구역 2 후반(16층)
 const VAULT_FLOOR_MAP = { 6: 0, 16: 1 };
 
@@ -131,7 +131,7 @@ function _addSecretRooms(rooms, floorNum, ownedItemIds) {
     parent.secretDoor = { dir, roomId: r.id, targetType: type };
   }
 
-  // 보물방 — 층 진행에 따라 20% → 30%(상한)
+  // 보물방 — 층 진행에 따라 50% → 75%(상한)
   const cacheChance = Math.min(
     SECRET_CACHE_CHANCE_MAX,
     SECRET_CACHE_CHANCE_BASE + (floorNum - 1) * SECRET_CACHE_CHANCE_STEP,

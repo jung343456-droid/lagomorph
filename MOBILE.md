@@ -79,6 +79,50 @@ npx cap open android     # Android Studio 열기 → ▶ 실행
 
 ---
 
+## 전체화면(Immersive) — 상태바·내비게이션 바 숨김
+
+홈/뒤로가기(내비게이션 바)와 상단 상태바를 모두 숨겨 게임 캔버스가 화면 전체를 채우도록
+`MainActivity.java`를 immersive sticky 모드로 설정했다(가장자리 스와이프 시에만 바가 일시 노출).
+
+파일: `android/app/src/main/java/com/lagomorph/game/MainActivity.java`
+```java
+package com.lagomorph.game;
+
+import android.os.Bundle;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
+import com.getcapacitor.BridgeActivity;
+
+public class MainActivity extends BridgeActivity {
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        enableImmersiveMode();
+    }
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) enableImmersiveMode();   // 복귀 시 재숨김 (sticky)
+    }
+    private void enableImmersiveMode() {
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+        WindowInsetsControllerCompat c =
+                WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+        if (c != null) {
+            c.hide(WindowInsetsCompat.Type.systemBars());
+            c.setSystemBarsBehavior(
+                    WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+        }
+    }
+}
+```
+- `androidx.core` 의존성은 Capacitor 안드로이드 템플릿에 기본 포함 — 별도 추가 불필요.
+- 적용: 네이티브 Java 변경이라 `cap sync` 가 아니라 **다음 `npx cap run android`(gradle 재컴파일)** 에서 반영된다.
+- ✅ **`android/` 는 이제 git 추적 대상**이라 이 커스터마이징은 커밋에 보존된다(아래 .gitignore 절 참조). 굳이 `npx cap add android` 로 재생성할 필요가 없다.
+
+---
+
 ## 모바일에서 중점 확인 사항
 
 - **가상 조이스틱 터치 반응** (`InputManager` 가상 조이스틱)
@@ -89,17 +133,23 @@ npx cap open android     # Android Studio 열기 → ▶ 실행
 
 ---
 
-## .gitignore — ✅ 설정 완료
+## .gitignore — android/ 추적 (네이티브 커스터마이징 보존)
 
-네이티브 프로젝트와 빌드 산출물은 커밋에서 제외한다. `.gitignore`에 이미 반영됨:
+루트 `.gitignore` 에서 **`android/` 무시를 해제**해 네이티브 프로젝트 소스를 커밋한다.
+전체화면 `MainActivity` 같은 커스터마이징이 재생성으로 사라지지 않게 하기 위함이다.
 ```
-dist/
-android/
+dist/          # 빌드 산출물 (웹)
+# android/ 는 추적 — 아래 참조
 ios/
 .capacitor/
 ```
-- `android/`는 통째로 무시 → 레포에 없으며 `npx cap add android` 로 언제든 재생성된다.
-- ⚠️ 그래서 **`android/` 내부를 직접 수정**(앱 아이콘, 스플래시, `AndroidManifest` 권한 등)하면 재생성 시 사라진다. 그런 네이티브 커스터마이징이 생기면 그때 `android/`를 추적 대상으로 전환할지 재검토할 것.
+- **빌드 산출물은 그대로 제외된다** — Capacitor 가 생성한 `android/.gitignore` / `android/app/.gitignore`
+  가 `build/`·`.gradle/`·`*.apk`·복사된 웹 에셋(`app/src/main/assets/public`)·생성 config·`local.properties`
+  등을 걸러준다. 실제 추적되는 건 소스/그래들/매니페스트 등 ~53개 파일.
+- 따라서 **`npx cap add android` 로 재생성할 필요가 없다.** android/ 는 레포에 보존된다.
+  - 만약 누군가 `android/` 를 지우고 `cap add` 로 재생성하면 working tree 의 커스터마이징이 stub 으로
+    덮인다 — 그땐 `git checkout -- android/app/src/main/java/com/lagomorph/game/MainActivity.java` 로 복원.
+- 네이티브 커스터마이징 현황: [전체화면(Immersive)](#전체화면immersive--상태바내비게이션-바-숨김) `MainActivity.java`.
 
 ---
 

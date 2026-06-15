@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Lagomorph</string>
+    <string name="title_activity_main">Lagomorph</string>
+    <string name="package_name">com.lagomorph.game</string>
+    <string name="custom_url_scheme">com.lagomorph.game</string>
+</resources>

@@ -231,7 +231,7 @@ export default class Toad {
   }
 
   /** 독 웅덩이 + scene update 틱 콜백 정리 — destroyed 여부와 무관하게 동작(사망 후 잔존분 정리용).
-   *  dispose() 및 EnemyManager 방 전환 정리(_clearAll)에서 공용 호출. */
+   *  dispose() 및 EnemyManager.clearLingeringHazards()(방 전환마다 호출, _clearAll 포함)에서 공용 호출. */
   disposeHazards() {
     if (this._sceneUpdateCb) { this.scene.events.off('update', this._sceneUpdateCb); this._sceneUpdateCb = null; }
     this._puddles.forEach(p => { if (p.gfx?.active) p.gfx.destroy(); });

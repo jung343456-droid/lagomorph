@@ -98,15 +98,21 @@ export default class GameScene extends Phaser.Scene {
     //   5·15 (보스) / 10 (보스)  → 계단 (10층은 구역 1 → 2 경계라 "ZONE 2 진입" 안내)
     //   20 (구역 2 최종 OWL KING) → ZONE 2 CLEAR (런 종료)
     this.events.on('boss-cleared', ({ x, y, floor, roomId }) => {
-      const excluded = new Set([
-        ...this._ownedItemIds(),
-        ...this._passiveItems.filter(i => i.alive).map(i => i.id),
-      ]);
-      const dropable = Object.keys(ITEM_DEFS).filter(id => !excluded.has(id));
-      if (dropable.length > 0) {
-        const id = dropable[Math.floor(Math.random() * dropable.length)];
-        const safe = this.roomManager?.findSafeDropPos(x, y) ?? { x, y };
-        this._passiveItems.push(new PassiveItem(this, safe.x, safe.y, id));
+      // 출구방은 보스/중간보스 없이 일반 적만 있는 층도 포함 — 실제 보스(5·10·15·20)·중간보스(3·8·13·18)
+      // 층에서만 패시브 아이템 드롭. 그 외 일반 층 클리어는 아이템 미드롭.
+      const isBossFloor    = floor % 5 === 0;            // 5·10·15·20
+      const isMidBossFloor = floor % 5 === 3;            // 3·8·13·18
+      if (isBossFloor || isMidBossFloor) {
+        const excluded = new Set([
+          ...this._ownedItemIds(),
+          ...this._passiveItems.filter(i => i.alive).map(i => i.id),
+        ]);
+        const dropable = Object.keys(ITEM_DEFS).filter(id => !excluded.has(id));
+        if (dropable.length > 0) {
+          const id = dropable[Math.floor(Math.random() * dropable.length)];
+          const safe = this.roomManager?.findSafeDropPos(x, y) ?? { x, y };
+          this._passiveItems.push(new PassiveItem(this, safe.x, safe.y, id));
+        }
       }
       if (floor === 20) {
         // 구역 2 최종 보스 처치 → 런 종료
