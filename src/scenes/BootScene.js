@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { GAME_W, GAME_H } from '../main';
+import { attachSound } from '../data/Settings';
 
 export default class BootScene extends Phaser.Scene {
   constructor() {
@@ -91,6 +92,8 @@ export default class BootScene extends Phaser.Scene {
   create() {
     this._generateTextures();
     this._generatePurpleTiles();
+    // 오디오 적용 레이어에 전역 sound manager 연결 (볼륨/음소거 설정 반영용)
+    attachSound(this.sound);
     this.scene.start('HubScene');
   }
 

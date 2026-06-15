@@ -4,6 +4,11 @@ import PassiveItem, { ITEM_DEFS } from '../entities/PassiveItem';
 import { ALTAR_POOL } from '../data/AltarPool';
 import { safeInsetBottom } from '../utils/SafeArea';
 import { saveRunState } from '../data/SaveManager';
+import {
+  getBgmVolume, getSfxVolume, isBgmMuted, isSfxMuted,
+  setBgmVolume, setSfxVolume, setBgmMuted, setSfxMuted,
+  setJoystickPos, setSlotPos, resetLayout, getSlotPos,
+} from '../data/Settings';
 
 const DLG_BOTTOM_PAD = 16;  // 패널 하단 추가 여백 (floor 위에 더하는 숨 쉴 공간)
 // 측정값이 0이어도 보장하는 최소 하단 확보량(게임 좌표). 일반 브라우저 탭에선 홈 인디케이터·
@@ -92,6 +97,10 @@ export default class UIScene extends Phaser.Scene {
     this._dlgFullText    = '';
     this._dlgTypeTimer   = null;
     this._pauseOpen      = false;
+    this._settingsOpen   = false;
+    this._layoutEditMode = false;
+    this._dragSlider     = null;   // 현재 드래그 중인 슬라이더 apply 콜백
+    this._layoutDrag     = null;   // 배치 편집 중 드래그 대상 ('joystick'|'A'|'B') 또는 null
 
     this._buildTopPanel();
     this._buildChargeGauge();
@@ -107,6 +116,7 @@ export default class UIScene extends Phaser.Scene {
     this._buildMinimapOverlay();
     this._buildPauseButton();
     this._buildPauseOverlay();
+    this._buildSettingsOverlay();
     this._bindKeys();
 
     this.scene.get('GameScene').events.on(
@@ -140,7 +150,8 @@ export default class UIScene extends Phaser.Scene {
   }
 
   update() {
-    if (this._bagOpen || this._shopOpen || this._minimapOpen || this._dialogueOpen || this._pauseOpen) return;
+    if (this._bagOpen || this._shopOpen || this._minimapOpen || this._dialogueOpen
+        || this._pauseOpen || this._settingsOpen || this._layoutEditMode) return;
     const { player, attackManager, enemyManager } = this.gameScene ?? {};
     if (player)        this._updateHP(player.hp, player.maxHp);
     if (attackManager) this._updateChargeGauge(attackManager);
@@ -1107,22 +1118,29 @@ export default class UIScene extends Phaser.Scene {
   // ── 스킬 슬롯 (우하단) ──────────────────────────────
 
   _buildSkillSlots() {
-    const slotSize = 56, gap = 10;
-    const slotCY   = this.scale.height - 130;
-    const rightX   = GAME_W - 20;
+    this._slotTexts = [];
     [
       { label: 'A', color: 0x4ecca3 },
       { label: 'B', color: 0xe63946 },
-    ].forEach((slot, i) => {
-      const x = rightX - slotSize / 2 - (slotSize + gap) * i;
-      const y = slotCY;
-      const rect = this.add.rectangle(x, y, slotSize, slotSize, 0x1a1a2e, 0.8)
+    ].forEach((slot) => {
+      const rect = this.add.rectangle(0, 0, 56, 56, 0x1a1a2e, 0.8)
         .setStrokeStyle(2, slot.color, 0.6);
-      this._slotRects.push(rect);
-      this.add.text(x, y, slot.label, {
+      const text = this.add.text(0, 0, slot.label, {
         fontSize: '20px', color: '#' + slot.color.toString(16).padStart(6, '0'),
         fontFamily: 'monospace',
       }).setOrigin(0.5);
+      this._slotRects.push(rect);
+      this._slotTexts.push(text);
+    });
+    this._layoutSkillSlots();
+  }
+
+  /** A/B 슬롯 시각을 현재 위치(Settings.getSlotPos — 개별 커스텀 또는 기본 미러)로 배치. */
+  _layoutSkillSlots() {
+    ['A', 'B'].forEach((slot, i) => {
+      const c = getSlotPos(slot);
+      this._slotRects[i].setPosition(c.x, c.y);
+      this._slotTexts[i].setPosition(c.x, c.y);
     });
   }
 
@@ -1146,7 +1164,9 @@ export default class UIScene extends Phaser.Scene {
     iKey.on('down', () => { if (this._bagOpen) this._closeBag(); else this._openBag(); });
     mKey.on('down', () => { if (this._minimapOpen) this._closeMinimap(); else this._openMinimap(); });
     this.input.keyboard.on('keydown-ESC', () => {
-      if (this._bagOpen)           this._closeBag();
+      if (this._layoutEditMode)    this._exitLayoutEdit(false);
+      else if (this._settingsOpen) this._closeSettings();
+      else if (this._bagOpen)      this._closeBag();
       else if (this._shopOpen)     this.closeShop();
       else if (this._minimapOpen)  this._closeMinimap();
       else if (this._dialogueOpen) this.closeDialogue();
@@ -1182,7 +1202,7 @@ export default class UIScene extends Phaser.Scene {
 
   _buildPauseOverlay() {
     const cx = GAME_W / 2, cy = GAME_H / 2;
-    const panelW = 280, panelH = 280;
+    const panelW = 280, panelH = 332;
 
     const backdrop = this.add.rectangle(0, 0, GAME_W, GAME_H, 0x000000, 0.84)
       .setOrigin(0, 0).setDepth(110).setInteractive();
@@ -1207,9 +1227,10 @@ export default class UIScene extends Phaser.Scene {
       this._pauseEls.push(r, t);
     };
 
-    mkBtn('계속하기',     -36, 0x4ecca3, '#4ecca3', () => this._closePause());
-    mkBtn('저장 후 종료',  22, 0x88aaff, '#88aaff', () => this._saveAndQuit());
-    mkBtn('포기',          80, 0xff6666, '#ff6666', () => this._abandonRun());
+    mkBtn('계속하기',     -64, 0x4ecca3, '#4ecca3', () => this._closePause());
+    mkBtn('설정',         -10, 0xddcc66, '#ddcc66', () => this._openSettings());
+    mkBtn('저장 후 종료',  44, 0x88aaff, '#88aaff', () => this._saveAndQuit());
+    mkBtn('포기',         100, 0xff6666, '#ff6666', () => this._abandonRun());
 
     this._pauseEls.forEach(el => el.setVisible(false));
   }
@@ -1245,6 +1266,297 @@ export default class UIScene extends Phaser.Scene {
     this._pauseEls.forEach(el => el.setVisible(false));
     gs.scene.resume();   // 결과 화면 버튼이 입력을 받도록 씬 재개
     gs.abandonRun();
+  }
+
+  // ── 설정 메뉴 ─────────────────────────────────────────
+  // 일시정지 메뉴 → '설정' 진입. 배경음/효과음 볼륨·음소거 + 조이스틱 위치 변경.
+  // GameScene 은 pause 메뉴 진입 시점에 이미 멈춰 있으므로 여기서 따로 pause 하지 않는다.
+
+  _buildSettingsOverlay() {
+    const cx = GAME_W / 2, cy = GAME_H / 2;
+    const panelW = 300, panelH = 380;
+    const top    = cy - panelH / 2;
+    const leftX  = cx - panelW / 2 + 24;
+    const rightX = cx + panelW / 2 - 24;
+    const sliderW = 168;
+
+    const backdrop = this.add.rectangle(0, 0, GAME_W, GAME_H, 0x000000, 0.86)
+      .setOrigin(0, 0).setDepth(115).setInteractive();
+    const panel = this.add.rectangle(cx, cy, panelW, panelH, 0x0c0c18)
+      .setStrokeStyle(2, 0x445588, 0.9).setDepth(116).setInteractive();
+    const title = this.add.text(cx, top + 26, '설정', {
+      fontSize: '18px', color: '#99aabb', fontFamily: 'monospace', fontStyle: 'bold',
+    }).setOrigin(0.5).setDepth(117);
+    const closeBtn = this.add.text(cx + panelW / 2 - 18, top + 24, '✕', {
+      fontSize: '16px', color: '#667788', fontFamily: 'monospace',
+    }).setOrigin(0.5).setDepth(117).setInteractive({ cursor: 'pointer' });
+    closeBtn.on('pointerdown', () => this._closeSettings());
+    closeBtn.on('pointerover', () => closeBtn.setColor('#ffffff'));
+    closeBtn.on('pointerout',  () => closeBtn.setColor('#667788'));
+    const divider = this.add.rectangle(cx, top + 44, panelW - 24, 1, 0x334466).setDepth(117);
+
+    this._settingsEls = [backdrop, panel, title, closeBtn, divider];
+
+    const sectionLabel = (text, y) => {
+      this._settingsEls.push(this.add.text(leftX, y, text, {
+        fontSize: '12px', color: '#6688aa', fontFamily: 'monospace', fontStyle: 'bold',
+      }).setOrigin(0, 0.5).setDepth(117));
+    };
+
+    // 배경음 (BGM)
+    let y = top + 78;
+    sectionLabel('배경음', y);
+    this._buildMuteToggle(rightX, y, isBgmMuted(), (m) => setBgmMuted(m));
+    this._buildSlider(leftX, y + 26, sliderW, getBgmVolume(), (r) => setBgmVolume(r));
+
+    // 효과음 (SFX)
+    y = top + 152;
+    sectionLabel('효과음', y);
+    this._buildMuteToggle(rightX, y, isSfxMuted(), (m) => setSfxMuted(m));
+    this._buildSlider(leftX, y + 26, sliderW, getSfxVolume(), (r) => setSfxVolume(r));
+
+    // 컨트롤러
+    y = top + 226;
+    sectionLabel('컨트롤러', y);
+    this._buildSettingsButton('컨트롤 배치 변경', cx, y + 32, panelW - 48, 0x4ecca3, '#4ecca3',
+      () => this._enterLayoutEdit());
+    this._buildSettingsButton('배치 초기화', cx, y + 72, panelW - 48, 0x778899, '#aabbcc', () => {
+      resetLayout();
+      this.gameScene?.input$?.resetBasePosition();
+      this._layoutSkillSlots();  // 조이스틱·A·B 모두 기본 위치로 복귀
+    });
+
+    this._settingsEls.forEach(el => el.setVisible(false));
+
+    // 슬라이더 thumb / 컨트롤 배치 프록시 드래그용 전역 포인터 핸들러 (1회 등록, 플래그로 가드)
+    this.input.on('pointermove', (p) => {
+      if (this._dragSlider) this._dragSlider(p.x);
+      if (this._layoutDrag) this._moveLayoutProxy(p.x, p.y);
+    });
+    this.input.on('pointerup', () => {
+      this._dragSlider = null;
+      this._layoutDrag = null;
+    });
+  }
+
+  /** 0~1 비율 슬라이더. 트랙/thumb 클릭·드래그로 조절, onChange(ratio) 콜백. */
+  _buildSlider(leftX, y, w, initial, onChange) {
+    const r0 = Phaser.Math.Clamp(initial, 0, 1);
+    const track = this.add.rectangle(leftX, y, w, 6, 0x1a1a2e)
+      .setOrigin(0, 0.5).setDepth(117).setInteractive({ cursor: 'pointer' });
+    const fill = this.add.rectangle(leftX, y, w * r0, 6, 0x4ecca3)
+      .setOrigin(0, 0.5).setDepth(117);
+    const thumb = this.add.rectangle(leftX + w * r0, y, 14, 20, 0xddeeff)
+      .setOrigin(0.5).setDepth(118).setInteractive({ cursor: 'pointer' });
+    const pct = this.add.text(leftX + w + 12, y, Math.round(r0 * 100) + '%', {
+      fontSize: '11px', color: '#aabbcc', fontFamily: 'monospace',
+    }).setOrigin(0, 0.5).setDepth(117);
+
+    const apply = (px) => {
+      const r = Phaser.Math.Clamp((px - leftX) / w, 0, 1);
+      fill.width = w * r;
+      thumb.x    = leftX + w * r;
+      pct.setText(Math.round(r * 100) + '%');
+      onChange(r);
+    };
+    track.on('pointerdown', (p) => { apply(p.x); this._dragSlider = apply; });
+    thumb.on('pointerdown', () => { this._dragSlider = apply; });
+
+    this._settingsEls.push(track, fill, thumb, pct);
+  }
+
+  /** 음소거 토글 버튼 (우측 정렬). 켜짐(초록) ↔ 음소거(빨강). onToggle(muted) 콜백. */
+  _buildMuteToggle(xRight, y, muted, onToggle) {
+    const W = 58, H = 22;
+    let state = muted;
+    const box = this.add.rectangle(xRight, y, W, H, 0x16261a)
+      .setOrigin(1, 0.5).setDepth(117).setInteractive({ cursor: 'pointer' });
+    const txt = this.add.text(xRight - W / 2, y, '', {
+      fontSize: '11px', fontFamily: 'monospace', fontStyle: 'bold',
+    }).setOrigin(0.5).setDepth(118);
+    const render = () => {
+      box.setFillStyle(state ? 0x3a1a1a : 0x16261a);
+      box.setStrokeStyle(1.5, state ? 0xcc5555 : 0x4ecca3, 0.9);
+      txt.setText(state ? '음소거' : '켜짐').setColor(state ? '#ee8888' : '#88eecc');
+    };
+    render();
+    box.on('pointerdown', () => { state = !state; render(); onToggle(state); });
+    this._settingsEls.push(box, txt);
+  }
+
+  _buildSettingsButton(label, cx, y, w, lineColor, textColor, onClick) {
+    const r = this.add.rectangle(cx, y, w, 34, 0x1a1a2e)
+      .setStrokeStyle(2, lineColor).setDepth(117).setInteractive({ cursor: 'pointer' });
+    const t = this.add.text(cx, y, label, {
+      fontSize: '13px', color: textColor, fontFamily: 'monospace', fontStyle: 'bold',
+    }).setOrigin(0.5).setDepth(118);
+    r.on('pointerover', () => r.setFillStyle(0x26263e));
+    r.on('pointerout',  () => r.setFillStyle(0x1a1a2e));
+    r.on('pointerdown', onClick);
+    this._settingsEls.push(r, t);
+  }
+
+  _openSettings() {
+    if (this._settingsOpen) return;
+    this._settingsOpen = true;
+    this._pauseEls.forEach(el => el.setVisible(false));     // 일시정지 메뉴 가림
+    this._settingsEls.forEach(el => el.setVisible(true));
+  }
+
+  _closeSettings() {
+    if (!this._settingsOpen) return;
+    this._settingsOpen = false;
+    this._dragSlider = null;
+    this._settingsEls.forEach(el => el.setVisible(false));
+    this._pauseEls.forEach(el => el.setVisible(true));      // 일시정지 메뉴로 복귀
+  }
+
+  // ── 컨트롤 배치 편집 (조이스틱·A·B 자유 드래그) ───────
+  // 설정 화면을 잠시 가리고 게임 위에 조이스틱·A·B 프록시를 띄운다. 각 프록시를 독립적으로
+  // 드래그해 배치하고, 확인 시 세 위치를 모두 저장한다. 실제 컨트롤은 편집 중 숨겼다가 복원.
+
+  _enterLayoutEdit() {
+    const im = this.gameScene?.input$;
+    if (!im || this._layoutEditMode) return;
+    this._layoutEditMode = true;
+    this._settingsEls.forEach(el => el.setVisible(false));
+
+    // 실제 컨트롤 숨김 — 프록시만 보이게
+    im.setVisible(false);
+    this._slotRects.forEach(r => r.setVisible(false));
+    this._slotTexts.forEach(t => t.setVisible(false));
+
+    const cx = GAME_W / 2;
+    const joy = { x: im._jx, y: im._jy };
+    const a   = getSlotPos('A');
+    const b   = getSlotPos('B');
+
+    const backdrop = this.add.rectangle(0, 0, GAME_W, GAME_H, 0x000000, 0.45)
+      .setOrigin(0, 0).setDepth(125).setInteractive();
+    backdrop.on('pointerdown', (p) => {
+      this._layoutDrag = this._pickLayoutTarget(p.x, p.y);
+      if (this._layoutDrag) this._moveLayoutProxy(p.x, p.y);
+    });
+
+    const hint = this.add.text(cx, 84, '조이스틱·A·B 버튼을 각각\n원하는 위치로 드래그하세요', {
+      fontSize: '14px', color: '#ddeeff', fontFamily: 'monospace', align: 'center', lineSpacing: 6,
+    }).setOrigin(0.5).setDepth(127);
+
+    // 조이스틱 프록시 (실제 BASE_R/THUMB_R 와 동일 크기)
+    const joyBase  = this.add.circle(joy.x, joy.y, 58, 0x4ecca3, 0.18)
+      .setStrokeStyle(2, 0x4ecca3, 0.8).setDepth(126);
+    const joyThumb = this.add.circle(joy.x, joy.y, 22, 0x4ecca3, 0.85).setDepth(127);
+
+    // A/B 버튼 프록시 (실제 슬롯과 동일 56×56)
+    const mkSlotProxy = (label, pos, color) => {
+      const rect = this.add.rectangle(pos.x, pos.y, 56, 56, 0x1a1a2e, 0.92)
+        .setStrokeStyle(2, color, 0.9).setDepth(126);
+      const text = this.add.text(pos.x, pos.y, label, {
+        fontSize: '20px', color: '#' + color.toString(16).padStart(6, '0'), fontFamily: 'monospace',
+      }).setOrigin(0.5).setDepth(127);
+      return { rect, text };
+    };
+    const aP = mkSlotProxy('A', a, 0x4ecca3);
+    const bP = mkSlotProxy('B', b, 0xe63946);
+
+    this._lp = {
+      joy:  { ...joy }, a: { ...a }, b: { ...b },
+      joyBase, joyThumb, aRect: aP.rect, aText: aP.text, bRect: bP.rect, bText: bP.text,
+    };
+    this._layoutEls = [backdrop, hint, joyBase, joyThumb, aP.rect, aP.text, bP.rect, bP.text];
+
+    const mkBtn = (label, ox, color, tcolor, cb) => {
+      const by = GAME_H - 70;
+      const r = this.add.rectangle(cx + ox, by, 94, 40, 0x1a1a2e)
+        .setStrokeStyle(2, color).setDepth(128).setInteractive({ cursor: 'pointer' });
+      const t = this.add.text(cx + ox, by, label, {
+        fontSize: '13px', color: tcolor, fontFamily: 'monospace', fontStyle: 'bold',
+      }).setOrigin(0.5).setDepth(129);
+      r.on('pointerover', () => r.setFillStyle(0x26263e));
+      r.on('pointerout',  () => r.setFillStyle(0x1a1a2e));
+      r.on('pointerdown', cb);
+      this._layoutEls.push(r, t);
+    };
+    mkBtn('취소',  -102, 0xff6666, '#ff6666', () => this._exitLayoutEdit(false));
+    mkBtn('초기화',   0, 0x778899, '#aabbcc', () => this._resetLayoutProxies());
+    mkBtn('확인',   102, 0x4ecca3, '#4ecca3', () => this._exitLayoutEdit(true));
+  }
+
+  /** 포인터 위치에서 가장 가까운(잡기 반경 내) 프록시 대상을 고른다. */
+  _pickLayoutTarget(x, y) {
+    const targets = [
+      { type: 'joystick', x: this._lp.joy.x, y: this._lp.joy.y, r: 58 },
+      { type: 'A', x: this._lp.a.x, y: this._lp.a.y, r: 40 },
+      { type: 'B', x: this._lp.b.x, y: this._lp.b.y, r: 40 },
+    ];
+    let best = null, bestD = Infinity;
+    for (const o of targets) {
+      const d = Phaser.Math.Distance.Between(x, y, o.x, o.y);
+      if (d <= o.r && d < bestD) { bestD = d; best = o.type; }
+    }
+    return best;
+  }
+
+  _moveLayoutProxy(px, py) {
+    const t = this._layoutDrag;
+    if (!t) return;
+    if (t === 'joystick') {
+      const x = Phaser.Math.Clamp(px, 60, GAME_W - 60);
+      const y = Phaser.Math.Clamp(py, HUD_H + 70, GAME_H - 70);
+      this._lp.joy = { x, y };
+      this._lp.joyBase.setPosition(x, y);
+      this._lp.joyThumb.setPosition(x, y);
+    } else {
+      const x = Phaser.Math.Clamp(px, 30, GAME_W - 30);
+      const y = Phaser.Math.Clamp(py, HUD_H + 30, GAME_H - 30);
+      const rect = t === 'A' ? this._lp.aRect : this._lp.bRect;
+      const text = t === 'A' ? this._lp.aText : this._lp.bText;
+      rect.setPosition(x, y);
+      text.setPosition(x, y);
+      this._lp[t === 'A' ? 'a' : 'b'] = { x, y };
+    }
+  }
+
+  /** 편집 중 프록시들을 기본 위치로 (저장 전 미리보기). */
+  _resetLayoutProxies() {
+    const jx = 90, jy = this.scale.height - 130;  // InputManager 기본값(JX=90, JY_FROM_BOTTOM=130)
+    this._lp.joy = { x: jx, y: jy };
+    this._lp.joyBase.setPosition(jx, jy);
+    this._lp.joyThumb.setPosition(jx, jy);
+    // 기본 슬롯은 조이스틱 좌측 기준(우측 배치) — getDefaultSlotPos 가 현재 저장값 영향을 받지
+    // 않도록, 조이스틱을 좌측 기본으로 되돌린 상태의 기본 위치를 직접 계산해 사용한다.
+    [['A', this._lp.aRect, this._lp.aText], ['B', this._lp.bRect, this._lp.bText]].forEach(([slot, rect, text], i) => {
+      const x = GAME_W - 20 - 28 - (56 + 10) * i;  // A=342, B=276
+      const y = this.scale.height - 130;
+      this._lp[slot === 'A' ? 'a' : 'b'] = { x, y };
+      rect.setPosition(x, y);
+      text.setPosition(x, y);
+    });
+  }
+
+  _exitLayoutEdit(commit) {
+    if (!this._layoutEditMode) return;
+    this._layoutEditMode = false;
+    this._layoutDrag = null;
+    const im = this.gameScene?.input$;
+
+    if (commit) {
+      setJoystickPos(this._lp.joy.x, this._lp.joy.y);
+      setSlotPos('A', this._lp.a.x, this._lp.a.y);
+      setSlotPos('B', this._lp.b.x, this._lp.b.y);
+      im?.setBasePosition(this._lp.joy.x, this._lp.joy.y);
+      this._layoutSkillSlots();
+    }
+    // 취소 시 저장하지 않음 — 실제 컨트롤은 건드린 적 없으므로 그대로 복원만.
+
+    this._layoutEls.forEach(el => { if (el.active) el.destroy(); });
+    this._layoutEls = [];
+    this._lp = null;
+
+    im?.setVisible(true);
+    this._slotRects.forEach(r => r.setVisible(true));
+    this._slotTexts.forEach(t => t.setVisible(true));
+    this._settingsEls.forEach(el => el.setVisible(true));  // 설정 화면 복귀
   }
 
   // ── NPC 대화 오버레이 ─────────────────────────────────
