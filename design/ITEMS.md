@@ -7,7 +7,7 @@
 - **보스방 클리어 시 / 엘리트 처치 시**: 미보유 일반 패시브 + 코어 결정체(스택형) 중 랜덤 1개 드롭. 코어 결정체는 보유 여부와 무관하게 항상 후보라 평소에도 섞여 나오고, **일반 패시브를 전부 보유**하면 자연히 코어 결정체만 남아 확정 드롭(`GameScene._dropPassiveItem`).
 - **상점(짝수층 2·4)**: 패시브 아이템 슬롯은 방 생성 시 `ITEM_DEFS` 중 1개를 미리 선정하여 카드에 이름·설명을 노출. 구매 시 `PassiveItem.grant`로 즉시 적용 + unlock 등록 (가격은 일반 패시브와 동일 45, `design/SHOP.md` 참조). 스택형은 보유 중이어도 상시 후보.
 - **시작 방**: 해금된 아이템 중 랜덤 — 코어 결정체도 해금됐다면 일반 아이템과 동일하게 후보.
-- **그루터기(stump) 파괴**: 근접 공격으로 1타에 부서지며, **5% 확률**로 상점 카탈로그(패시브 + 회복) 1개 드롭. 가격이 비쌀수록 확률↓(`DungeonGenerator.pickPriceWeightedDrop`, weight = 100/cost). 패시브는 `PassiveItem`, 회복은 `RareItem`(수치 가변)로 스폰. tree/bush는 부서지지 않음.
+- **그루터기(stump) 파괴**: 근접 공격으로 1타에 부서지며, **단일 추첨**으로 보상 1개만 — **50% 꽝 / 45% 코어 / 5% 아이템**(코어와 아이템 동시 드롭 없음). 코어 수량은 `BOX_CORE_TABLE` 가중(1~5 흔함, 10·20 희귀). 아이템은 상점 카탈로그(패시브 + 회복)에서 가격이 비쌀수록 확률↓(`DungeonGenerator.pickPriceWeightedDrop`, weight = 100/cost). 패시브는 `PassiveItem`, 회복은 `RareItem`(수치 가변)로 스폰. tree/bush는 부서지지 않음.
 - unlock 목록은 `localStorage['lagomorph_unlocked']`에 JSON 배열로 저장 (런 간 영속).
 - **스택형(`stackable: true`)**: 중복 소유 가능. 인벤토리에 같은 id 엔트리의 `count`로 누적되고, 가방 UI에 `이름 ×N`으로 표시. 픽업·구매 모두 `PassiveItem.grant`가 처리.
 

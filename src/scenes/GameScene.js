@@ -18,6 +18,12 @@ import { randomGrimTip } from '../data/GrimDialogue';
 // 구역 1 ×1.0 / 구역 2 ×1.5. 영구 해금 할인(player.shopPriceMult)과 곱연산 합성.
 const floorPriceMult = (floor) => 1 + 0.5 * (zoneOf(floor) - 1);
 
+// 상자(stump) 파괴 시 코어 드롭 수량 가중표 — 1~5는 흔하게, 10·20은 아주 낮은 확률.
+const BOX_CORE_TABLE = [
+  { count: 1, weight: 30 }, { count: 2, weight: 25 }, { count: 3, weight: 20 },
+  { count: 4, weight: 12 }, { count: 5, weight: 8 },  { count: 10, weight: 4 }, { count: 20, weight: 1 },
+];
+
 const GRIM_FIRST_LINES = [
   '잠깐. 거기 서봐.',
   '...자네, 토끼인가. 내가 이 입구 근처까지 내려온 게 얼마만인지. 아직 끝나지 않은 건가..',
@@ -124,9 +130,20 @@ export default class GameScene extends Phaser.Scene {
       this._dropPassiveItem(x, y);
     });
 
-    // 부술 수 있는 장애물(stump) 파괴: 5% 확률로 상점 카탈로그(가격 역가중) 드롭
+    // 부술 수 있는 장애물(stump) 파괴: 단일 추첨 — 50% 꽝 / 45% 코어 / 5% 아이템 (둘 다 안 나옴)
     this.events.on('obstacle-broken', ({ x, y }) => {
-      if (Math.random() >= 0.05) return;
+      const roll = Math.random();
+      if (roll < 0.50) return; // 50% 꽝
+      if (roll < 0.95) {
+        // 45% 코어 드롭 — 수량은 BOX_CORE_TABLE 가중(1~5 흔함, 10·20 희귀)
+        const total = BOX_CORE_TABLE.reduce((s, e) => s + e.weight, 0);
+        let r = Math.random() * total;
+        let count = BOX_CORE_TABLE[0].count;
+        for (const e of BOX_CORE_TABLE) { r -= e.weight; if (r <= 0) { count = e.count; break; } }
+        this.enemyManager.dropCores(x, y, count);
+        return;
+      }
+      // 5% 상점 카탈로그 드롭 (가격 역가중)
       const drop = pickPriceWeightedDrop(this._ownedItemIds());
       const safe = this.roomManager?.findSafeDropPos(x, y) ?? { x, y };
       if (drop.kind === 'item') {
