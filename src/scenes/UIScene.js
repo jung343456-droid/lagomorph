@@ -605,6 +605,7 @@ export default class UIScene extends Phaser.Scene {
     // 좌측 / 우측 컬럼 항목 정의. enhanced=true 면 청록 강조.
     const trapCost = Math.max(1, 3 - player.trapCostBonus);
     const stats = [
+      { label: '기본 공격력',  value: `${player.baseAttack ?? 10}`,                  enhanced: (player.baseAttack ?? 10) > 10 },
       { label: '체력',         value: `${player.hp}/${player.maxHp}`,                enhanced: player.maxHp > 100 },
       { label: '방어력',       value: `${player.armor ?? 0}`,                        enhanced: (player.armor ?? 0) > 0 },
       { label: '이동속도',     value: `${Math.round(player.baseSpeed)}`,             enhanced: player.baseSpeed > 200 },
@@ -728,7 +729,7 @@ export default class UIScene extends Phaser.Scene {
       const rowY = listStartY + i * rowH + rowH / 2;
       container.add([
         this.add.rectangle(iconX, rowY, 12, 12, item.color).setOrigin(0.5),
-        this.add.text(textX, rowY - 6, item.name, {
+        this.add.text(textX, rowY - 6, item.count > 1 ? `${item.name} ×${item.count}` : item.name, {
           fontSize: '11px', color: '#ddeeff', fontFamily: 'monospace', fontStyle: 'bold',
         }).setOrigin(0, 0.5),
         this.add.text(textX, rowY + 7, item.desc ?? '', {
@@ -909,10 +910,11 @@ export default class UIScene extends Phaser.Scene {
     );
     slots.forEach(slot => {
       if (slot.kind !== 'item' || slot.sold) return;
+      if (ITEM_DEFS[slot.id]?.stackable) return; // 스택형(코어 결정체)은 보유 중이어도 상시 판매 — 재추첨 안 함
       if (!owned.has(slot.id)) return;
-      // 후보: ITEM_DEFS 중 보유하지 않고, 같은 상점의 다른 슬롯이 가지지 않은 id
+      // 후보: ITEM_DEFS 중 보유하지 않고, 같은 상점의 다른 슬롯이 가지지 않은 일반 패시브 (스택형은 재추첨 대상에서 제외)
       const candidates = Object.keys(ITEM_DEFS)
-        .filter(id => !owned.has(id) && !usedInShop.has(id));
+        .filter(id => !owned.has(id) && !usedInShop.has(id) && !ITEM_DEFS[id].stackable);
       if (candidates.length === 0) {
         slot.sold = true;
         return;
@@ -1044,16 +1046,9 @@ export default class UIScene extends Phaser.Scene {
     if (slot.kind === 'heal_pct')  { player.heal(Math.floor(player.maxHp * slot.ratio * player.healItemMult)); return; }
     if (slot.kind === 'heal_full') { player.heal(player.maxHp); return; }
     if (slot.kind === 'item') {
-      // 생성 시점에 이미 선정된 패시브 적용 (slot.id 고정)
-      const def = ITEM_DEFS[slot.id];
-      def.apply(player);
-      player.inventory.push({ id: slot.id, name: def.name, color: def.color, desc: def.desc });
-      // 다음 런 시작방 풀에도 포함되도록 영속 해금 갱신
-      const unlocked = PassiveItem.getUnlocked();
-      if (!unlocked.includes(slot.id)) {
-        unlocked.push(slot.id);
-        try { localStorage.setItem('lagomorph_unlocked', JSON.stringify(unlocked)); } catch {}
-      }
+      // 생성 시점에 이미 선정된 패시브 적용 (slot.id 고정).
+      // grant 가 효과 적용 + 인벤토리 등록(스택형 count 누적) + 영속 해금을 일괄 처리.
+      PassiveItem.grant(player, slot.id);
     }
   }
 

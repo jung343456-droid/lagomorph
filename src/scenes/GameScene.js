@@ -4,7 +4,7 @@ import Player from '../entities/Player';
 import InputManager from '../utils/InputManager';
 import AttackManager from '../systems/AttackManager';
 import EnemyManager from '../systems/EnemyManager';
-import { generateDungeon } from '../world/DungeonGenerator';
+import { generateDungeon, pickPriceWeightedDrop } from '../world/DungeonGenerator';
 import RoomManager from '../world/RoomManager';
 import { ROOM_W, ROOM_H } from '../world/Room';
 import PassiveItem, { ITEM_DEFS } from '../entities/PassiveItem';
@@ -103,16 +103,7 @@ export default class GameScene extends Phaser.Scene {
       const isBossFloor    = floor % 5 === 0;            // 5·10·15·20
       const isMidBossFloor = floor % 5 === 3;            // 3·8·13·18
       if (isBossFloor || isMidBossFloor) {
-        const excluded = new Set([
-          ...this._ownedItemIds(),
-          ...this._passiveItems.filter(i => i.alive).map(i => i.id),
-        ]);
-        const dropable = Object.keys(ITEM_DEFS).filter(id => !excluded.has(id));
-        if (dropable.length > 0) {
-          const id = dropable[Math.floor(Math.random() * dropable.length)];
-          const safe = this.roomManager?.findSafeDropPos(x, y) ?? { x, y };
-          this._passiveItems.push(new PassiveItem(this, safe.x, safe.y, id));
-        }
+        this._dropPassiveItem(x, y);
       }
       if (floor === 20) {
         // 구역 2 최종 보스 처치 → 런 종료
@@ -130,15 +121,21 @@ export default class GameScene extends Phaser.Scene {
 
     // 엘리트 처치: 보유하지 않은 랜덤 패시브 아이템 드롭
     this.events.on('elite-killed', ({ x, y }) => {
-      const excluded = new Set([
-        ...this._ownedItemIds(),
-        ...this._passiveItems.filter(i => i.alive).map(i => i.id),
-      ]);
-      const dropable = Object.keys(ITEM_DEFS).filter(id => !excluded.has(id));
-      if (dropable.length > 0) {
-        const id   = dropable[Math.floor(Math.random() * dropable.length)];
-        const safe = this.roomManager?.findSafeDropPos(x, y) ?? { x, y };
-        this._passiveItems.push(new PassiveItem(this, safe.x, safe.y, id));
+      this._dropPassiveItem(x, y);
+    });
+
+    // 부술 수 있는 장애물(stump) 파괴: 5% 확률로 상점 카탈로그(가격 역가중) 드롭
+    this.events.on('obstacle-broken', ({ x, y }) => {
+      if (Math.random() >= 0.05) return;
+      const drop = pickPriceWeightedDrop(this._ownedItemIds());
+      const safe = this.roomManager?.findSafeDropPos(x, y) ?? { x, y };
+      if (drop.kind === 'item') {
+        this._passiveItems.push(new PassiveItem(this, safe.x, safe.y, drop.id));
+      } else {
+        const amount = drop.kind === 'heal'     ? drop.amount
+                     : drop.kind === 'heal_pct' ? Math.floor(this.player.maxHp * drop.ratio)
+                     :                            this.player.maxHp; // heal_full
+        this.enemyManager.dropRareItem(safe.x, safe.y, amount);
       }
     });
 
@@ -558,6 +555,23 @@ export default class GameScene extends Phaser.Scene {
   /** 현재 보유한 패시브 id 목록 — 상점 슬롯·보스 드롭 제외 필터에 사용 */
   _ownedItemIds() {
     return (this.player?.inventory ?? []).map(i => i.id).filter(Boolean);
+  }
+
+  /**
+   * 패시브 아이템 1개 드롭 (보스 클리어·엘리트 처치 공용).
+   * 미보유 일반 패시브 + 스택형(코어 결정체) 중 랜덤 1개. 코어 결정체는 보유 여부와 무관하게 항상 후보라
+   * 평소에도 섞여 나오고, 일반 패시브가 전부 소진되면 자연히 코어 결정체만 남아 확정 드롭된다.
+   */
+  _dropPassiveItem(x, y) {
+    const excluded = new Set([
+      ...this._ownedItemIds(),
+      ...this._passiveItems.filter(i => i.alive).map(i => i.id),
+    ]);
+    const dropable = Object.keys(ITEM_DEFS)
+      .filter(id => !excluded.has(id) || ITEM_DEFS[id].stackable);
+    const id   = dropable[Math.floor(Math.random() * dropable.length)] ?? 'core_crystal';
+    const safe = this.roomManager?.findSafeDropPos(x, y) ?? { x, y };
+    this._passiveItems.push(new PassiveItem(this, safe.x, safe.y, id));
   }
 
   _advanceFloor() {

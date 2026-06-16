@@ -6,11 +6,12 @@ const MAGNET_SPEED   = 350;      // 흡수 이동 속도 (px/s)
 const COLLECT_R      = 14;       // 수집 판정 반경 (px)
 
 export default class RareItem {
-  constructor(scene, x, y) {
+  // healAmount 기본 30(보스 드롭). 부술 수 있는 장애물 회복 드롭은 상점 회복 수치를 인자로 넘긴다.
+  constructor(scene, x, y, healAmount = RARE_HEAL) {
     this.scene = scene;
     this.alive = true;
     this.magnetized = false;
-    this.healAmount = RARE_HEAL;
+    this.healAmount = healAmount;
 
     this.gameObject = scene.add.rectangle(x, y, RARE_SIZE, RARE_SIZE, RARE_COLOR).setDepth(7);
     this._scaleTween = scene.tweens.add({

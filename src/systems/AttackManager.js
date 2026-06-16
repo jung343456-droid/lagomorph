@@ -3,18 +3,19 @@ import { showDamageNumber } from '../utils/DamageNumbers';
 import { getSlotPos } from '../data/Settings';
 
 const MAX_CHARGE = 0.8; // 최대 충전 시간 (초): 이 시간 이상 누르면 MAX 티어
-const BASE_DMG   = 10;  // 근거리 기본 데미지 (티어 I 기준)
 const BASE_R     = 60;  // 근거리 기본 공격 반경 (px, 티어 I 기준)
 
+// 데미지는 player.baseAttack(기본 10) 에서 파생 — 근거리는 충전 단계별 dmgMult, 설치형은 ×TRAP_DMG_MULT.
 const MELEE_TIERS = [
-  { threshold: 0,   color: 0x4ecca3, label: '근거리 I',   damage: BASE_DMG,              radius: BASE_R       },
-  { threshold: 0.3, color: 0x88eecc, label: '근거리 II',  damage: (BASE_DMG * 1.2) | 0,  radius: BASE_R * 1.2 },
-  { threshold: 0.8, color: 0xffffff, label: '근거리 MAX', damage: (BASE_DMG * 1.4) | 0,  radius: BASE_R * 1.5 },
+  { threshold: 0,   color: 0x4ecca3, label: '근거리 I',   dmgMult: 1.0, radius: BASE_R       },
+  { threshold: 0.3, color: 0x88eecc, label: '근거리 II',  dmgMult: 1.2, radius: BASE_R * 1.2 },
+  { threshold: 0.8, color: 0xffffff, label: '근거리 MAX', dmgMult: 1.4, radius: BASE_R * 1.5 },
 ];
 
 const POOP_COST     = 3;    // 설치형 공격 1회당 소모 코어 수
 const POOP_COOLDOWN = 0.3;  // 설치형 공격 재사용 대기 시간 (초)
-const POOP_DMG      = 30;   // 설치형 공격 명중 데미지
+const POOP_DMG      = 30;   // 설치형 공격 명중 데미지 (구버전 세이브 복원 폴백 전용 — 현재는 baseAttack×TRAP_DMG_MULT)
+const TRAP_DMG_MULT = 3;    // 설치형 공격 데미지 = 기본 공격력 × 이 값
 const POOP_SIZE     = 22;   // 설치형 오브젝트 크기 (px)
 const MAX_POOPS     = 5;    // 동시에 배치 가능한 최대 설치물 수
 const POOP_COLOR    = 0x7B3F20; // 설치물 색상 (갈색)
@@ -271,7 +272,7 @@ export default class AttackManager {
   _fireMelee() {
     const tier   = MELEE_TIERS[this._calcTier(this._mChargeTime * this.player.chargeSpeedMult, MELEE_TIERS)];
     const radius = tier.radius * this.player.meleeRadiusMult;
-    const damage = Math.round(tier.damage * this.player.meleeDamageMult);
+    const damage = Math.round(this.player.baseAttack * tier.dmgMult * this.player.meleeDamageMult);
     const { x: px, y: py } = this.player;
 
     this.scene.events.emit('attack-fired', {
@@ -330,7 +331,7 @@ export default class AttackManager {
     go.body.setCircle(40);
     go.body.setImmovable(true);
     go.body.setAllowGravity(false);
-    this._poops.push({ go, damage: POOP_DMG, size });
+    this._poops.push({ go, damage: this.player.baseAttack * TRAP_DMG_MULT, size });
     this._poopGroup.add(go);
     this._spawnRing(px, py, POOP_COLOR, size * 2);
   }

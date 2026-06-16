@@ -49,8 +49,8 @@
 
 | 컴포넌트 | 직렬화 | 복원 | 보존 내용 |
 |---|---|---|---|
-| `Player` | `serialize()` | `applySave(data)` | 좌표·HP·전체 스탯·인벤토리·방향. 복원 시 저장값으로 **덮어씀**(런 중 아이템 변경분 반영) |
-| `EnemyManager` | `serialize()` | `restoreFromSave(data)` | 적·코어·레어·상태이상·코어카운트·보스·**제단 누진 카운트(`altarPurchases`)** |
+| `Player` | `serialize()` | `applySave(data)` | 좌표·HP·전체 스탯(`SAVE_STAT_KEYS` — `baseAttack` 포함)·인벤토리(스택형 `count` 포함)·방향. 복원 시 저장값으로 **덮어씀**(런 중 아이템 변경분 반영). 스탯 직접 주입이라 아이템 재적용 없음 → 코어 결정체 누적 baseAttack 이중 적용 없음 |
+| `EnemyManager` | `serialize()` | `restoreFromSave(data)` | 적·코어·레어(`healAmount` 포함 — 그루터기 회복 드롭 수치 보존)·상태이상·코어카운트·보스·**제단 누진 카운트(`altarPurchases`)** |
 | `AttackManager` | `serialize()` | `restoreFromSave(data)` | B쿨다운·설치 트랩(`_poops`) |
 | `RoomManager` | — (dungeonData는 GameScene 레벨) | `restore(dungeon, roomId)` | 저장된 방으로 진입(적 스폰 안 함) |
 

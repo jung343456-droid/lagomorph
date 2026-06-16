@@ -4,9 +4,12 @@
 
 **스폰 규칙**
 - **시작 방**: 이전 런에서 한 번이라도 획득(`collect`)한 아이템 중 랜덤 1개 스폰. 처음 플레이 시(unlock 없음)에는 스폰 안 함.
-- **보스방 클리어 시**: `ITEM_DEFS` 전체에서 랜덤 1개 드롭. 첫 런부터 획득 가능.
-- **상점(짝수층 2·4)**: 패시브 아이템 슬롯은 방 생성 시 `ITEM_DEFS` 중 1개를 미리 선정하여 카드에 이름·설명을 노출. 구매 시 해당 아이템 즉시 적용 + unlock 등록 (가격 45, `design/SHOP.md` 참조).
+- **보스방 클리어 시 / 엘리트 처치 시**: 미보유 일반 패시브 + 코어 결정체(스택형) 중 랜덤 1개 드롭. 코어 결정체는 보유 여부와 무관하게 항상 후보라 평소에도 섞여 나오고, **일반 패시브를 전부 보유**하면 자연히 코어 결정체만 남아 확정 드롭(`GameScene._dropPassiveItem`).
+- **상점(짝수층 2·4)**: 패시브 아이템 슬롯은 방 생성 시 `ITEM_DEFS` 중 1개를 미리 선정하여 카드에 이름·설명을 노출. 구매 시 `PassiveItem.grant`로 즉시 적용 + unlock 등록 (가격은 일반 패시브와 동일 45, `design/SHOP.md` 참조). 스택형은 보유 중이어도 상시 후보.
+- **시작 방**: 해금된 아이템 중 랜덤 — 코어 결정체도 해금됐다면 일반 아이템과 동일하게 후보.
+- **그루터기(stump) 파괴**: 근접 공격으로 1타에 부서지며, **5% 확률**로 상점 카탈로그(패시브 + 회복) 1개 드롭. 가격이 비쌀수록 확률↓(`DungeonGenerator.pickPriceWeightedDrop`, weight = 100/cost). 패시브는 `PassiveItem`, 회복은 `RareItem`(수치 가변)로 스폰. tree/bush는 부서지지 않음.
 - unlock 목록은 `localStorage['lagomorph_unlocked']`에 JSON 배열로 저장 (런 간 영속).
+- **스택형(`stackable: true`)**: 중복 소유 가능. 인벤토리에 같은 id 엔트리의 `count`로 누적되고, 가방 UI에 `이름 ×N`으로 표시. 픽업·구매 모두 `PassiveItem.grant`가 처리.
 
 ---
 
@@ -37,6 +40,18 @@
 | `map_sense` | 던전의 감각 | 청색 `0x33bbdd` | 이 층의 모든 방이 지도에 표시됨 (미방문 포함, 비밀방 제외) | `player.hasMapReveal = true` |
 | `secret_sense` | 예리한 후각 | 연보라 `0xbb88ee` | 비밀 방 입구 벽이 뚜렷하게 드러남 (투명도 0.65→0.2, `Room._buildSecretWall`) | `player.hasSecretSense = true` |
 | `core_affinity` | 코어 체질 | 청록 `0x00d4aa` | 방 클리어 시 남은 코어 전량 자동 흡수 (없으면 코어는 바닥에 남아 직접 근처로 가야 수집) | `player.autoCollectCores = true` |
+| `core_crystal` | 코어 결정체 | 청록 `0x00e0ff` | **기본 공격력 +1** (중복 획득 가능). 스택형 — 드롭·상점(45코어)·시작방에 일반 아이템처럼 등장 + 일반 패시브 소진 시 확정 폴백 드롭 | `player.baseAttack += 1` |
+
+---
+
+## 기본 공격력 (`player.baseAttack`)
+
+근거리·설치 공격 데미지의 **단일 출처**. 초기값 10.
+
+- **근거리(A)**: `round(baseAttack × dmgMult × meleeDamageMult)` — 충전 단계별 `dmgMult` = `1.0 / 1.2 / 1.4` (`AttackManager.MELEE_TIERS`). 기본 10/12/14.
+- **설치형(B)**: `baseAttack × TRAP_DMG_MULT(3)` (`AttackManager._placePoop`). 기본 30. 구버전 세이브 복원은 저장된 값 우선(`POOP_DMG=30` 폴백).
+- 스플래시(`SPLASH_DMG=15`)는 baseAttack과 무관하게 고정.
+- `core_crystal`로 +1 될 때마다 근거리·설치가 함께 상승.
 
 ---
 
@@ -44,6 +59,7 @@
 
 | 프로퍼티 | 기본값 | 설명 |
 |---|---|---|
+| `baseAttack` | `10` | 기본 공격력 — 근거리(×충전배율×meleeDamageMult)·설치형(×3) 데미지의 단일 출처. 코어 결정체 +1 (스택) |
 | `meleeRadiusMult` | `1.0` | 근거리 공격 반경 배율 |
 | `meleeDamageMult` | `1.0` | 근거리 공격 데미지 배율 |
 | `hasPoison` | `false` | 명중 시 30% 확률로 독 부여 여부 |

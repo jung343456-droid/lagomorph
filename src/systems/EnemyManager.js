@@ -484,9 +484,9 @@ export default class EnemyManager {
     this._makeElite(enemy);
   }
 
-  dropRareItem(x, y) {
+  dropRareItem(x, y, healAmount) {
     ({ x, y } = this.scene.roomManager?.findSafeDropPos(x, y) ?? { x, y });
-    this.rareItems.push(new RareItem(this.scene, x, y));
+    this.rareItems.push(new RareItem(this.scene, x, y, healAmount));
     this.scene.events.emit('rare-item-dropped');
   }
 
@@ -539,7 +539,7 @@ export default class EnemyManager {
       hadEnemies: this._hadEnemies,
       enemies:    live.map(e => this._snapshotEnemy(e)),
       cores:      this.cores.filter(c => c.alive).map(c => ({ x: c.x, y: c.y })),
-      rareItems:  this.rareItems.filter(r => r.alive).map(r => ({ x: r.x, y: r.y })),
+      rareItems:  this.rareItems.filter(r => r.alive).map(r => ({ x: r.x, y: r.y, healAmount: r.healAmount })),
       status: {
         poisoned: this._serializeStatus(this._poisoned, live),
         burned:   this._serializeStatus(this._burned, live),
@@ -561,7 +561,7 @@ export default class EnemyManager {
     this.boss = this.enemies.find(e => e.isBoss) ?? null;
 
     for (const c of data.cores ?? [])     this.cores.push(new Core(this.scene, c.x, c.y));
-    for (const r of data.rareItems ?? []) this.rareItems.push(new RareItem(this.scene, r.x, r.y));
+    for (const r of data.rareItems ?? []) this.rareItems.push(new RareItem(this.scene, r.x, r.y, r.healAmount));
 
     this._restoreStatus(data.status?.poisoned, this._poisoned, 0xaa44ff);
     this._restoreStatus(data.status?.burned,   this._burned,   0xff4422);

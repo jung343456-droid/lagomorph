@@ -1,6 +1,8 @@
 /**
- * 패시브 아이템 픽업 — 총 23종
+ * 패시브 아이템 픽업 — 총 24종 (코어 결정체 포함)
  * 수집 시 플레이어 스탯에 영구 적용 (런 내 유지), 획득 이력 localStorage 저장
+ * 스택형(core_crystal): stackable=true. 드롭/상점/시작방에 일반 아이템처럼 등장하되 보유 여부와 무관하게
+ *   항상 후보(중복 획득) + 일반 패시브 전부 보유 시 확정 폴백 드롭. 인벤토리 ×N 누적
  *
  * 근거리 강화: wide_claws(반경), sharp_claws(데미지), quick_claws(충전속도)
  * 근거리 상태이상: poison_claws(독), fire_claws(화상), ice_claws(빙결), thunder_claws(연쇄)
@@ -15,7 +17,8 @@
  * 스폰 규칙:
  *   시작 방 — 해금된 아이템 중 랜덤 1개 (첫 런은 미스폰)
  *             '기억 단편화' 해금 시 player.extraStartItems 만큼 추가 (GameScene._spawnStartRoomItem)
- *   보스 클리어 — ITEM_DEFS 전체 랜덤 1개 드롭
+ *   보스 클리어 / 엘리트 처치 — 미보유 일반 패시브 + 코어 결정체(스택형) 중 랜덤 1개 드롭.
+ *                              일반 패시브를 전부 보유하면 코어 결정체만 남아 확정 드롭.
  */
 const ITEM_SIZE = 18;
 
@@ -31,6 +34,13 @@ export const ITEM_DEFS = {
     desc:  '근거리 공격 데미지 ×1.20',
     color: 0x00ccff,
     apply: (player) => { player.meleeDamageMult += 0.20; },
+  },
+  core_crystal: {
+    name:  '코어 결정체',
+    desc:  '기본 공격력 +1 (중복 획득 가능)',
+    color: 0x00e0ff,
+    stackable: true,   // 중복 소유 가능. 드롭·상점(45코어)·시작방에 일반 아이템처럼 섞여 등장 + 일반 패시브 소진 시 폴백 드롭
+    apply: (player) => { player.baseAttack += 1; },
   },
   poison_claws: {
     name:  '독성 발톱',
@@ -222,16 +232,32 @@ export default class PassiveItem {
 
   collect(player) {
     if (!this._alive) return;
-    this._def.apply(player);
-    player.inventory.push({ id: this._id, name: this._def.name, color: this._def.color, desc: this._def.desc });
-    // 영속 해금 목록 갱신 (다음 런 시작 방 풀에 포함됨)
-    const unlocked = PassiveItem.getUnlocked();
-    if (!unlocked.includes(this._id)) {
-      unlocked.push(this._id);
-      try { localStorage.setItem('lagomorph_unlocked', JSON.stringify(unlocked)); } catch {}
-    }
+    PassiveItem.grant(player, this._id);
     this._showFloatText();
     this.dispose();
+  }
+
+  /**
+   * 패시브 효과 적용 + 인벤토리 등록 + 영속 해금. 픽업(collect)과 상점 구매(UIScene) 공용.
+   * stackable 아이템은 같은 id 엔트리에 count 를 누적(인벤토리에 ×N 표시), 비-스택은 단일 등록.
+   */
+  static grant(player, id) {
+    const def = ITEM_DEFS[id];
+    if (!def) return;
+    def.apply(player);
+    if (def.stackable) {
+      const existing = player.inventory.find(it => it.id === id);
+      if (existing) existing.count = (existing.count ?? 1) + 1;
+      else player.inventory.push({ id, name: def.name, color: def.color, desc: def.desc, count: 1 });
+    } else {
+      player.inventory.push({ id, name: def.name, color: def.color, desc: def.desc });
+    }
+    // 영속 해금 목록 갱신 (다음 런 시작 방 풀에 포함됨)
+    const unlocked = PassiveItem.getUnlocked();
+    if (!unlocked.includes(id)) {
+      unlocked.push(id);
+      try { localStorage.setItem('lagomorph_unlocked', JSON.stringify(unlocked)); } catch {}
+    }
   }
 
   /** localStorage에서 한 번이라도 획득한 아이템 ID 배열 반환 (현재 ITEM_DEFS 에 존재하는 항목만) */

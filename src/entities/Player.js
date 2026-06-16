@@ -72,6 +72,7 @@ const SAVE_STAT_KEYS = [
   'healItemMult', 'coreDropMult', 'hpPerRoomClear', 'shopSlotBonus', 'armor', 'damageReduction',
   'trapMaxBonus', 'startingCores', 'invulnDurationMult', 'hasMapReveal', 'hasSecretSense', 'extraLives',
   'extraStartItems', 'shopPriceMult', 'metaRetainRate', 'autoCollectCores', 'corePickupRange',
+  'baseAttack',
 ];
 
 export default class Player {
@@ -88,6 +89,7 @@ export default class Player {
     this.facingDir       = { x: 0, y: 1 };
     this.lastDamageSource = null; // 마지막으로 피해 입힌 적 식별자 (사망 결과창 표시용)
 
+    this.baseAttack       = 10;    // 기본 공격력 — 근거리(×충전배율)·설치형(×3) 데미지의 단일 출처. 코어 결정체 +1
     this.meleeRadiusMult  = 1.0;
     this.meleeDamageMult  = 1.0;
     this.critRate         = 0.15;  // 기본 치명타율 15%

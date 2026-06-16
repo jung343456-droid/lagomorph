@@ -46,8 +46,9 @@ function _entryToSlot(entry, excludeItemIds, priceMult = 1) {
   const price = (raw) => priceMult === 1 ? raw : Math.max(1, Math.floor(raw * priceMult));
 
   if (entry.kind === 'item') {
-    // 생성 시점에 패시브 1개 미리 선정 → 카드에 실제 이름/설명 표시
-    const ids = Object.keys(ITEM_DEFS).filter(id => !excludeItemIds.has(id));
+    // 생성 시점에 패시브 1개 미리 선정 → 카드에 실제 이름/설명 표시.
+    // 스택형(코어 결정체)은 보유 중이어도 항상 후보 — 가격은 일반 패시브와 동일(45).
+    const ids = Object.keys(ITEM_DEFS).filter(id => !excludeItemIds.has(id) || ITEM_DEFS[id].stackable);
     if (ids.length === 0) return null; // 가용 패시브 없음 — 호출부에서 다른 엔트리 재추첨
     const id  = ids[Math.floor(Math.random() * ids.length)];
     const def = ITEM_DEFS[id];
@@ -90,6 +91,31 @@ function _generateShopSlots(ownedItemIds = [], extraSlots = 0, priceMult = 1) {
     if (slot.kind === 'item') excludeItems.add(slot.id);
   }
   return slots;
+}
+
+/**
+ * 부술 수 있는 장애물(stump) 드롭 추첨 — 상점 카탈로그(패시브 + 회복) 단일 출처 재사용.
+ * 가격 역가중(weight = WEIGHT_BASE / cost)이라 비싼 아이템일수록 확률이 낮다.
+ * 패시브는 미보유분만(스택형은 항상 포함). 반환은 스폰용 descriptor:
+ *   { kind:'item', id } | { kind:'heal', amount } | { kind:'heal_pct', ratio } | { kind:'heal_full' }
+ */
+export function pickPriceWeightedDrop(ownedItemIds = []) {
+  const owned = new Set(ownedItemIds);
+  const WEIGHT_BASE = 100; // 튜닝 상수
+  const entries = [];
+  for (const id of Object.keys(ITEM_DEFS)) {
+    if (owned.has(id) && !ITEM_DEFS[id].stackable) continue;
+    entries.push({ kind: 'item', id, cost: 45 });
+  }
+  for (const t of HEAL_TIERS) entries.push({ kind: 'heal', amount: t.amount, cost: t.cost });
+  entries.push({ kind: 'heal_pct', ratio: 0.5, cost: 50 });
+  entries.push({ kind: 'heal_full',            cost: 75 });
+
+  const weighted = entries.map(e => ({ e, w: WEIGHT_BASE / e.cost }));
+  const total = weighted.reduce((s, x) => s + x.w, 0);
+  let r = Math.random() * total;
+  for (const { e, w } of weighted) { r -= w; if (r <= 0) return e; }
+  return weighted[weighted.length - 1].e;
 }
 
 // ── 비밀방 헬퍼 ───────────────────────────────────────

@@ -1,5 +1,5 @@
 /**
- * 영구 해금 트리 — 공격 9(파동 확장 3 포함) / 생존 11(강인한 몸 5 포함) / 특수 14(잔해 회수 4·코어 흡수 3 포함) = 34노드.
+ * 영구 해금 트리 — 공격 10(파동 확장 3 포함) / 생존 11(강인한 몸 5 포함) / 특수 14(잔해 회수 4·코어 흡수 3 포함) = 35노드.
  * 각 단계 N 노드는 단계 N-1 노드의 prereq 를 갖는다 (tier = 선행 깊이 = 표시 순서, 선행 해금 필수).
  * 특수 계열은 비용 오름차순 단일 사슬이며, 잔해 회수도 같은 사슬에 편입되어 있다.
  *
@@ -63,6 +63,12 @@ export const UNLOCK_NODES = {
     branch: 'attack', tier: 9, prereq: 'trap_master', cost: 900,
     name: '점화의 잔해', desc: '런 시작 시 코어 +10 보유',
     apply: (p) => { p.startingCores = (p.startingCores ?? 0) + 10; },
+  },
+  core_amplify: {
+    branch: 'attack', tier: 10, prereq: 'starting_ember', cost: 1000,
+    name: '근원 강화', desc: '기본 공격력 +1 (근거리·설치 동시 상승)',
+    dynDesc: (p) => `기본 공격력 +1 (${p.baseAttack ?? 10} → ${(p.baseAttack ?? 10) + 1})`,
+    apply: (p) => { p.baseAttack = (p.baseAttack ?? 10) + 1; },
   },
 
   // ── 생존 계열 ── 비용 오름차순 단일 사슬. 강인한 몸 5단계를 중간중간 분산, 최후의 발버둥은 최종 티어.

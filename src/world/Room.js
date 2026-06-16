@@ -30,7 +30,9 @@ export default class Room {
     this._doorBlocks    = {};  // dir → rect
     this._gfx           = [];  // 비물리 시각 오브젝트
     this._secretWallData = null; // 비밀 벽 상태
-    this._onAttackFired  = null; // 이벤트 리스너 참조 (정리용)
+    this._onAttackFired  = null; // 비밀 벽 이벤트 리스너 참조 (정리용)
+    this._breakables       = []; // 부술 수 있는 장애물(stump) gameObject 목록
+    this._onAttackBreakable = null; // 부술 수 있는 장애물 attack-fired 리스너 참조 (정리용)
 
     this._buildFloor();
     this._buildWalls();
@@ -105,6 +107,10 @@ export default class Room {
     if (this._onAttackFired) {
       this.scene.events.off('attack-fired', this._onAttackFired, this);
       this._onAttackFired = null;
+    }
+    if (this._onAttackBreakable) {
+      this.scene.events.off('attack-fired', this._onAttackBreakable, this);
+      this._onAttackBreakable = null;
     }
     this.wallGroup.destroy(true);
     this.obstacleGroup.destroy(true);
@@ -252,7 +258,47 @@ export default class Room {
       this.scene.physics.add.existing(obs, true);
       this.obstacleGroup.add(obs);
       this._gfx.push(obs);
+      if (type === 'stump') this._breakables.push(obs); // 부술 수 있는 상자형 장애물
     });
+
+    // 부술 수 있는 장애물이 있으면 근접 공격 타격 리스너 등록 (비밀 벽과 별개의 리스너)
+    if (this._breakables.length > 0) {
+      this._onAttackBreakable = ({ tierData, playerX, playerY }) => {
+        for (let i = this._breakables.length - 1; i >= 0; i--) {
+          const go = this._breakables[i];
+          if (!go.active) { this._breakables.splice(i, 1); continue; }
+          const dist = Phaser.Math.Distance.Between(playerX, playerY, go.x, go.y);
+          if (dist <= (tierData.radius ?? 60) + go.displayWidth / 2) {
+            this._breakables.splice(i, 1);
+            this._breakStump(go); // 1타 즉시 파괴
+          }
+        }
+      };
+      this.scene.events.on('attack-fired', this._onAttackBreakable, this);
+    }
+  }
+
+  /** stump 파괴 — 충돌 즉시 해제 + 붕괴 연출 후 destroy, obstacle-broken 이벤트로 드롭 위임 */
+  _breakStump(go) {
+    if (this.data.obstacleLayout) {
+      const idx = this.data.obstacleLayout.findIndex(
+        o => Math.abs(o.x - go.x) < 1 && Math.abs(o.y - go.y) < 1,
+      );
+      if (idx !== -1) this.data.obstacleLayout.splice(idx, 1);
+    }
+    if (go.body) go.body.enable = false;
+    this.obstacleGroup.remove(go, false, false);
+    const gi = this._gfx.indexOf(go);
+    if (gi !== -1) this._gfx.splice(gi, 1);
+
+    this.scene.tweens.add({
+      targets: go, alpha: { from: 1, to: 0 },
+      scaleX: go.scaleX * 1.3, scaleY: go.scaleY * 1.3,
+      duration: 200, ease: 'Quad.Out',
+      onComplete: () => { if (go.active) go.destroy(); },
+    });
+
+    this.scene.events.emit('obstacle-broken', { x: go.x, y: go.y });
   }
 
   _drawOpenDoorHints() {
