@@ -1,6 +1,6 @@
 /**
  * 족제비 (Weasel) — 기습형
- * HP 30 / 속도 176→308 / 데미지 7 / 코어 드롭 2
+ * HP 30 / 속도 171→298 / 데미지 7 / 코어 드롭 2
  *
  * 패턴:
  *   idle     → approach(282px 이내 탐지)
@@ -14,8 +14,8 @@
  */
 const DETECT_R       = 282;
 const APPROACH_DIST  = 70;
-const APPROACH_SPEED = 176;
-const DASH_SPEED     = 308;
+const APPROACH_SPEED = 171;
+const DASH_SPEED     = 298;
 const DASH_DUR       = 0.4;
 const COOL_DUR       = 0.8;
 const COOL_DUR_RAGE  = 0.4;

@@ -49,7 +49,7 @@ export default class Squirrel {
     this.hp     = 29;
     this.maxHp  = 29;
     this.speed  = KITE_SPEED;
-    this.damage = 5;
+    this.damage = SQUIRREL_DMG;
     this.displayName = '다람쥐';
 
     this.state      = 'idle';
@@ -207,7 +207,7 @@ export default class Squirrel {
       .setRotation(Math.atan2(ny, nx))
       .setDepth(8);
     this.scene.enemyManager.addEnemyProjectile(
-      proj, SQUIRREL_DMG, nx * ACORN_SPEED, ny * ACORN_SPEED, '다람쥐 도토리', this.isElite,
+      proj, this.damage, nx * ACORN_SPEED, ny * ACORN_SPEED, '다람쥐 도토리', this.isElite,
     );
   }
 

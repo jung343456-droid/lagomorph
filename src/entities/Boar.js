@@ -1,6 +1,6 @@
 /**
  * 멧돼지 (Boar) — 중량 단일 돌격병 (구역 2)
- * HP 88 / 속도 88(approach) → 297(charge) / 데미지 18 / 코어 4
+ * HP 80 / 속도 88(approach) → 297(charge) / 데미지 15 / 코어 4
  *
  * 패턴:
  *   idle     → approach(320px 이내 탐지)
@@ -46,10 +46,10 @@ export default class Boar {
   constructor(scene, x, y) {
     this.scene = scene;
 
-    this.hp     = 88;
-    this.maxHp  = 88;
+    this.hp     = 80;
+    this.maxHp  = 80;
     this.speed  = APPROACH_SPEED;
-    this.damage = 18;
+    this.damage = 15;
     this.displayName = '멧돼지';
 
     this.state      = 'idle';
@@ -182,10 +182,10 @@ export default class Boar {
   }
 
   takeDamage(amount, knockback = null) {
-    if (!this.alive || this.state === 'stun' || this.state === 'wallstun') return false;
+    if (!this.alive || this.state === 'stun') return false;
     this.hp -= amount;
     if (this.hp <= 0) { this._die(); return true; }
-    if (this.state !== 'charge') {
+    if (this.state !== 'charge' && this.state !== 'wallstun') {
       if (knockback) {
         const { dx, dy, force, duration } = knockback;
         this._knockbackTimer    = duration;

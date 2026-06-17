@@ -1,6 +1,6 @@
 /**
  * FANG — 구역 1 보스
- * HP 800 / 크기 64×64px
+ * HP 720 / 크기 64×64px
  *
  * 인지 범위: 방 어디서든 즉시 추적·공격 (DETECT_R 없음)
  * 이동속도: 1페이즈 198px/s / 2페이즈 242px/s (≈+22%, 플레이어 200 기준)
@@ -10,7 +10,7 @@
  *                  안전상 MAX 2.5초 캡 (room diagonal 통과 분)
  *   dash_combo   → 3연속 고정 거리 직선 돌진 — 각 돌진 사이 재조준 정지(1페 0.25s / 2페 0.18s, 첫 발 포함),
  *                  거리 = 플레이어까지 + 관통 90px (180~420px 클램프), 벽 충돌 시 wallstun + 콤보 취소
- *   stomp        → 0.6초 예고 후 반경 150px AoE (데미지 20 + 넉백)
+ *   stomp        → 0.6초 예고 후 반경 150px AoE (데미지 12 + 넉백)
  *                  2페이즈: 2연속 — 0.45초 후 반경 195px(×1.3) 2회차
  *   roar         → 0.35초 예고(주황 틴트) 후 반경 200px 내 플레이어 0.5초 기절 (데미지 없음)
  *                  명중 시 포효 종료 직후 급습 돌진(단발 콤보 돌진) 연계
@@ -39,7 +39,7 @@ const STOMP_WINDUP      = 0.6;
 const STOMP_WINDUP_2ND  = 0.45;  // 2연속 발구름 2회차 예고 (2페이즈)
 const STOMP_RADIUS      = 150;
 const STOMP_RADIUS2_MULT = 1.3;  // 2회차 반경 배율 (150 → 195)
-const STOMP_DMG         = 20;
+const STOMP_DMG         = 12;
 const STOMP_PUSH        = 380;
 const STOMP_PUSH_DUR    = 0.3;
 
@@ -77,10 +77,10 @@ export default class Fang {
   constructor(scene, x, y) {
     this.scene = scene;
 
-    this.hp     = 800;
-    this.maxHp  = 800;
+    this.hp     = 720;
+    this.maxHp  = 720;
     this.speed  = BASE_CHASE_SPEED;
-    this.damage = 25;
+    this.damage = 15;
     this.displayName = 'FANG';
 
     this.state      = 'idle';

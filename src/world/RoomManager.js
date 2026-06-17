@@ -20,6 +20,7 @@ export default class RoomManager {
     this._enteredAt       = 0;
     this._clearedAt       = 0;
     this.floorNum         = 1;  // 현재 층 번호 (1~20 선형 카운터, 구역 = ceil/5)
+    this._roomDrops       = new Map(); // roomId → { cores:[{x,y}], items:[{x,y,healAmount}] }
 
     scene.events.on('all-enemies-dead',   this._onRoomCleared,      this);
     scene.events.on('secret-door-opened', this._onSecretDoorOpened, this);
@@ -33,6 +34,7 @@ export default class RoomManager {
   setFloor(n) {
     this.floorNum = n;
     this.enemyManager.setFloor(n);
+    this._roomDrops.clear(); // 층 전환 시 이전 층 드롭 캐시 초기화
   }
 
   /** 드롭 위치가 장애물 안이면 인근 빈 위치로 보정 — Room 위임 */
@@ -87,6 +89,24 @@ export default class RoomManager {
   }
 
   _enterRoom(roomData, fromDir, opts = {}) {
+    // 현재 방의 코어/아이템 위치를 저장하고 게임 오브젝트를 즉시 정리.
+    // _clearAll 이 아직 호출되기 전에 먼저 추출해야 데이터가 보존된다.
+    if (this.currentRoomData) {
+      const drops = this.enemyManager.extractDropPositions();
+      if (drops.cores.length || drops.items.length) {
+        this._roomDrops.set(this.currentRoomData.id, drops);
+      }
+    }
+
+    // 엘리트 비밀방을 미클리어 상태로 이탈하면 남은 적을 즉시 정리.
+    // 엘리트방은 도망 가능 설계라 미클리어 상태에서도 문 트리거가 발화되는데,
+    // spawn 메서드를 거치지 않고 이전 방으로 넘어가면 _clearAll() 이 호출되지 않아
+    // 엘리트가 이전 방에 그대로 남아 따라오는 버그 방지.
+    const leavingEliteCache = this.currentRoomData?.type === 'secret_cache'
+                           && this.currentRoomData?.cacheSubtype === 'elite'
+                           && !this.currentRoomData?.cleared;
+    if (leavingEliteCache) this.enemyManager.clearAll();
+
     // 떠나는 방의 잔존 위험물(거미줄·독 웅덩이) 정리 — 모든 전환에서 수행.
     // 클리어된 방 재진입은 spawnForRoom(→_clearAll)을 타지 않아 여기서 정리하지 않으면
     // 좌표 공유(모든 방 0~ROOM_W/H)로 이전 방 hazard 가 다음 방에 그대로 남는다.
@@ -205,6 +225,13 @@ export default class RoomManager {
       // 일반 전투방
       this._room.lockDoors();
       this.enemyManager.spawnForRoom(this._normalRoomCount());
+    }
+
+    // 이 방에 이전 방문 시 남겨진 코어/아이템 복원
+    const savedDrops = this._roomDrops.get(roomData.id);
+    if (savedDrops) {
+      this.enemyManager.restoreDrops(savedDrops);
+      this._roomDrops.delete(roomData.id);
     }
 
     this.scene.events.emit('room-entered', { roomData, dungeonData: this.dungeonData });

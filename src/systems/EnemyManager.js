@@ -517,6 +517,24 @@ export default class EnemyManager {
     return true;
   }
 
+  /** 현재 방의 코어/아이템 위치를 추출하고 게임 오브젝트를 즉시 정리.
+   *  RoomManager가 방 전환 직전에 호출 — 이후 _clearAll 에서 이중 파괴되지 않도록 배열을 비운다. */
+  extractDropPositions() {
+    const cores = this.cores.filter(c => c.alive).map(c => ({ x: c.x, y: c.y }));
+    const items = this.rareItems.filter(r => r.alive).map(r => ({ x: r.x, y: r.y, healAmount: r.healAmount }));
+    this.cores.forEach(c => { if (c.alive) { c.alive = false; c.gameObject.destroy(); } });
+    this.cores = [];
+    this.rareItems.forEach(r => { if (r.alive) r.dispose(); });
+    this.rareItems = [];
+    return { cores, items };
+  }
+
+  /** 저장된 위치에서 코어/아이템 게임 오브젝트를 재생성 */
+  restoreDrops({ cores = [], items = [] }) {
+    cores.forEach(c => this.cores.push(new Core(this.scene, c.x, c.y)));
+    items.forEach(r => this.rareItems.push(new RareItem(this.scene, r.x, r.y, r.healAmount)));
+  }
+
   /** 코어 제단 현재 가격 — 런 누적 구매 수 기준 누진. */
   altarCost() { return altarCostFor(this._altarPurchases); }
 

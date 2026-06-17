@@ -157,7 +157,10 @@ export default class UIScene extends Phaser.Scene {
     if (attackManager) this._updateChargeGauge(attackManager);
     if (enemyManager)  this._coreText.setText(String(enemyManager.coreCount));
     if (attackManager && enemyManager) this._updateBSlot(attackManager, enemyManager);
-    if (enemyManager)  this._updateBossHPBar(enemyManager.boss);
+    if (enemyManager) {
+      if (this.gameScene?._endScreenEls) this._bossBarContainer.setVisible(false);
+      else this._updateBossHPBar(enemyManager.boss);
+    }
   }
 
   // ── 상단 패널 배경 + 구분선 ─────────────────────────

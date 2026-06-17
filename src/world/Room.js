@@ -28,6 +28,7 @@ export default class Room {
     this.wallGroup      = scene.physics.add.staticGroup();
     this.obstacleGroup  = scene.physics.add.staticGroup();
     this._doorBlocks    = {};  // dir → rect
+    this._splitWalls    = {};  // dir → [piece1, piece2] (문이 있는 방향의 분할 벽 세그먼트)
     this._gfx           = [];  // 비물리 시각 오브젝트
     this._secretWallData = null; // 비밀 벽 상태
     this._onAttackFired  = null; // 비밀 벽 이벤트 리스너 참조 (정리용)
@@ -45,21 +46,27 @@ export default class Room {
   lockDoors() {
     Object.entries(this.data.doors).forEach(([dir, nid]) => {
       if (nid === null || this._doorBlocks[dir]) return;
-      const a = this._doorArea(dir);
-      // 벽과 동일한 fence 텍스처로 채워 zone 톤과 자연스럽게 이어지게 한다.
-      const block = this.scene.add.tileSprite(a.cx, a.cy, a.w, a.h, this._tex('obstacle_fence'));
-      block.setDepth(3);
-      this.scene.physics.add.existing(block, true);
-      this.wallGroup.add(block);
+      // 분할 벽 2개를 숨기고 방향 전체를 덮는 단일 통짜 벽으로 교체.
+      // 분리된 세그먼트가 물리 바디 경계를 만들어 캐릭터가 걸리는 문제를 해결한다.
+      const splitPieces = this._splitWalls[dir];
+      if (splitPieces) {
+        splitPieces.forEach(p => { if (p.body) p.body.enable = false; p.setVisible(false); });
+      }
+      const block = this._makeFullWall(dir);
       this._doorBlocks[dir] = block;
     });
   }
 
   /** 방 클리어 시 문 잠금 해제 + 시각 힌트 추가 */
   unlockDoors() {
-    Object.values(this._doorBlocks).forEach(block => {
+    Object.entries(this._doorBlocks).forEach(([dir, block]) => {
       if (block.body) block.body.enable = false;
       block.setVisible(false);
+      // 통짜 벽 제거 후 분할 세그먼트 복원 (개구부 유지)
+      const splitPieces = this._splitWalls[dir];
+      if (splitPieces) {
+        splitPieces.forEach(p => { if (p.body) p.body.enable = true; p.setVisible(true); });
+      }
     });
     this._doorBlocks = {};
     this._drawOpenDoorHints();
@@ -156,31 +163,54 @@ export default class Room {
       this.scene.physics.add.existing(sprite, true);
       this.wallGroup.add(sprite);
       this._gfx.push(sprite);
+      return sprite;
     };
 
     // 상단
     if (doors.up !== null || sd === 'up') {
-      add(0, 0, DOOR_HX, WALL_T);
-      add(DOOR_HX + DOOR_W, 0, ROOM_W, WALL_T);
+      const p1 = add(0, 0, DOOR_HX, WALL_T);
+      const p2 = add(DOOR_HX + DOOR_W, 0, ROOM_W, WALL_T);
+      if (doors.up !== null) this._splitWalls.up = [p1, p2];
     } else { add(0, 0, ROOM_W, WALL_T); }
 
     // 하단
     if (doors.down !== null || sd === 'down') {
-      add(0, ROOM_H - WALL_T, DOOR_HX, ROOM_H);
-      add(DOOR_HX + DOOR_W, ROOM_H - WALL_T, ROOM_W, ROOM_H);
+      const p1 = add(0, ROOM_H - WALL_T, DOOR_HX, ROOM_H);
+      const p2 = add(DOOR_HX + DOOR_W, ROOM_H - WALL_T, ROOM_W, ROOM_H);
+      if (doors.down !== null) this._splitWalls.down = [p1, p2];
     } else { add(0, ROOM_H - WALL_T, ROOM_W, ROOM_H); }
 
     // 좌측
     if (doors.left !== null || sd === 'left') {
-      add(0, 0, WALL_T, DOOR_VY);
-      add(0, DOOR_VY + DOOR_W, WALL_T, ROOM_H);
+      const p1 = add(0, 0, WALL_T, DOOR_VY);
+      const p2 = add(0, DOOR_VY + DOOR_W, WALL_T, ROOM_H);
+      if (doors.left !== null) this._splitWalls.left = [p1, p2];
     } else { add(0, 0, WALL_T, ROOM_H); }
 
     // 우측
     if (doors.right !== null || sd === 'right') {
-      add(ROOM_W - WALL_T, 0, ROOM_W, DOOR_VY);
-      add(ROOM_W - WALL_T, DOOR_VY + DOOR_W, ROOM_W, ROOM_H);
+      const p1 = add(ROOM_W - WALL_T, 0, ROOM_W, DOOR_VY);
+      const p2 = add(ROOM_W - WALL_T, DOOR_VY + DOOR_W, ROOM_W, ROOM_H);
+      if (doors.right !== null) this._splitWalls.right = [p1, p2];
     } else { add(ROOM_W - WALL_T, 0, ROOM_W, ROOM_H); }
+  }
+
+  /** 잠금 시 방향 전체를 단일 tileSprite로 덮는 통짜 벽 생성 */
+  _makeFullWall(dir) {
+    let x1, y1, x2, y2;
+    switch (dir) {
+      case 'up':    x1 = 0;            y1 = 0;            x2 = ROOM_W; y2 = WALL_T;          break;
+      case 'down':  x1 = 0;            y1 = ROOM_H-WALL_T; x2 = ROOM_W; y2 = ROOM_H;          break;
+      case 'left':  x1 = 0;            y1 = 0;            x2 = WALL_T;  y2 = ROOM_H;          break;
+      case 'right': x1 = ROOM_W-WALL_T; y1 = 0;           x2 = ROOM_W;  y2 = ROOM_H;          break;
+    }
+    const w = x2 - x1, h = y2 - y1;
+    const sprite = this.scene.add.tileSprite(x1 + w/2, y1 + h/2, w, h, this._tex('obstacle_fence'));
+    sprite.setDepth(3);
+    this.scene.physics.add.existing(sprite, true);
+    this.wallGroup.add(sprite);
+    this._gfx.push(sprite);
+    return sprite;
   }
 
   _buildObstacles() {
