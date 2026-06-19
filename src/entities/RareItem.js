@@ -1,9 +1,12 @@
-const RARE_SIZE      = 22;       // 크기 (px)
-const RARE_COLOR     = 0xffd700; // 색상 (황금)
+const RARE_SIZE      = 22;       // 십자 전체 크기 (px)
+const RARE_COLOR     = 0x66ff88; // 색상 (연두 — showHealNumber 색과 동일)
 const RARE_HEAL      = 30;       // 플레이어 회복량
 const PICKUP_R       = 40;       // 자동 흡수 시작 반경 (px)
 const MAGNET_SPEED   = 350;      // 흡수 이동 속도 (px/s)
 const COLLECT_R      = 14;       // 수집 판정 반경 (px)
+
+const ARM_LEN   = RARE_SIZE;
+const ARM_THICK = Math.round(RARE_SIZE * 0.36); // ~8px
 
 export default class RareItem {
   // healAmount 기본 30(보스 드롭). 부술 수 있는 장애물 회복 드롭은 상점 회복 수치를 인자로 넘긴다.
@@ -13,7 +16,10 @@ export default class RareItem {
     this.magnetized = false;
     this.healAmount = healAmount;
 
-    this.gameObject = scene.add.rectangle(x, y, RARE_SIZE, RARE_SIZE, RARE_COLOR).setDepth(7);
+    const hBar = scene.add.rectangle(0, 0, ARM_LEN, ARM_THICK, RARE_COLOR);
+    const vBar = scene.add.rectangle(0, 0, ARM_THICK, ARM_LEN, RARE_COLOR);
+    this.gameObject = scene.add.container(x, y, [vBar, hBar]).setDepth(7);
+
     this._scaleTween = scene.tweens.add({
       targets:  this.gameObject,
       scaleX:   1.4, scaleY: 1.4,

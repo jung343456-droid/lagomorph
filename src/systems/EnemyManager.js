@@ -174,6 +174,14 @@ export default class EnemyManager {
     const dt = delta / 1000;
     this.enemies.forEach(e => e.update(delta, this.player));
 
+    // 사망 후 남은 위험물(거미줄·독 웅덩이) 틱 — enemies 에서 빠진 잔존 hazard 를 매니저가 직접 갱신.
+    //   scene.events.on('update') 리스너 방식은 페이드 전환 중 off() 가 'update' 리스너를 통째로
+    //   날려 화면이 검게 굳는 버그가 있어 폐기. 평소엔 비어 있으므로 스냅샷 할당을 건너뛴다.
+    //   (틱 중 disposeHazards 가 Set 을 수정하므로 비어있지 않을 때만 스냅샷으로 순회한다.)
+    if (this._lingeringHazards.size > 0) {
+      [...this._lingeringHazards].forEach(h => h.tickLingering?.(delta, this.player));
+    }
+
     // 적 위치 안전 클램프 — 강한 넉백이 lockDoors 블록을 뚫고 벽 너머로 빠지는 사례 차단.
     //   문 잠금이 풀린 클리어방에서는 적이 존재하지 않으므로 항상 안전.
     //   클램프된 축의 외향 속도는 0으로 끊어 매 프레임 다시 벽을 향해 튕기는 루프 방지.

@@ -40,7 +40,10 @@
   enemyState,         // EnemyManager.serialize()
   attackState,        // AttackManager.serialize()
   stairs,             // { roomId, x, y, triggered } | null
-  floorPassiveItems,  // [{ id, x, y }] — 바닥에 놓인 PassiveItem
+  roomDrops,          // { [roomId]: { cores:[{x,y}], items:[{x,y,healAmount}] } } | undefined
+                      //   현재 방 이외의 방에 남아 있는 코어·회복 아이템 위치 캐시
+                      //   (RoomManager._roomDrops) — undefined면 다른 방 드롭 없음
+  floorPassiveItems,  // [{ id, x, y, roomId }] — 바닥에 놓인 PassiveItem (roomId=null이면 방 무관)
   meta: { runPicked }, // MetaProgress 런 픽업 카운터
 }
 ```
@@ -52,7 +55,7 @@
 | `Player` | `serialize()` | `applySave(data)` | 좌표·HP·전체 스탯(`SAVE_STAT_KEYS` — `baseAttack` 포함)·인벤토리(스택형 `count` 포함)·방향. 복원 시 저장값으로 **덮어씀**(런 중 아이템 변경분 반영). 스탯 직접 주입이라 아이템 재적용 없음 → 코어 결정체 누적 baseAttack 이중 적용 없음 |
 | `EnemyManager` | `serialize()` | `restoreFromSave(data)` | 적·코어·레어(`healAmount` 포함 — 그루터기 회복 드롭 수치 보존)·상태이상·코어카운트·보스·**제단 누진 카운트(`altarPurchases`)** |
 | `AttackManager` | `serialize()` | `restoreFromSave(data)` | B쿨다운·설치 트랩(`_poops`) |
-| `RoomManager` | — (dungeonData는 GameScene 레벨) | `restore(dungeon, roomId)` | 저장된 방으로 진입(적 스폰 안 함) |
+| `RoomManager` | `serializeRoomDrops()` | `restore(dungeon, roomId)` + `restoreRoomDropsFromSave(data)` | 저장된 방으로 진입(적 스폰 안 함) + 다른 방 드롭 캐시 복원 |
 
 > **코어 제단 강화**: 제단으로 산 런 한정 강화(최대HP·근접피해·충전속도·덫·근접범위)는 모두 `Player`의
 > 기존 스탯 필드를 갱신하므로 `Player.serialize()`가 그대로 보존한다 — 별도 처리 없음. 가격 누진 상태만
@@ -90,10 +93,11 @@
 `GameScene.create()` 복원 블록은 **이벤트 핸들러 등록 후 + `scene.launch('UIScene')` 전**에 위치하며, 순서가 고정이다:
 
 ```
-1. roomManager.restore(dungeon, roomId)   // 적 스폰 안 함(_enterRoom의 skipSpawn), room-entered emit
-2. player.applySave(save.player)          // 좌표/스탯/인벤토리 덮어쓰기
-3. enemyManager.restoreFromSave(...)      // 적 주입
-4. attackManager.restoreFromSave(...)     // 트랩 — 반드시 마지막
+1. roomManager.restore(dungeon, roomId)         // 적 스폰 안 함(_enterRoom의 skipSpawn), room-entered emit
+1a. roomManager.restoreRoomDropsFromSave(...)   // 다른 방 드롭 캐시 복원 (1 직후)
+2. player.applySave(save.player)                // 좌표/스탯/인벤토리 덮어쓰기
+3. enemyManager.restoreFromSave(...)            // 적 주입
+4. attackManager.restoreFromSave(...)           // 트랩 — 반드시 마지막
 ```
 
 - **4가 마지막인 이유**: `AttackManager`의 `room-entered` 리스너가 `_poops`를 비운다. room 진입(1)이 그 이벤트를 발생시키므로, 트랩 복원은 그 뒤에 와야 안 지워진다.

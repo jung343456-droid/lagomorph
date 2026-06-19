@@ -37,6 +37,20 @@ export default class RoomManager {
     this._roomDrops.clear(); // 층 전환 시 이전 층 드롭 캐시 초기화
   }
 
+  serializeRoomDrops() {
+    if (this._roomDrops.size === 0) return undefined;
+    const out = {};
+    for (const [id, drops] of this._roomDrops) out[id] = drops;
+    return out;
+  }
+
+  restoreRoomDropsFromSave(data) {
+    if (!data) return;
+    for (const [key, drops] of Object.entries(data)) {
+      this._roomDrops.set(parseInt(key, 10), drops);
+    }
+  }
+
   /** 드롭 위치가 장애물 안이면 인근 빈 위치로 보정 — Room 위임 */
   findSafeDropPos(x, y) {
     return this._room?.findSafeDropPos(x, y) ?? { x, y };

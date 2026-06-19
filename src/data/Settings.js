@@ -2,7 +2,8 @@
  * 사용자 설정 — 런/세션 간 영속되는 환경 설정. (메타 progression 과 분리: MetaProgress.js)
  *
  * localStorage 키:
- *   lagomorph_settings  { bgmVolume, sfxVolume, bgmMuted, sfxMuted, joystickX, joystickY }
+ *   lagomorph_settings  { bgmVolume, sfxVolume, bgmMuted, sfxMuted, joystickX, joystickY,
+ *                         aX, aY, bX, bY, aSize, bSize }
  *
  * 두 가지 책임을 한 모듈에 둔다:
  *   1) 설정값 영속 (load/save + 게터/세터)
@@ -29,11 +30,18 @@ const DEFAULTS = {
   // A/B 액션 버튼 개별 위치(캔버스 좌표). null = 조이스틱 쪽에 따른 기본 미러 위치.
   aX: null, aY: null,
   bX: null, bY: null,
+  // A/B 액션 버튼 개별 크기(반지름, 캔버스 좌표). null = 기본 반지름(SLOT_R_DEFAULT).
+  aSize: null, bSize: null,
 };
 
 // 슬롯 레이아웃 상수 (AttackManager / UIScene._buildSkillSlots 와 동일)
 const SLOT = 56, SLOT_GAP = 10, SLOT_MARGIN = 20;
 const SLOT_CY = GAME_H - 130;
+
+// 슬롯 크기(반지름) 기본값·경계 — 시각·탭 판정의 단일 출처(getSlotRadius)가 사용.
+export const SLOT_R_DEFAULT = 28;
+export const SLOT_R_MIN = 20;
+export const SLOT_R_MAX = 46;
 
 let _cache = null;
 
@@ -93,6 +101,13 @@ export function getSlotPos(slot) {
   return getDefaultSlotPos(slot);
 }
 
+/** slot('A'|'B') 의 현재 반지름 — 커스텀 크기가 있으면 그것을, 없으면 기본값. */
+export function getSlotRadius(slot) {
+  const s = load();
+  const v = slot === 'A' ? s.aSize : s.bSize;
+  return v != null ? v : SLOT_R_DEFAULT;
+}
+
 /**
  * 포인터가 A/B 액션 버튼 히트 영역 안인지. 조이스틱 _onDown 에서 액션 버튼 탭을
  * 가로채지 않도록(버튼이 조이스틱 쪽에 놓인 경우 대비) 사용한다.
@@ -100,7 +115,9 @@ export function getSlotPos(slot) {
 export function isInActionSlot(px, py) {
   for (const slot of ['A', 'B']) {
     const c = getSlotPos(slot);
-    if (Math.abs(px - c.x) <= SLOT / 2 && Math.abs(py - c.y) <= SLOT / 2) return true;
+    const r = getSlotRadius(slot);
+    const dx = px - c.x, dy = py - c.y;
+    if (dx * dx + dy * dy <= r * r) return true; // 시각이 원형(반지름 r)이라 판정도 원형
   }
   return false;
 }
@@ -133,11 +150,20 @@ export function setSlotPos(slot, x, y) {
   save();
 }
 
-/** 컨트롤 배치(조이스틱·A·B) 전체를 기본값으로 되돌린다. */
+export function setSlotSize(slot, r) {
+  const s = load();
+  const v = Math.round(Math.max(SLOT_R_MIN, Math.min(SLOT_R_MAX, r)));
+  if (slot === 'A') s.aSize = v;
+  else              s.bSize = v;
+  save();
+}
+
+/** 컨트롤 배치(조이스틱·A·B 위치·크기) 전체를 기본값으로 되돌린다. */
 export function resetLayout() {
   const s = load();
   s.joystickX = s.joystickY = null;
   s.aX = s.aY = s.bX = s.bY = null;
+  s.aSize = s.bSize = null;
   save();
 }
 

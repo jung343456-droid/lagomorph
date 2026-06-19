@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { showDamageNumber } from '../utils/DamageNumbers';
-import { getSlotPos } from '../data/Settings';
+import { getSlotPos, getSlotRadius } from '../data/Settings';
 
 const MAX_CHARGE = 0.8; // 최대 충전 시간 (초): 이 시간 이상 누르면 MAX 티어
 const BASE_R     = 60;  // 근거리 기본 공격 반경 (px, 티어 I 기준)
@@ -27,8 +27,8 @@ const SPLASH_RADIUS = 40;  // 위장 트랩 스플래시 반경 (px)
 const SPLASH_DMG    = 15;  // 위장 트랩 스플래시 데미지
 const DISGUISE_PROC = 0.5; // 위장 트랩 상태이상 발동 확률 (명중 enemy 1마리당, 위장 종류별 독립)
 
-// 슬롯 탭 판정 크기 (위치는 Settings.getSlotPos 가 제공 — 개별 자유 배치 가능)
-const SLOT_SIZE = 56;
+// 슬롯 탭 판정: 위치는 Settings.getSlotPos, 반지름은 getSlotRadius 가 제공
+// (개별 자유 배치·크기 조절 가능). 시각이 원형이라 판정도 원형 거리로 맞춘다.
 
 export default class AttackManager {
   constructor(scene, player) {
@@ -259,12 +259,16 @@ export default class AttackManager {
 
   _inASlot(p) {
     const c = getSlotPos('A');
-    return Math.abs(p.x - c.x) <= SLOT_SIZE / 2 && Math.abs(p.y - c.y) <= SLOT_SIZE / 2;
+    const r = getSlotRadius('A');
+    const dx = p.x - c.x, dy = p.y - c.y;
+    return dx * dx + dy * dy <= r * r;
   }
 
   _inBSlot(p) {
     const c = getSlotPos('B');
-    return Math.abs(p.x - c.x) <= SLOT_SIZE / 2 && Math.abs(p.y - c.y) <= SLOT_SIZE / 2;
+    const r = getSlotRadius('B');
+    const dx = p.x - c.x, dy = p.y - c.y;
+    return dx * dx + dy * dy <= r * r;
   }
 
   // ── 근거리 공격 (A / Z) ──────────────────────────────

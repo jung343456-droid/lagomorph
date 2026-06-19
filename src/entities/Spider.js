@@ -72,7 +72,6 @@ export default class Spider {
     this._lateralSign = Math.random() < 0.5 ? 1 : -1;
     this._lateralFlip = LATERAL_FLIP;
     this._webs        = [];  // [{ gfx, timer, x, y }]
-    this._sceneUpdateCb = null;
     this._player      = null;
 
     this._knockbackTimer    = 0;
@@ -190,10 +189,16 @@ export default class Spider {
     this.destroyed = true;
   }
 
-  /** 거미줄 + scene update 틱 콜백 정리 — destroyed 여부와 무관하게 동작(사망 후 잔존분 정리용).
+  /** 사망 후 잔존 거미줄 갱신 — EnemyManager.update 가 _lingeringHazards 를 순회하며 매 프레임 호출.
+   *  모두 사라지면 스스로 정리(매니저 등록 해제). */
+  tickLingering(delta, player) {
+    this._tickWebs(delta / 1000, player ?? this._player);
+    if (this._webs.length === 0) this.disposeHazards();
+  }
+
+  /** 거미줄 정리 — destroyed 여부와 무관하게 동작(사망 후 잔존분 정리용).
    *  dispose() 및 EnemyManager.clearLingeringHazards()(방 전환마다 호출, _clearAll 포함)에서 공용 호출. */
   disposeHazards() {
-    if (this._sceneUpdateCb) { this.scene.events.off('update', this._sceneUpdateCb); this._sceneUpdateCb = null; }
     this._webs.forEach(w => { if (w.gfx?.active) w.gfx.destroy(); });
     this._webs = [];
     this.scene.enemyManager?.unregisterLingeringHazard?.(this);
@@ -353,19 +358,10 @@ export default class Spider {
       onComplete: () => {
         this.gameObject.destroy();
         this.destroyed = true;
-        // EnemyManager에서 제거된 이후에도 남은 거미줄을 scene update로 계속 틱.
-        // 방 전환 시 정리되도록 매니저에 잔존 hazard 로 등록한다.
+        // EnemyManager 에서 제거된 이후에도 남은 거미줄은 매니저가 _lingeringHazards 로 직접
+        // 틱한다(tickLingering). 방 전환 시 clearLingeringHazards 로 일괄 정리.
         if (this._webs.length > 0) {
           this.scene.enemyManager?.registerLingeringHazard?.(this);
-          this._sceneUpdateCb = (time, delta) => {
-            if (this._player) this._tickWebs(delta / 1000, this._player);
-            if (this._webs.length === 0) {
-              this.scene.events.off('update', this._sceneUpdateCb);
-              this._sceneUpdateCb = null;
-              this.scene.enemyManager?.unregisterLingeringHazard?.(this);
-            }
-          };
-          this.scene.events.on('update', this._sceneUpdateCb);
         }
       },
     });

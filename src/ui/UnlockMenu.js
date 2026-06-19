@@ -260,9 +260,16 @@ export default class UnlockMenu {
 
   _beginDrag(p, card) {
     // 카드 hit area 는 컨테이너 transform 을 따라가지만 마스크는 시각만 클립한다.
-    // 마스크 영역 밖에서 발생한 카드 클릭(스크롤된 카드가 헤더 영역에 위치)은 구매로 인정하지 않는다.
-    if (card && (p.y < GRID_VIEW_TOP || p.y > GRID_VIEW_TOP + GRID_VIEW_H)) {
-      card = null;
+    // 마스크 영역 밖(헤더 위 또는 아래)으로 스크롤된 카드의 클릭은 구매로 인정하지 않는다.
+    // 주의: pointer.y(p.y)는 HubScene 카메라 viewport offset(HUD_H)이 더해진 캔버스 좌표라,
+    // 마스크가 쓰는 월드 좌표(GRID_VIEW_TOP~)와 기준이 어긋난다. 그대로 비교하면 맨 아래
+    // 카드(황금손)는 p.y 가 항상 하단 경계를 넘어 영구히 구매 불가였다.
+    // → 포인터가 아니라 카드의 실제 월드 y(컨테이너 스크롤 + 로컬 y)로 가시 범위를 판정한다.
+    if (card) {
+      const cardWorldY = this._container.y + card.bg.y;
+      if (cardWorldY < GRID_VIEW_TOP || cardWorldY > GRID_VIEW_TOP + GRID_VIEW_H) {
+        card = null;
+      }
     }
     this._dragStartY = p.y;
     this._dragLastY  = p.y;

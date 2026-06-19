@@ -198,7 +198,7 @@ export default class PassiveItem {
     this._glowTween = scene.tweens.add({
       targets: state, a: 0.05, duration: 700, yoyo: true, repeat: -1,
       onUpdate: () => {
-        if (!this._alive) return;
+        if (!this._alive || !this.gameObject.visible) { gfx.clear(); return; }
         gfx.clear();
         gfx.lineStyle(2, this._def.color, state.a);
         gfx.strokeCircle(this.gameObject.x, this.gameObject.y, ITEM_SIZE * 1.6);

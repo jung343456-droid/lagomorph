@@ -147,7 +147,7 @@ export default class GameScene extends Phaser.Scene {
       const drop = pickPriceWeightedDrop(this._ownedItemIds());
       const safe = this.roomManager?.findSafeDropPos(x, y) ?? { x, y };
       if (drop.kind === 'item') {
-        this._passiveItems.push(new PassiveItem(this, safe.x, safe.y, drop.id));
+        this._passiveItems.push(this._makePassiveItem(safe.x, safe.y, drop.id));
       } else {
         const amount = drop.kind === 'heal'     ? drop.amount
                      : drop.kind === 'heal_pct' ? Math.floor(this.player.maxHp * drop.ratio)
@@ -165,7 +165,7 @@ export default class GameScene extends Phaser.Scene {
     this.events.on('secret-cache-entered', ({ x, y, reward }) => {
       if (!reward) return;
       if (reward.kind === 'item') {
-        this._passiveItems.push(new PassiveItem(this, x, y, reward.id));
+        this._passiveItems.push(this._makePassiveItem(x, y, reward.id));
       } else {
         this.enemyManager.dropRareItem(x, y);
       }
@@ -202,6 +202,13 @@ export default class GameScene extends Phaser.Scene {
         this._shopkeeper = new Shopkeeper(
           this, ROOM_W / 2, ROOM_H * 0.32, roomData.shopSlots,
         );
+      }
+
+      // 패시브 아이템 — 현재 방 소속만 표시 (다른 방 아이템이 같은 좌표에 보이거나 픽업되는 것 방지)
+      const rid = roomData.id;
+      for (const item of this._passiveItems) {
+        if (!item.alive) continue;
+        item.gameObject.setVisible(item.roomId == null || item.roomId === rid);
       }
 
       // 방 이동 시 자동 저장 (다음 틱 — 방 구성/적 주입 완료 후)
@@ -242,11 +249,16 @@ export default class GameScene extends Phaser.Scene {
     // 순서: 방 진입(적 스폰 안 함) → 플레이어 좌표/스탯 적용 → 적 주입 → 트랩 복원 → 바닥 아이템/계단.
     if (save) {
       this.roomManager.restore(save.dungeon, save.currentRoomId);
+      this.roomManager.restoreRoomDropsFromSave(save.roomDrops);
       this.player.applySave(save.player);
       this.enemyManager.restoreFromSave(save.enemyState);
       this.attackManager.restoreFromSave(save.attackState);
       for (const it of save.floorPassiveItems ?? []) {
-        this._passiveItems.push(new PassiveItem(this, it.x, it.y, it.id));
+        const _pi = new PassiveItem(this, it.x, it.y, it.id);
+        _pi.roomId = it.roomId ?? null;
+        const _cid = this.roomManager.currentRoomData?.id;
+        _pi.gameObject.setVisible(_pi.roomId == null || _pi.roomId === _cid);
+        this._passiveItems.push(_pi);
       }
       if (save.stairs) {
         this._markStairs(save.stairs.roomId, save.stairs.x, save.stairs.y);
@@ -255,6 +267,12 @@ export default class GameScene extends Phaser.Scene {
     }
 
     this.scene.launch('UIScene', { gameScene: this });
+
+    // 디버그: 숫자 1 → 누를 때마다 다음 층으로 이동
+    this.input.keyboard.on('keydown-ONE', () => {
+      if (this.currentFloor >= 20) return;
+      this._advanceFloor();
+    });
 
     // 디버그: 숫자 2 → 보스방 즉시 이동
     this.input.keyboard.on('keydown-TWO', () => {
@@ -565,8 +583,14 @@ export default class GameScene extends Phaser.Scene {
       const j = i + Math.floor(Math.random() * (pool.length - i));
       [pool[i], pool[j]] = [pool[j], pool[i]];
       const pos = positions[i] ?? positions[0];
-      this._passiveItems.push(new PassiveItem(this, pos.x, pos.y, pool[i]));
+      this._passiveItems.push(this._makePassiveItem(pos.x, pos.y, pool[i]));
     }
+  }
+
+  _makePassiveItem(x, y, id) {
+    const item = new PassiveItem(this, x, y, id);
+    item.roomId = this.roomManager.currentRoomData?.id ?? null;
+    return item;
   }
 
   /** 현재 보유한 패시브 id 목록 — 상점 슬롯·보스 드롭 제외 필터에 사용 */
@@ -588,7 +612,7 @@ export default class GameScene extends Phaser.Scene {
       .filter(id => !excluded.has(id) || ITEM_DEFS[id].stackable);
     const id   = dropable[Math.floor(Math.random() * dropable.length)] ?? 'core_crystal';
     const safe = this.roomManager?.findSafeDropPos(x, y) ?? { x, y };
-    this._passiveItems.push(new PassiveItem(this, safe.x, safe.y, id));
+    this._passiveItems.push(this._makePassiveItem(safe.x, safe.y, id));
   }
 
   _advanceFloor() {
@@ -710,8 +734,10 @@ export default class GameScene extends Phaser.Scene {
     if (this._shopkeeper) this._shopkeeper.update(this.player);
     if (this._altar) this._altar.update(this.player);
 
+    const _curRoomId = this.roomManager.currentRoomData?.id;
     for (const item of this._passiveItems) {
       if (!item.alive) continue;
+      if (item.roomId != null && item.roomId !== _curRoomId) continue;
       const d = Phaser.Math.Distance.Between(
         this.player.x, this.player.y, item.x, item.y,
       );

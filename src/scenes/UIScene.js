@@ -8,12 +8,19 @@ import {
   getBgmVolume, getSfxVolume, isBgmMuted, isSfxMuted,
   setBgmVolume, setSfxVolume, setBgmMuted, setSfxMuted,
   setJoystickPos, setSlotPos, resetLayout, getSlotPos,
+  getSlotRadius, setSlotSize, SLOT_R_MIN, SLOT_R_MAX, SLOT_R_DEFAULT,
 } from '../data/Settings';
 
 const DLG_BOTTOM_PAD = 16;  // 패널 하단 추가 여백 (floor 위에 더하는 숨 쉴 공간)
 // 측정값이 0이어도 보장하는 최소 하단 확보량(게임 좌표). 일반 브라우저 탭에선 홈 인디케이터·
 // 제스처바가 env()/visualViewport 로 보고되지 않으므로, 측정값과 floor 중 큰 쪽을 쓴다.
 const DLG_MIN_BOTTOM = 60;
+
+// A/B 슬롯 글자 렌더 해상도 — Scale.FIT 으로 캔버스가 확대돼도 또렷하게(고DPI 대응, 상한 3)
+const SLOT_TEXT_RES = Math.min(3, Math.max(2, Math.ceil(window.devicePixelRatio || 1)));
+// 슬롯 글자/반지름 비율 — 기본 반지름 28 에서 22px (크기 조절 시 글자도 비례 스케일)
+const SLOT_FONT_RATIO = 22 / 28;
+const slotFontPx = (r) => Math.round(r * SLOT_FONT_RATIO) + 'px';
 
 // ── 상단 패널 레이아웃 ────────────────────────────────
 const TOP_H      = HUD_H; // 상단 패널 높이 — constants.HUD_H 와 반드시 일치
@@ -1121,11 +1128,14 @@ export default class UIScene extends Phaser.Scene {
       { label: 'A', color: 0x4ecca3 },
       { label: 'B', color: 0xe63946 },
     ].forEach((slot) => {
-      const rect = this.add.rectangle(0, 0, 56, 56, 0x1a1a2e, 0.8)
-        .setStrokeStyle(2, slot.color, 0.6);
+      const r = getSlotRadius(slot.label);
+      const rect = this.add.circle(0, 0, r, 0x12121f, 0.85)
+        .setStrokeStyle(4, slot.color, 1);
       const text = this.add.text(0, 0, slot.label, {
-        fontSize: '20px', color: '#' + slot.color.toString(16).padStart(6, '0'),
-        fontFamily: 'monospace',
+        fontSize: slotFontPx(r), color: '#ffffff',
+        fontFamily: 'Arial, sans-serif',
+        stroke: '#ffffff', strokeThickness: 0.1, // 일반↔볼드 사이 두께: 흰 글자에 얇은 흰 stroke
+        resolution: SLOT_TEXT_RES, // Scale.FIT 확대 시 비트맵 뭉개짐 방지 (고해상도로 구움)
       }).setOrigin(0.5);
       this._slotRects.push(rect);
       this._slotTexts.push(text);
@@ -1133,12 +1143,16 @@ export default class UIScene extends Phaser.Scene {
     this._layoutSkillSlots();
   }
 
-  /** A/B 슬롯 시각을 현재 위치(Settings.getSlotPos — 개별 커스텀 또는 기본 미러)로 배치. */
+  /**
+   * A/B 슬롯 시각을 현재 위치(getSlotPos)·크기(getSlotRadius)로 배치.
+   * 위치·크기 단일 출처(Settings)를 그대로 반영 — 편집 확정 후에도 이 경로로 갱신.
+   */
   _layoutSkillSlots() {
     ['A', 'B'].forEach((slot, i) => {
       const c = getSlotPos(slot);
-      this._slotRects[i].setPosition(c.x, c.y);
-      this._slotTexts[i].setPosition(c.x, c.y);
+      const r = getSlotRadius(slot);
+      this._slotRects[i].setPosition(c.x, c.y).setRadius(r);
+      this._slotTexts[i].setPosition(c.x, c.y).setFontSize(slotFontPx(r));
     });
   }
 
@@ -1445,23 +1459,33 @@ export default class UIScene extends Phaser.Scene {
       .setStrokeStyle(2, 0x4ecca3, 0.8).setDepth(126);
     const joyThumb = this.add.circle(joy.x, joy.y, 22, 0x4ecca3, 0.85).setDepth(127);
 
-    // A/B 버튼 프록시 (실제 슬롯과 동일 56×56)
-    const mkSlotProxy = (label, pos, color) => {
-      const rect = this.add.rectangle(pos.x, pos.y, 56, 56, 0x1a1a2e, 0.92)
-        .setStrokeStyle(2, color, 0.9).setDepth(126);
+    // A/B 버튼 프록시 (실제 슬롯과 동일 — getSlotRadius 반지름 원형)
+    const mkSlotProxy = (label, pos, color, rad) => {
+      const rect = this.add.circle(pos.x, pos.y, rad, 0x12121f, 0.92)
+        .setStrokeStyle(4, color, 1).setDepth(126);
       const text = this.add.text(pos.x, pos.y, label, {
-        fontSize: '20px', color: '#' + color.toString(16).padStart(6, '0'), fontFamily: 'monospace',
+        fontSize: slotFontPx(rad), color: '#ffffff',
+        fontFamily: 'Arial, sans-serif',
+        stroke: '#ffffff', strokeThickness: 0.1, // 일반↔볼드 사이 두께: 흰 글자에 얇은 흰 stroke
+        resolution: SLOT_TEXT_RES,
       }).setOrigin(0.5).setDepth(127);
       return { rect, text };
     };
-    const aP = mkSlotProxy('A', a, 0x4ecca3);
-    const bP = mkSlotProxy('B', b, 0xe63946);
+    const aR = getSlotRadius('A'), bR = getSlotRadius('B');
+    const aP = mkSlotProxy('A', a, 0x4ecca3, aR);
+    const bP = mkSlotProxy('B', b, 0xe63946, bR);
 
     this._lp = {
-      joy:  { ...joy }, a: { ...a }, b: { ...b },
+      joy:  { ...joy }, a: { ...a }, b: { ...b }, aSize: aR, bSize: bR,
       joyBase, joyThumb, aRect: aP.rect, aText: aP.text, bRect: bP.rect, bText: bP.text,
+      aSlider: null, bSlider: null,
     };
     this._layoutEls = [backdrop, hint, joyBase, joyThumb, aP.rect, aP.text, bP.rect, bP.text];
+
+    // 크기 슬라이더 (상단 hint 아래 — 하단 프록시와 겹치지 않게)
+    const sx = cx - 70, sw = 120;
+    this._lp.aSlider = this._buildSizeSlider(sx, 138, sw, 'A', 0x4ecca3);
+    this._lp.bSlider = this._buildSizeSlider(sx, 174, sw, 'B', 0xe63946);
 
     const mkBtn = (label, ox, color, tcolor, cb) => {
       const by = GAME_H - 70;
@@ -1484,8 +1508,8 @@ export default class UIScene extends Phaser.Scene {
   _pickLayoutTarget(x, y) {
     const targets = [
       { type: 'joystick', x: this._lp.joy.x, y: this._lp.joy.y, r: 58 },
-      { type: 'A', x: this._lp.a.x, y: this._lp.a.y, r: 40 },
-      { type: 'B', x: this._lp.b.x, y: this._lp.b.y, r: 40 },
+      { type: 'A', x: this._lp.a.x, y: this._lp.a.y, r: Math.max(40, this._lp.aSize + 12) },
+      { type: 'B', x: this._lp.b.x, y: this._lp.b.y, r: Math.max(40, this._lp.bSize + 12) },
     ];
     let best = null, bestD = Infinity;
     for (const o of targets) {
@@ -1515,6 +1539,56 @@ export default class UIScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * 편집 화면용 A/B 크기 슬라이더. 비율 0~1 ↔ 반지름 [SLOT_R_MIN, SLOT_R_MAX] 매핑.
+   * 드래그 시 해당 프록시 원·글자·this._lp 크기를 갱신. 요소는 _layoutEls 에 push.
+   * { setRatio } 반환 — 초기화에서 thumb 위치 동기화에 사용.
+   */
+  _buildSizeSlider(leftX, y, w, slot, color) {
+    const isA = slot === 'A';
+    const r2ratio = (r) => (r - SLOT_R_MIN) / (SLOT_R_MAX - SLOT_R_MIN);
+    const r0 = Phaser.Math.Clamp(r2ratio(isA ? this._lp.aSize : this._lp.bSize), 0, 1);
+
+    const label = this.add.text(leftX - 8, y, slot + ' 크기', {
+      fontSize: '12px', color: '#aabbcc', fontFamily: 'monospace',
+    }).setOrigin(1, 0.5).setDepth(127);
+    const track = this.add.rectangle(leftX, y, w, 6, 0x1a1a2e)
+      .setOrigin(0, 0.5).setDepth(127).setInteractive({ cursor: 'pointer' });
+    const fill = this.add.rectangle(leftX, y, w * r0, 6, color)
+      .setOrigin(0, 0.5).setDepth(127);
+    const thumb = this.add.rectangle(leftX + w * r0, y, 14, 20, 0xddeeff)
+      .setOrigin(0.5).setDepth(128).setInteractive({ cursor: 'pointer' });
+
+    const applyRatio = (r) => {
+      fill.width = w * r;
+      thumb.x    = leftX + w * r;
+      const rad = Math.round(SLOT_R_MIN + (SLOT_R_MAX - SLOT_R_MIN) * r);
+      const rect = isA ? this._lp.aRect : this._lp.bRect;
+      const text = isA ? this._lp.aText : this._lp.bText;
+      rect.setRadius(rad);
+      text.setFontSize(slotFontPx(rad));
+      if (isA) this._lp.aSize = rad; else this._lp.bSize = rad;
+    };
+    const apply = (px) => applyRatio(Phaser.Math.Clamp((px - leftX) / w, 0, 1));
+    track.on('pointerdown', (p) => { apply(p.x); this._dragSlider = apply; });
+    thumb.on('pointerdown', () => { this._dragSlider = apply; });
+
+    // 이 슬롯만 기본 크기로 (슬라이더 옆 개별 초기화)
+    const defRatio = (SLOT_R_DEFAULT - SLOT_R_MIN) / (SLOT_R_MAX - SLOT_R_MIN);
+    const rbX = leftX + w + 30;
+    const rbtn = this.add.rectangle(rbX, y, 44, 22, 0x1a1a2e)
+      .setStrokeStyle(1.5, color, 0.9).setDepth(127).setInteractive({ cursor: 'pointer' });
+    const rtxt = this.add.text(rbX, y, '기본', {
+      fontSize: '11px', color: '#aabbcc', fontFamily: 'monospace',
+    }).setOrigin(0.5).setDepth(128);
+    rbtn.on('pointerover', () => rbtn.setFillStyle(0x26263e));
+    rbtn.on('pointerout',  () => rbtn.setFillStyle(0x1a1a2e));
+    rbtn.on('pointerdown', () => applyRatio(defRatio));
+
+    this._layoutEls.push(label, track, fill, thumb, rbtn, rtxt);
+    return { setRatio: applyRatio };
+  }
+
   /** 편집 중 프록시들을 기본 위치로 (저장 전 미리보기). */
   _resetLayoutProxies() {
     const jx = 90, jy = this.scale.height - 130;  // InputManager 기본값(JX=90, JY_FROM_BOTTOM=130)
@@ -1530,6 +1604,10 @@ export default class UIScene extends Phaser.Scene {
       rect.setPosition(x, y);
       text.setPosition(x, y);
     });
+    // 크기도 기본값으로 — 슬라이더 thumb 동기화(setRatio 가 프록시 원·글자·lp 크기까지 갱신)
+    const defRatio = (SLOT_R_DEFAULT - SLOT_R_MIN) / (SLOT_R_MAX - SLOT_R_MIN);
+    this._lp.aSlider?.setRatio(defRatio);
+    this._lp.bSlider?.setRatio(defRatio);
   }
 
   _exitLayoutEdit(commit) {
@@ -1542,6 +1620,8 @@ export default class UIScene extends Phaser.Scene {
       setJoystickPos(this._lp.joy.x, this._lp.joy.y);
       setSlotPos('A', this._lp.a.x, this._lp.a.y);
       setSlotPos('B', this._lp.b.x, this._lp.b.y);
+      setSlotSize('A', this._lp.aSize);
+      setSlotSize('B', this._lp.bSize);
       im?.setBasePosition(this._lp.joy.x, this._lp.joy.y);
       this._layoutSkillSlots();
     }

@@ -11,6 +11,10 @@ const TRAVEL_R = 50;    // 핸들 최대 이동 반경 (요구사항)
 const BASE_R   = 58;    // 베이스 원 시각 반경 (여유분 8px)
 const THUMB_R  = 22;    // 핸들 원 시각 반경
 
+// 활성화 영역: 베이스 중심에서 이 반경 안을 눌렀을 때만 조이스틱 작동.
+// 시각(BASE_R=58)보다 넉넉하되(엄지 도달 여유) 화면 절반 전체처럼 과하지 않게.
+const ACTIVATE_R = 130;
+
 // 미세 떨림 무시
 const DEAD_ZONE = 4;
 
@@ -130,6 +134,9 @@ export default class InputManager {
       // setBasePosition 으로 좌↔우 이동 시 _jx 가 갱신되므로 활성화 영역도 따라 뒤집힌다.
       const onJoystickHalf = this._jx < halfW ? p.x <= halfW : p.x > halfW;
       if (!onJoystickHalf) return;
+      // 베이스 주변 ACTIVATE_R 반경 안에서만 — 멀리 떨어진 곳 탭으로는 작동하지 않게.
+      const ddx = p.x - this._jx, ddy = p.y - this._jy;
+      if (ddx * ddx + ddy * ddy > ACTIVATE_R * ACTIVATE_R) return;
       // A/B 버튼이 조이스틱 쪽에 자유 배치된 경우, 버튼 위 탭은 공격으로 넘기고 이동은 무시.
       if (isInActionSlot(p.x, p.y)) return;
 
