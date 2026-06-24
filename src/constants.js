@@ -2,8 +2,18 @@ export const GAME_W = 390;
 export const GAME_H = 844;
 export const HUD_H  = 88;   // 상단 HUD 높이 — UIScene TOP_H 와 반드시 일치
 
-// 층(1~20 선형 카운터) ↔ 구역/표시층 매핑.
-//   구역 1: 층 1~10 (풀숲 1~5 + 깊은 숲 6~10)
-//   구역 2: 층 11~20 (1·2구역 적 혼합·강화, 보라톤) — 화면엔 다시 1~10층으로 재표시
-export const zoneOf       = (floor) => Math.ceil(floor / 10);    // 1..2
+// 구역/층 구조 — 총 4구역 × 10층 = 40층 (설계 목표). 선형 카운터 1~MAX_FLOOR.
+//   구역 1: 층  1~10  풀숲 (base)
+//   구역 2: 층 11~20  더 깊은 숲 = 구역 1 강화·혼합, 보라톤
+//   구역 3: 층 21~30  사냥꾼 영역 = 동물 + 인간 사냥꾼 (base, 신규 로스터)
+//   구역 4: 층 31~40  추격의 끝 = 구역 3 강화·혼합
+// 화면엔 각 구역이 다시 1~10층으로 재표시(displayFloor).
+export const MAX_ZONE  = 4;
+export const MAX_FLOOR = MAX_ZONE * 10;   // 40
+
+export const zoneOf       = (floor) => Math.ceil(floor / 10);    // 1..MAX_ZONE
 export const displayFloor = (floor) => ((floor - 1) % 10) + 1;   // 1..10
+
+// 강화 구역 = 짝수 구역(2·4). 홀수 구역(1·3)은 base 로스터, 다음 짝수 구역이 그것을 ×배수 강화·혼합한다.
+//   구역 1↔2, 구역 3↔4 가 각각 base↔강화 쌍.
+export const isStrengthenedZone = (floor) => zoneOf(floor) % 2 === 0;

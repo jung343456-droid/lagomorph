@@ -5,8 +5,8 @@
  * 패턴:
  *   idle          → chase(282px 이내 탐지)
  *   chase         → 121px/s 추격 (격노 시 165px/s)
- *   swipe_windup  → 80px 이내 접근 시 0.2초 예고 (2타째는 0.15초 — 플레이어 방향 재조준)
- *   swipe         → 0.2초간 120px 반경 정면 120° 부채꼴 피해 (측면·등 뒤 안전), 시각 잔상 +0.1초
+ *   swipe_windup  → 80px 이내 접근 시 0.5초 예고 (2타째는 0.15초 — 플레이어 방향 재조준)
+ *   swipe         → 0.2초간 96px 반경 정면 120° 부채꼴 피해 (측면·등 뒤 안전), 시각 잔상 +0.1초
  *                   2회 연속 발동 — 타격마다 휘두르는 방향으로 200px/s 전진(한 걸음 ~40px), 타당 1회 피해
  *                   피격 스턴 시 콤보 취소(cooldown 으로 복귀)
  *   cooldown      → 1.8초 정지 (격노 시 1.0초)
@@ -20,13 +20,13 @@ const DETECT_R       = 282;
 const CHASE_SPEED    = 121;
 const RAGE_SPEED     = 165;
 const SWIPE_RANGE    = 80;
-const SWIPE_RADIUS   = 120;
+const SWIPE_RADIUS   = 96;             // 할퀴기 피해 판정 반경 (사거리)
 const SWIPE_HALF_ANGLE = Math.PI / 3;            // 부채꼴 반각 60° (전체 120°)
 const SWIPE_DOT_MIN  = Math.cos(SWIPE_HALF_ANGLE); // 피해 판정 내적 하한 (0.5)
 const SWIPE_DMG      = 22;
 const SWIPE_PUSH     = 350;
 const SWIPE_PUSH_DUR = 0.25;
-const SWIPE_WINDUP   = 0.2;
+const SWIPE_WINDUP   = 0.5;            // 1타 선딜레이
 const SWIPE_WINDUP_NEXT = 0.15; // 2타째 예고 — 1타보다 짧게, 플레이어 방향 재조준
 const SWIPE_COUNT    = 2;       // 연속 발동 횟수
 const SWIPE_STEP_SPEED = 200;   // 타격 중 전진 속도 (px/s) — SWIPE_DUR 0.2s 동안 한 걸음 ~40px

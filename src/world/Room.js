@@ -1,12 +1,13 @@
 import Phaser from 'phaser';
-import { GAME_W, GAME_H, HUD_H } from '../constants';
+import { GAME_W, GAME_H, HUD_H, isStrengthenedZone } from '../constants';
 
 export const ROOM_W = GAME_W;           // 방 너비 = 캔버스 너비
 export const ROOM_H = GAME_H - HUD_H;  // 방 높이 = 게임플레이 뷰포트 높이 (스크롤 없음)
 export const WALL_T = 20;   // 벽 두께 (px)
 export const DOOR_W = 80;   // 문 통로 너비 (px) — 플레이어 body(55×53) 가 여유롭게 통과하도록 80
 
-// 구역 2(층 11~20) 보라톤 — BootScene 가 hue-rotate 로 만든 '_p' 텍스처를 _tex()로 선택(새 에셋 없음).
+// 배경 톤 — 강화 구역(짝수 구역 2·4)은 BootScene 가 hue-rotate 로 만든 '_p'(보라) 텍스처를 _tex()로 선택.
+// base 구역(홀수 구역 1·3 = 풀숲형)은 기본 초록 grass 텍스처. (새 에셋 없이 런타임 생성)
 
 const WALL_COLOR     = 0x3a3a5e; // 벽 색상 (진한 남색)
 const OBSTACLE_COLOR = 0x2a2a50; // 장애물 색상
@@ -23,7 +24,7 @@ export default class Room {
   constructor(scene, data, floorNum = 1) {
     this.scene = scene;
     this.data  = data;
-    this._purple = floorNum >= 11;  // 구역 2(11~20층) → 보라톤 틴트
+    this._purple = isStrengthenedZone(floorNum);  // 강화 구역(2·4) → 보라톤 / base 구역(1·3) → 초록
 
     this.wallGroup      = scene.physics.add.staticGroup();
     this.obstacleGroup  = scene.physics.add.staticGroup();
@@ -126,7 +127,7 @@ export default class Room {
 
   // ── private ─────────────────────────────────────────
 
-  /** 11층 이상(구역 2) 방이면 '_p'(보라톤) 텍스처 키로 치환 (BootScene 가 hue-rotate 로 생성) */
+  /** 강화 구역(2·4) 방이면 '_p'(보라톤) 텍스처 키로 치환 (BootScene 가 hue-rotate 로 생성) */
   _tex(key) {
     return this._purple ? `${key}_p` : key;
   }

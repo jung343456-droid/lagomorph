@@ -276,7 +276,7 @@ export default class AttackManager {
   _fireMelee() {
     const tier   = MELEE_TIERS[this._calcTier(this._mChargeTime * this.player.chargeSpeedMult, MELEE_TIERS)];
     const radius = tier.radius * this.player.meleeRadiusMult;
-    const damage = Math.round(this.player.baseAttack * tier.dmgMult * this.player.meleeDamageMult);
+    const damage = Math.round(this.player.baseAttack * tier.dmgMult * this.player.meleeDamageMult * (1 + this.player.hungerDamageBonus()));
     const { x: px, y: py } = this.player;
 
     this.scene.events.emit('attack-fired', {

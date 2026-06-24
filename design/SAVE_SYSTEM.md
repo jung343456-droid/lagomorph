@@ -82,9 +82,11 @@
 - 제외: `SNAPSHOT_SKIP`(`scene/gameObject/_hpBg/_hpFill/_blinkEvent`) + 함수/Phaser 객체 → **순환참조 방지 필수**
 - 복원(`_restoreEnemy`): `new Cls(scene, x, y)` → `Object.assign(enemy, props)` → 좌표/속도 적용 → 엘리트면 `_applyEliteTint`
 
-타입 매핑은 `ALL_CLASSES`(일반 적 + 보스 `fang/wolf/blackbear/owlking`)와 역방향 `CLASS_TO_TYPE`. 적 클래스를 **추가하면 매핑에도 반영**해야 복원된다.
+타입 매핑은 `ALL_CLASSES`(일반 적 `fox/.../toad` + 구역3 `daggerhunter/bowhunter/snake/crow/badger` + 보스 `fang/wolf/blackbear/owlking/hound/hunterboss`)와 역방향 `CLASS_TO_TYPE`. 적 클래스를 **추가하면 매핑에도 반영**해야 복원된다.
 
-> **구역 3·4 강화(`_applyZoneBuff`, 층 11~20)는 별도 처리 불필요.** ×1.4/×1.1 변형 결과가 `maxHp·hp·damage·speedMult·baseSpeedMult·zoneBuffed`라는 number/boolean 인스턴스 프로퍼티에 그대로 남아 스냅샷에 보존되고, `Object.assign`으로 복원된다. 복원 경로에서 버프를 **재적용하지 않으므로 중복 강화 없음**. `currentFloor`는 1~20 범위로 저장된다.
+> **구역 강화(`_applyZoneBuff`, 짝수 구역 2·4)는 별도 처리 불필요.** ×1.4/×1.1 변형 결과가 `maxHp·hp·damage·speedMult·baseSpeedMult·zoneBuffed`라는 number/boolean 인스턴스 프로퍼티에 그대로 남아 스냅샷에 보존되고, `Object.assign`으로 복원된다. 복원 경로에서 버프를 **재적용하지 않으므로 중복 강화 없음**. `currentFloor`는 1~`MAX_FLOOR`(40) 범위로 저장된다.
+
+> **구역 3 신규 적의 비-스칼라 상태는 자동 제외돼 안전.** 올가미/표식 등(`_snares`·`_aimGfx`·`_auraTargets`)은 배열/Set/Phaser 객체라 `_snapshotEnemy`의 number/string/boolean + 평면 `{x,y}` 필터에서 걸러진다(거미줄 `_webs`·독 웅덩이 `_puddles`와 동일). 복원 시 이 잔존 hazard는 사라진다(의도된 미저장).
 
 ### 3. 상태이상 Map은 인덱스로
 `_poisoned/_burned/_frozen`은 `Map<enemy, entry>`라 인스턴스 키를 직렬화할 수 없다. **live 배열 인덱스**로 변환해 저장하고, 복원 시 같은 순서로 재구성한 `enemies[idx]`를 키로 Map을 재구축한다. → 적 직렬화/복원 순서가 동일해야 idx가 유효.
@@ -106,7 +108,7 @@
 ### 5. 의도적 미저장
 - **비행 중 적 투사체**(`_enemyProjs`): 클래스별 텍스처 재생성이 취약 → 제외(곧 벽에 소멸하는 단명 객체).
 - **복원 시 `enemy.update(0, player)` 호출 안 함**: 보스 AI 부수효과(howl 소환 등)가 즉발될 수 있어서. HP바/스프라이트는 다음 `GameScene.update` 프레임(~16ms)에 자동 동기화.
-- **플레이어 전이성 상태**(무적·넉백·슬로우 타이머)·**근거리 충전 게이지**: 복원 시 리셋.
+- **플레이어 전이성 상태**(무적·넉백·슬로우·**올가미 속박(`_rootTimer`)·뱀 독(`_poisonTimer`)** 타이머)·**근거리 충전 게이지**: 복원 시 리셋(`Player.applySave`).
 
 ### 6. 메타 픽업 정합성
 `MetaProgress._runPicked`를 저장본 `meta.runPicked`에 포함해 복원한다(`beginMetaRun()` 후 `addRunPickup(saved)`). "저장 후 종료"는 `commitMetaRun()`을 호출하지 않는다(런 미종료). 실제 정산은 사망/클리어/포기 시 1회만.

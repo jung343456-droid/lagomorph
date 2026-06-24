@@ -87,14 +87,76 @@ export default class BootScene extends Phaser.Scene {
     this.load.image('spider-web',      'assets/enemies/zone-2/spider/spider-web.png');
     this.load.image('toad-puddle',     'assets/enemies/zone-2/toad/toad-puddle.png');
     this.load.image('owlking-feather', 'assets/enemies/zone-2/owlking/owlking-feather.png');
+
+    // zone-3 적 (Hunter's Domain) — 방향 스프라이트(8방향)만 로드.
+    // 액션 키(lurk/strike/mark/dive/claw/burrow/idle/lunge/aim/windup/slash/summon/rage)는
+    // 아직 PNG 가 없어 _generateZone3Placeholders 가 placeholder 로 채운다(미존재 키만).
+    [
+      'badger', 'crow', 'daggerhunter', 'bowhunter', 'snake', 'hound',
+    ].forEach((name) => {
+      DIRS.forEach(d => this.load.image(`${name}-${d}`, `assets/enemies/zone-3/${name}/${name}-${d}.png`));
+    });
+    // 수석 사냥꾼 보스: 아트 폴더명은 hunterleader, 코드 텍스처 키는 hunterboss-* 로 매핑.
+    DIRS.forEach(d => this.load.image(`hunterboss-${d}`, `assets/enemies/zone-3/hunterleader/hunterleader-${d}.png`));
   }
 
   create() {
     this._generateTextures();
     this._generatePurpleTiles();
+    this._generateZone3Placeholders();
     // 오디오 적용 레이어에 전역 sound manager 연결 (볼륨/음소거 설정 반영용)
     attachSound(this.sound);
     this.scene.start('HubScene');
+  }
+
+  // 구역 3 적·보조 텍스처의 fallback placeholder — 코드로 생성.
+  // 방향 스프라이트(8방향)는 preload 에서 실제 PNG 로 로드되므로 여기서 덮어쓰지 않고(미존재
+  // 키만 채움 — textures.exists 가드), PNG 로드 실패 시에만 대체된다. 각 적의 액션 상태(strike/
+  // mark/dive/claw/burrow/lunge/aim/windup/slash 등)는 별도 스프라이트 없이 방향 스프라이트를
+  // 재사용하므로(엔티티 _updateSprite 참조) 더 이상 액션 키 placeholder 를 만들지 않는다.
+  _generateZone3Placeholders() {
+    const g = this.make.graphics({ add: false });
+    const DIRS = ['n','ne','e','se','s','sw','w','nw'];
+    const keysFor = (name, actions) => [...DIRS.map(d => `${name}-${d}`), ...actions.map(a => `${name}-${a}`)];
+    const emit = (keys, w, h, draw) => {
+      g.clear();
+      draw(g, w, h);
+      keys.forEach(k => { if (!this.textures.exists(k)) g.generateTexture(k, w, h); });
+    };
+    const humanoid = (color) => (gg, w, h) => {
+      gg.fillStyle(color, 1);            gg.fillRoundedRect(w * 0.2, h * 0.26, w * 0.6, h * 0.72, 4); // 몸통
+      gg.fillStyle(0xe8c8a0, 1);         gg.fillCircle(w * 0.5, h * 0.16, w * 0.16);                  // 머리
+      gg.fillStyle(0xff3322, 1);         gg.fillCircle(w * 0.5, h * 0.15, 2);                         // 붉은 눈
+    };
+    const animal = (color) => (gg, w, h) => {
+      gg.fillStyle(color, 1);            gg.fillEllipse(w * 0.5, h * 0.58, w * 0.82, h * 0.62);       // 몸
+      gg.fillStyle(0xff3322, 1);         gg.fillCircle(w * 0.64, h * 0.46, 2);                        // 붉은 눈
+    };
+
+    emit(keysFor('daggerhunter', []), 40, 56, humanoid(0x6b5436));
+    emit(keysFor('bowhunter',    []), 40, 56, humanoid(0x5a6b3a));
+    emit(keysFor('snake',        []), 36, 26, animal(0x4a7a3a));
+    emit(keysFor('crow',         []), 32, 26, animal(0x2a2a33));
+    emit(keysFor('badger',       []), 44, 34, animal(0x9a9488));
+    emit(keysFor('hound',        []), 42, 34, animal(0x3a3026));
+    emit(keysFor('hunterboss',   []), 64, 80, humanoid(0x5a4a30));
+
+    // 올가미 덫 — 밧줄 고리
+    if (!this.textures.exists('snare')) {
+      g.clear();
+      g.lineStyle(4, 0xc8a060, 0.85); g.strokeCircle(40, 40, 33);
+      g.lineStyle(2, 0x8b6b3a, 0.7);  g.strokeCircle(40, 40, 23);
+      g.generateTexture('snare', 80, 80);
+    }
+    // 사냥꾼 화살
+    if (!this.textures.exists('hunter-arrow')) {
+      g.clear();
+      g.fillStyle(0xc8ccd0, 1); g.fillRect(2, 6, 14, 4);
+      g.fillStyle(0x8b6b3a, 1); g.fillRect(0, 4, 4, 8);
+      g.generateTexture('hunter-arrow', 16, 16);
+    }
+
+    g.destroy();
   }
 
   // 구역 2(11~20층) 보라톤 타일 — grass/장애물 텍스처를 색조 회전(hue-rotate)으로 변형해 '_p' 키로 등록.

@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { GAME_W, GAME_H, HUD_H, zoneOf, displayFloor } from '../constants';
+import { GAME_W, GAME_H, HUD_H, zoneOf, displayFloor, MAX_FLOOR, MAX_ZONE } from '../constants';
 import Player from '../entities/Player';
 import InputManager from '../utils/InputManager';
 import AttackManager from '../systems/AttackManager';
@@ -98,31 +98,34 @@ export default class GameScene extends Phaser.Scene {
     beginMetaRun();
     if (save) addRunPickup(save.meta?.runPicked ?? 0);
 
-    // 보스 클리어: 랜덤 아이템 드롭(보유 패시브 + 미수집 월드 아이템 제외) + 계단 표시 / 구역 클리어
-    //   일반 출구방              → 계단
-    //   3·8·13·18 (중간보스)     → 레어 아이템 추가 드롭 + 계단
-    //   5·15 (보스) / 10 (보스)  → 계단 (10층은 구역 1 → 2 경계라 "ZONE 2 진입" 안내)
-    //   20 (구역 2 최종 OWL KING) → ZONE 2 CLEAR (런 종료)
+    // 보스 클리어: 패시브 드롭 + 계단 표시 / 구역 전환 / 런 종료 (모두 displayFloor·zoneOf 기준).
+    //   일반 출구방               → 계단
+    //   표시 3·8층 (중간보스)      → 레어 아이템 추가 드롭 + 계단
+    //   표시 5·10층 (보스)         → 계단. 표시 10층이 구역 경계면(비최종) "ZONE n+1 진입" 안내
+    //   30층(구역3 보스)           → "공허함" 서사 배너
+    //   MAX_FLOOR=40(구역4 보스)   → "사냥꾼=로봇" 자각 연출 → ZONE 4 CLEAR (런 종료)
     this.events.on('boss-cleared', ({ x, y, floor, roomId }) => {
-      // 출구방은 보스/중간보스 없이 일반 적만 있는 층도 포함 — 실제 보스(5·10·15·20)·중간보스(3·8·13·18)
-      // 층에서만 패시브 아이템 드롭. 그 외 일반 층 클리어는 아이템 미드롭.
-      const isBossFloor    = floor % 5 === 0;            // 5·10·15·20
-      const isMidBossFloor = floor % 5 === 3;            // 3·8·13·18
-      if (isBossFloor || isMidBossFloor) {
-        this._dropPassiveItem(x, y);
+      // 실제 보스(표시 5·10층)·중간보스(표시 3·8층) 층에서만 패시브 아이템 드롭.
+      const zone = zoneOf(floor);
+      const df   = displayFloor(floor);
+      const isBossFloor    = df === 5 || df === 10;
+      const isMidBossFloor = df === 3 || df === 8;
+      if (isBossFloor || isMidBossFloor) this._dropPassiveItem(x, y);
+
+      if (floor === MAX_FLOOR) {
+        // 최종 보스(구역 4 표시 10층) — "죽인 사냥꾼이 로봇이었다" 자각 연출 후 런 종료
+        this.time.delayedCall(800, () => this._showHunterTruth(zone));
+        return;
       }
-      if (floor === 20) {
-        // 구역 2 최종 보스 처치 → 런 종료
-        this.time.delayedCall(1500, () => this._showZoneClear(2));
-      } else {
-        // 중간보스(층 3·8·13·18): 회복 레어 아이템 추가 드롭
-        if (floor === 3 || floor === 8 || floor === 13 || floor === 18) {
-          this.enemyManager.dropRareItem(x - 40, y);
-        }
-        this.time.delayedCall(800, () => this._markStairs(roomId, x, y + 90));
-        // 구역 경계 통과 안내 — 10→11 (구역 1 → 구역 2)
-        if (floor === 10) this.time.delayedCall(1200, () => this._showZoneTransition(2));
+      // 중간보스(표시 3·8층): 회복 레어 아이템 추가 드롭
+      if (isMidBossFloor) this.enemyManager.dropRareItem(x - 40, y);
+      // 구역 3 보스(표시 10층, 비최종): "드디어 죽였지만 공허함" 연출
+      if (zone === 3 && df === 10) {
+        this.time.delayedCall(600, () => this._showStoryBanner('…사냥꾼을 죽였다. 그런데, 왜 아무것도 느껴지지 않지?'));
       }
+      this.time.delayedCall(800, () => this._markStairs(roomId, x, y + 90));
+      // 구역 경계(표시 10층) 통과 안내
+      if (df === 10 && zone < MAX_ZONE) this.time.delayedCall(1200, () => this._showZoneTransition(zone + 1));
     });
 
     // 엘리트 처치: 보유하지 않은 랜덤 패시브 아이템 드롭
@@ -270,7 +273,7 @@ export default class GameScene extends Phaser.Scene {
 
     // 디버그: 숫자 1 → 누를 때마다 다음 층으로 이동
     this.input.keyboard.on('keydown-ONE', () => {
-      if (this.currentFloor >= 20) return;
+      if (this.currentFloor >= MAX_FLOOR) return;
       this._advanceFloor();
     });
 
@@ -294,6 +297,18 @@ export default class GameScene extends Phaser.Scene {
     this.input.keyboard.on('keydown-FIVE', () => {
       if (this.currentFloor >= 11) return;
       this.currentFloor = 10;  // _advanceFloor() 가 +1 하여 11 도달
+      this._advanceFloor();
+    });
+
+    // 디버그: 숫자 7 → 21층(구역 3 시작) / 숫자 9 → 31층(구역 4 시작)
+    this.input.keyboard.on('keydown-SEVEN', () => {
+      if (this.currentFloor >= 21) return;
+      this.currentFloor = 20;
+      this._advanceFloor();
+    });
+    this.input.keyboard.on('keydown-NINE', () => {
+      if (this.currentFloor >= 31) return;
+      this.currentFloor = 30;
       this._advanceFloor();
     });
 
@@ -616,8 +631,8 @@ export default class GameScene extends Phaser.Scene {
   }
 
   _advanceFloor() {
-    // 20층 이후로는 계단 트리거 자체가 발생하지 않지만 방어용 가드
-    if (this.currentFloor >= 20) return;
+    // 최종 층 이후로는 계단 트리거 자체가 발생하지 않지만 방어용 가드
+    if (this.currentFloor >= MAX_FLOOR) return;
     this._disposeStairs();
     this._stairsRoomId    = null;
     this._stairsPos       = null;
@@ -700,6 +715,47 @@ export default class GameScene extends Phaser.Scene {
             targets: txt, alpha: 0, duration: 400, ease: 'Quad.In',
             onComplete: () => { if (txt.active) txt.destroy(); },
           });
+        });
+      },
+    });
+  }
+
+  /** 서사용 일시 표시 배너 (구역 3 보스 처치 "공허함" 등) — 비차단, 잠깐 떴다 사라짐 */
+  _showStoryBanner(msg) {
+    const txt = this.add.text(ROOM_W / 2, ROOM_H / 2 - 40, msg, {
+      fontSize: '15px', color: '#cfd8dc', fontFamily: 'monospace', fontStyle: 'italic',
+      stroke: '#000000', strokeThickness: 3, align: 'center', wordWrap: { width: ROOM_W - 60 },
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(91).setAlpha(0);
+    this.tweens.add({
+      targets: txt, alpha: 1, duration: 500, ease: 'Quad.Out',
+      onComplete: () => {
+        this.time.delayedCall(2600, () => {
+          this.tweens.add({
+            targets: txt, alpha: 0, duration: 600, ease: 'Quad.In',
+            onComplete: () => { if (txt.active) txt.destroy(); },
+          });
+        });
+      },
+    });
+  }
+
+  /** 최종 보스(구역 4) 처치 — 쓰러진 사냥꾼이 로봇이었음을 자각하는 연출 후 런 종료 */
+  _showHunterTruth(zone = MAX_ZONE) {
+    const bg = this.add.rectangle(0, 0, GAME_W, GAME_H, 0x000000, 0)
+      .setOrigin(0).setScrollFactor(0).setDepth(95);
+    const txt = this.add.text(GAME_W / 2, (GAME_H - HUD_H) / 2,
+      '쓰러진 사냥꾼의 몸에서\n부서진 회로가 드러난다.\n\n…전부, 기계였다.', {
+        fontSize: '18px', color: '#ff6666', fontFamily: 'monospace', fontStyle: 'bold',
+        align: 'center', stroke: '#000000', strokeThickness: 4, lineSpacing: 6,
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(96).setAlpha(0);
+    this.tweens.add({ targets: bg,  alpha: 0.85, duration: 700 });
+    this.tweens.add({
+      targets: txt, alpha: 1, duration: 800, ease: 'Quad.Out',
+      onComplete: () => {
+        this.time.delayedCall(2600, () => {
+          if (bg.active)  bg.destroy();
+          if (txt.active) txt.destroy();
+          this._showZoneClear(zone);
         });
       },
     });

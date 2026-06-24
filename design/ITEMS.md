@@ -41,6 +41,8 @@
 | `secret_sense` | 예리한 후각 | 연보라 `0xbb88ee` | 비밀 방 입구 벽이 뚜렷하게 드러남 (투명도 0.65→0.2, `Room._buildSecretWall`) | `player.hasSecretSense = true` |
 | `core_affinity` | 코어 체질 | 청록 `0x00d4aa` | 방 클리어 시 남은 코어 전량 자동 흡수 (없으면 코어는 바닥에 남아 직접 근처로 가야 수집) | `player.autoCollectCores = true` |
 | `core_crystal` | 코어 결정체 | 청록 `0x00e0ff` | **기본 공격력 +1** (중복 획득 가능). 스택형 — 드롭·상점(45코어)·시작방에 일반 아이템처럼 등장 + 일반 패시브 소진 시 확정 폴백 드롭 | `player.baseAttack += 1` |
+| `hungry_spirit` | 헝그리 정신 | 연두 `0x99ff33` | 부족분(500−코어) ×0.1% 만큼 **근거리(A) 공격 피해 증가**, 3~30% 클램프 (코어 ≥ 500 이어도 하한 3% 상시). 코어 200 이하에서 +30% 도달. 실시간 코어량으로 매 공격 재계산 (트랩·스플래시 미적용) | `player.hasHungrySpirit = true` |
+| `satiety` | 포만감 | 호박 `0xffaa33` | 코어 1개당 **치명타 피해 +0.1%**, 최대 +100% (코어 1000개에서 도달). `critMult` 에 합산되어 모든 치명타(근거리·트랩 직격·스플래시)에 적용. 실시간 코어량으로 매 공격 재계산. 헝그리 정신의 정반대(코어를 쌓을수록 강화) | `player.hasSatiety = true` |
 
 ---
 
@@ -48,10 +50,11 @@
 
 근거리·설치 공격 데미지의 **단일 출처**. 초기값 10.
 
-- **근거리(A)**: `round(baseAttack × dmgMult × meleeDamageMult)` — 충전 단계별 `dmgMult` = `1.0 / 1.2 / 1.4` (`AttackManager.MELEE_TIERS`). 기본 10/12/14.
+- **근거리(A)**: `round(baseAttack × dmgMult × meleeDamageMult × (1 + hungerDamageBonus()))` — 충전 단계별 `dmgMult` = `1.0 / 1.2 / 1.4` (`AttackManager.MELEE_TIERS`). 기본 10/12/14. 헝그리 정신 보너스는 여기에만 적용.
 - **설치형(B)**: `baseAttack × TRAP_DMG_MULT(3)` (`AttackManager._placePoop`). 기본 30. 구버전 세이브 복원은 저장된 값 우선(`POOP_DMG=30` 폴백).
 - 스플래시(`SPLASH_DMG=15`)는 baseAttack과 무관하게 고정.
 - `core_crystal`로 +1 될 때마다 근거리·설치가 함께 상승.
+- **헝그리 정신(`hungry_spirit`)**: `AttackManager._fireMelee` 에서 근거리(A) base 데미지에 `hungerDamageBonus()`(부족분 ×0.1%, 3~30% 클램프 — 코어 500↑ 이어도 하한 3%)를 곱한다. 근거리 공격에만 적용되며 트랩·스플래시에는 영향 없음.
 
 ---
 
@@ -81,6 +84,8 @@
 | `hasMapReveal` | `false` | 현재 층 전체 방을 지도에 표시 (던전의 감각, 비밀방 제외) |
 | `hasSecretSense` | `false` | 비밀 방 입구 벽 투명도 0.2 로 뚜렷하게 비침 (예리한 후각, Room._buildSecretWall) |
 | `autoCollectCores` | `false` | 방 클리어 시 남은 코어 전량 자석 흡수 (EnemyManager._collectAllCores 게이팅) |
+| `hasHungrySpirit` | `false` | 헝그리 정신 — 부족분(500−코어) ×0.1% 근거리 피해 증가(3~30% 클램프, 코어 500↑ 이어도 하한 3%). `AttackManager._fireMelee` 가 `hungerDamageBonus()` 로 근거리(A) base 에만 곱함 |
+| `hasSatiety` | `false` | 포만감 — 코어 ×0.1% 치명타 피해 증가(최대 +100%, 코어 1000개에서 도달). `Player.rollAttackDamage` 가 `satietyCritBonus()` 를 `critMult` 에 합산해 모든 치명타에 적용 |
 
 ---
 

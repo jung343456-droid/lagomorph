@@ -42,6 +42,8 @@
  *   metaRetainRate   0.25   사망 시 메타 픽업분 보존율 (영구 해금 '잔해 회수 I~IV' +0.05 씩 → 최대 0.45) — MetaProgress.commitMetaRun 참조
  *   autoCollectCores false  방 클리어 시 남은 코어 전량 자석 흡수 — 기본 해제, 패시브 아이템으로 활성화 (EnemyManager._collectAllCores 게이팅)
  *   corePickupRange  55     코어 자동 흡수 시작 반경(px) — 해금 '코어 흡수 I~III' +15 씩 (→ 70/85/100)
+ *   hasHungrySpirit  false  헝그리 정신 — 코어 < 500 일 때 부족분 ×0.1% 근접(A) 피해 증가(3~30% 클램프, 코어 500↑ 이어도 하한 3%). AttackManager._fireMelee 에 반영
+ *   hasSatiety       false  포만감 — 코어 ×0.1% 치명타 피해 증가(최대 +100%, 코어 1000 에서 도달). rollAttackDamage 에서 critMult 에 합산
  *
  * 임시 저장: serialize() 로 좌표·스탯·플래그·인벤토리를 평문 객체로 추출, applySave(data) 로 복원한다.
  *   복원 시 저장된 스탯으로 전부 덮어쓴다 — 런 중 패시브 아이템이 변경한 값까지 반영하기 위함
@@ -55,6 +57,7 @@ const DISPLAY_H    = 56;    // 표시 높이 근사치 (px) — 데미지/회복
 const BODY_W       = 40;    // 물리 히트박스 너비 (px)
 const BODY_H       = 38;    // 물리 히트박스 높이 (px)
 const WALK_FPS_MS  = 125;   // 걷기 프레임 전환 간격 (ms) ≈ 8fps
+const POISON_TICK  = 0.5;   // 플레이어 독 DoT 틱 간격 (s) — 구역 3 뱀
 
 // soma-walk 시트: 8행(방향) × 4열(걷기 프레임). 행 = 반시계 방향 순서.
 // 프레임 인덱스 = row*4 + frame (Phaser 스프라이트시트 행우선 인덱싱)
@@ -72,7 +75,7 @@ const SAVE_STAT_KEYS = [
   'healItemMult', 'coreDropMult', 'hpPerRoomClear', 'shopSlotBonus', 'armor', 'damageReduction',
   'trapMaxBonus', 'startingCores', 'invulnDurationMult', 'hasMapReveal', 'hasSecretSense', 'extraLives',
   'extraStartItems', 'shopPriceMult', 'metaRetainRate', 'autoCollectCores', 'corePickupRange',
-  'baseAttack',
+  'baseAttack', 'hasHungrySpirit', 'hasSatiety',
 ];
 
 export default class Player {
@@ -86,6 +89,10 @@ export default class Player {
     this._invincible     = false;
     this._knockbackTimer = 0;
     this._slowTimer      = 0;     // 구역 2 거미줄 — applySlow(dur) 로 갱신, > 0 동안 이동속도 ×0.4
+    this._rootTimer      = 0;     // 구역 3 올가미 덫 — applyRoot(dur) 로 갱신, > 0 동안 이동 0 (속박)
+    this._poisonTimer    = 0;     // 구역 3 뱀 독 — applyPoison(dps,dur) 로 갱신, POISON_TICK 마다 DoT
+    this._poisonDps      = 0;     // 독 초당 피해 (틱당 dps×POISON_TICK 적용, 방어력 관통)
+    this._poisonTick     = 0;     // 다음 독 틱까지 남은 시간 (s)
     this.facingDir       = { x: 0, y: 1 };
     this.lastDamageSource = null; // 마지막으로 피해 입힌 적 식별자 (사망 결과창 표시용)
 
@@ -123,6 +130,8 @@ export default class Player {
     this.metaRetainRate   = 0.25; // 사망 시 메타 픽업분 보존율 — 잔해 회수 해금으로 +0.05 씩 (MetaProgress.commitMetaRun 참조)
     this.autoCollectCores = false; // 방 클리어 시 남은 코어 전량 자석 흡수 — 기본 해제, 패시브 아이템으로 활성화 (EnemyManager._collectAllCores 참조)
     this.corePickupRange  = 55;  // 코어 자동 흡수 시작 반경(px) — 해금 '코어 흡수 I~III' +15 씩 (EnemyManager update 자석 분기 참조)
+    this.hasHungrySpirit  = false; // 헝그리 정신 — 코어 < 500 일 때 부족분 ×0.1% 근접 피해 증가(3~30%), AttackManager._fireMelee 에서 적용
+    this.hasSatiety       = false; // 포만감 — 코어 ×0.1% 만큼 치명타 피해 증가(최대 +100%), rollAttackDamage 에서 critMult 에 합산
     this.inventory        = [];
     this._dir            = 'bottom';
     this._row            = DIR_ROW.bottom; // 현재 방향 행
@@ -152,9 +161,19 @@ export default class Player {
   update({ x, y }, delta) {
     const dt = delta / 1000;
     if (this._slowTimer > 0) this._slowTimer = Math.max(0, this._slowTimer - dt);
+    if (this._rootTimer > 0) this._rootTimer = Math.max(0, this._rootTimer - dt);
+    this._tickPoison(dt);
 
     if (this._knockbackTimer > 0) {
       this._knockbackTimer = Math.max(0, this._knockbackTimer - dt);
+      return;
+    }
+    // 올가미 속박 — 이동 0, 정지 프레임 (방향 입력은 무시)
+    if (this._rootTimer > 0) {
+      this.gameObject.body.setVelocity(0, 0);
+      this._animFrame = 0;
+      this._animTimer = 0;
+      this.gameObject.setFrame(this._row * 4, false, false);
       return;
     }
     const slowMult = this._slowTimer > 0 ? 0.3 : 1;
@@ -188,6 +207,35 @@ export default class Player {
   /** 거미줄 등 슬로우 효과 — 매 프레임 갱신되며 만료되면 자동 해제 */
   applySlow(duration) {
     if (duration > this._slowTimer) this._slowTimer = duration;
+  }
+
+  /** 올가미 덫 속박 — duration 동안 이동 0 (구역 3). 더 긴 지속만 갱신. */
+  applyRoot(duration) {
+    if (duration > this._rootTimer) this._rootTimer = duration;
+  }
+
+  /** 뱀 독 — dps 만큼 duration 동안 DoT(방어력 관통, 구역 3). 더 강하거나 긴 쪽으로 갱신. */
+  applyPoison(dps, duration) {
+    this._poisonDps   = Math.max(this._poisonDps, dps);
+    if (duration > this._poisonTimer) {
+      this._poisonTimer = duration;
+      this._poisonTick  = POISON_TICK; // 즉시 중복틱 방지 — 첫 틱은 POISON_TICK 후
+    }
+  }
+
+  /** 독 DoT 틱 — update 에서 매 프레임 호출. 이동/넉백/속박과 무관하게 진행. */
+  _tickPoison(dt) {
+    if (this._poisonTimer <= 0) { this._poisonDps = 0; return; }
+    this._poisonTimer = Math.max(0, this._poisonTimer - dt);
+    this._poisonTick -= dt;
+    if (this._poisonTick <= 0) {
+      this._poisonTick += POISON_TICK;
+      const dmg = Math.max(1, Math.round(this._poisonDps * POISON_TICK));
+      this.lastDamageSource = '뱀독';
+      const dead = this.takeDamage(dmg, null, { bypassArmor: true });
+      if (dead) this.scene.events.emit('player-dead');
+    }
+    if (this._poisonTimer <= 0) this._poisonDps = 0;
   }
 
   /**
@@ -319,9 +367,31 @@ export default class Player {
    * 치명타 굴림 — base 데미지에 critRate 확률로 critMult 배율 적용.
    * @returns {{ damage:number, isCrit:boolean }} 적용할 정수 데미지와 치명타 여부
    */
+  /**
+   * 헝그리 정신 근접 피해 보너스 비율 — 코어 < 500 이면 부족분 ×0.1%, 3~30% 클램프.
+   * 코어 ≥ 500 이어도 하한 3% 는 항상 적용. 미보유 시만 0. 코어 잔량은 EnemyManager 에서 실시간 조회.
+   * AttackManager._fireMelee 에서 근접(A) 데미지에만 곱한다.
+   */
+  hungerDamageBonus() {
+    if (!this.hasHungrySpirit) return 0;
+    const cores = this.scene?.enemyManager?.coreCount ?? 0;
+    return Math.min(0.30, Math.max(0.03, (500 - cores) * 0.001));
+  }
+
+  /**
+   * 포만감 치명타 피해 보너스 비율 — 코어 ×0.1%, 최대 +100%(코어 1000개에서 도달).
+   * 미보유 시 0. 헝그리 정신의 정반대(코어를 쌓을수록 강화). 코어 잔량은 실시간 조회.
+   * rollAttackDamage 에서 critMult 에 합산해 모든 치명타(근접·트랩·스플래시)에 적용.
+   */
+  satietyCritBonus() {
+    if (!this.hasSatiety) return 0;
+    const cores = this.scene?.enemyManager?.coreCount ?? 0;
+    return Math.min(1.0, cores * 0.001);
+  }
+
   rollAttackDamage(base) {
     const isCrit = Math.random() < this.critRate;
-    const damage = isCrit ? Math.round(base * this.critMult) : base;
+    const damage = isCrit ? Math.round(base * (this.critMult + this.satietyCritBonus())) : base;
     return { damage, isCrit };
   }
 
@@ -367,6 +437,10 @@ export default class Player {
     this._invincible     = false;
     this._knockbackTimer = 0;
     this._slowTimer      = 0;
+    this._rootTimer      = 0;
+    this._poisonTimer    = 0;
+    this._poisonDps      = 0;
+    this._poisonTick     = 0;
     this._animFrame      = 0;
     this._animTimer      = 0;
 

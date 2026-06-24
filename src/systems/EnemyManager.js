@@ -13,12 +13,20 @@ import Bear     from '../entities/Bear';
 import Toad     from '../entities/Toad';
 import BlackBear from '../entities/BlackBear';
 import OwlKing  from '../entities/OwlKing';
+import DaggerHunter from '../entities/DaggerHunter';
+import BowHunter    from '../entities/BowHunter';
+import Snake        from '../entities/Snake';
+import Crow         from '../entities/Crow';
+import Badger       from '../entities/Badger';
+import Hound        from '../entities/Hound';
+import HunterBoss   from '../entities/HunterBoss';
 import Core     from '../entities/Core';
 import RareItem, { PICKUP_R as RARE_PICKUP_R, MAGNET_SPEED as RARE_MAGNET_SPEED, COLLECT_R as RARE_COLLECT_R } from '../entities/RareItem';
 import { ROOM_W, ROOM_H, WALL_T } from '../world/Room';
 import { showDamageNumber } from '../utils/DamageNumbers';
 import { addRunPickup } from '../data/MetaProgress';
 import { altarCostFor } from '../data/AltarPool';
+import { isStrengthenedZone, zoneOf, displayFloor } from '../constants';
 
 const CORE_PICKUP_R          = 55;  // 코어 자동 흡수 시작 반경 기본값 (px) — 해금으로 player.corePickupRange 증가
 const CORE_MAGNET_SPEED      = 400; // 코어 자석 이동 속도 (px/s)
@@ -34,9 +42,8 @@ const ELITE_DMG_MULT         = 2;    // 엘리트 공격력 ×2
 const ELITE_SPD_MULT         = 1.8;  // 엘리트 이동속도 ×1.8 (speedMult/baseSpeedMult 경유 — 모든 적 이동이 곱함)
 const MIN_SPAWN_DIST         = 160;      // 플레이어 진입 위치와 적 스폰 최소 거리 (px)
 
-// 구역 2(층 11~20) 강화 배수 — 1구역 기준 적 스탯 대비. 보스 포함 모든 스폰에 적용.
-// (ZONE34_* 네이밍은 구버전 4구역 잔재 — 실제 조건은 floorNum >= 11)
-const ZONE34_FLOOR     = 11;  // 이 층 이상에서 강화 적용
+// 강화 구역(짝수 구역 2·4) 배수 — 직전 홀수 구역(1·3) base 스탯 대비. 보스 포함 모든 스폰에 적용.
+// 적용 여부는 isStrengthenedZone(floorNum)(constants) — 구역 2(11~20)·구역 4(31~40)에서 true.
 const ZONE34_HP_MULT   = 1.4; // HP ×1.4
 const ZONE34_DMG_MULT  = 1.4; // 공격력 ×1.4
 const ZONE34_SPD_MULT  = 1.1; // 이동속도 ×1.1 (speedMult / baseSpeedMult 경유)
@@ -47,10 +54,12 @@ const ENEMY_CLASSES = {
   fox: Fox, rat: Rat, weasel: Weasel, hedgehog: Hedgehog, squirrel: Squirrel,
   // 구역 2
   bat: Bat, boar: Boar, spider: Spider, bear: Bear, toad: Toad,
+  // 구역 3 (인간 사냥꾼 + 동물 신규 로스터)
+  daggerhunter: DaggerHunter, bowhunter: BowHunter, snake: Snake, crow: Crow, badger: Badger,
 };
 
 // 보스 클래스 — 임시 저장 복원용 타입 매핑에 포함 (스폰 테이블엔 들어가지 않음)
-const BOSS_CLASSES = { fang: Fang, wolf: Wolf, blackbear: BlackBear, owlking: OwlKing };
+const BOSS_CLASSES = { fang: Fang, wolf: Wolf, blackbear: BlackBear, owlking: OwlKing, hound: Hound, hunterboss: HunterBoss };
 
 // 복원 시 사용하는 type↔Class 양방향 매핑 (일반 적 + 보스 전부 포함)
 const ALL_CLASSES   = { ...ENEMY_CLASSES, ...BOSS_CLASSES };
@@ -136,6 +145,24 @@ const MIXED_POOL = [
   { type: 'bear',     weight: 1 },
 ];
 for (let f = 11; f <= 20; f++) FLOOR_SPAWN_TABLES[f] = MIXED_POOL;
+
+// 구역 3(층 21~30) — 인간 사냥꾼 2종 + 동물 3종. 1구역 계열 미사용. 표시층별 점진 추가.
+const Z3 = {
+  daggerhunter: { type: 'daggerhunter', weight: 2 },
+  bowhunter:    { type: 'bowhunter',    weight: 2 },
+  snake:        { type: 'snake',        weight: 2 },
+  crow:         { type: 'crow',         weight: 2 },
+  badger:       { type: 'badger',       weight: 1 },
+};
+FLOOR_SPAWN_TABLES[21] = [Z3.snake, Z3.daggerhunter];
+FLOOR_SPAWN_TABLES[22] = [Z3.snake, Z3.daggerhunter, Z3.bowhunter];
+FLOOR_SPAWN_TABLES[23] = [Z3.snake, Z3.daggerhunter, Z3.bowhunter, Z3.crow];
+FLOOR_SPAWN_TABLES[24] = [Z3.daggerhunter, Z3.bowhunter, Z3.crow, Z3.snake, Z3.badger];
+// 구역 3 혼합 풀 — 5종 전체. 25~30층 공용.
+const MIXED_POOL_Z3 = [Z3.daggerhunter, Z3.bowhunter, Z3.snake, Z3.crow, Z3.badger];
+for (let f = 25; f <= 30; f++) FLOOR_SPAWN_TABLES[f] = MIXED_POOL_Z3;
+// 구역 4(층 31~40) — 구역 3 혼합 풀을 강화·랜덤 배치(isStrengthenedZone → ×1.4 적용).
+for (let f = 31; f <= 40; f++) FLOOR_SPAWN_TABLES[f] = MIXED_POOL_Z3;
 
 // 3마리 묶음 스폰되는 타입 — Rat(들쥐), Bat(박쥐)
 const PACK_TYPES = new Set(['rat', 'bat']);
@@ -423,22 +450,37 @@ export default class EnemyManager {
     const enemy = new Cls(this.scene, x, y);
     enemy.gameObject.body.setMaxVelocity(350, 350);
     enemy.gameObject.body.setCollideWorldBounds(true);
-    if (this.floorNum >= ZONE34_FLOOR) this._applyZoneBuff(enemy);
+    if (isStrengthenedZone(this.floorNum)) this._applyZoneBuff(enemy);
     this.enemies.push(enemy);
     this.enemyGroup.add(enemy.gameObject);
     return enemy;
   }
 
-  /** 중간보스방:
-   *   층 3·13: Wolf 2마리 (수행원은 Wolf 자체 howl 소환)
-   *   층 8·18: BlackBear 1마리 (포효 시 멧돼지 2 소환)
-   *   층 13·18(구역 2)은 ZONE34 배수로 강화.
+  /** 중간보스방 (표시 3·8층):
+   *   구역 1·2 — 표시 3층: Wolf 2마리 / 표시 8층: BlackBear 1마리
+   *   구역 3·4 — 표시 3층: 사냥개 2마리 / 표시 8층: 정예 사냥꾼 듀오(단검+활) ※placeholder
+   *   짝수 구역(2·4)은 isStrengthenedZone 배수로 강화.
    */
   spawnMidBoss(x, y) {
     this._clearAll();
     this._hadEnemies = true;
-    const buffed = this.floorNum >= ZONE34_FLOOR;
-    if (this.floorNum === 8 || this.floorNum === 18) {
+    const buffed = isStrengthenedZone(this.floorNum);
+    const zone = zoneOf(this.floorNum);
+    const df   = displayFloor(this.floorNum);
+
+    if (zone >= 3) {
+      if (df === 3) {
+        this._addBossUnit(new Hound(this.scene, x - 60, y), buffed, 440);
+        this._addBossUnit(new Hound(this.scene, x + 60, y), buffed, 440);
+      } else {
+        // 표시 8층: 정예 사냥꾼 듀오 (spawnEnemy 가 구역 강화 + push 처리, 이후 엘리트 변이)
+        this._makeElite(this.spawnEnemy('daggerhunter', x - 60, y));
+        this._makeElite(this.spawnEnemy('bowhunter',    x + 60, y));
+      }
+      return;
+    }
+
+    if (df === 8) {
       const bb = new BlackBear(this.scene, x, y);
       bb.gameObject.body.setMaxVelocity(350, 350);
       bb.gameObject.body.setCollideWorldBounds(true);
@@ -448,33 +490,47 @@ export default class EnemyManager {
       this.boss = bb;
       this.scene.events.emit('boss-spawned', bb);
     } else {
-      [-70, 70].forEach(off => {
-        const wolf = new Wolf(this.scene, x + off, y);
-        wolf.gameObject.body.setMaxVelocity(350, 350);
-        wolf.gameObject.body.setCollideWorldBounds(true);
-        if (buffed) this._applyZoneBuff(wolf);
-        this.enemies.push(wolf);
-        this.enemyGroup.add(wolf.gameObject);
-      });
+      [-70, 70].forEach(off => this._addBossUnit(new Wolf(this.scene, x + off, y), buffed, 350));
     }
+  }
+
+  /** 다개체 보스 구성원 1마리 등록 (Wolf·Hound 등 — this.boss 미설정, 방 클리어로 처치 판정) */
+  _addBossUnit(unit, buffed, maxVel) {
+    unit.gameObject.body.setMaxVelocity(maxVel, maxVel);
+    unit.gameObject.body.setCollideWorldBounds(true);
+    if (buffed) this._applyZoneBuff(unit);
+    this.enemies.push(unit);
+    this.enemyGroup.add(unit.gameObject);
+    return unit;
   }
 
   /** 현재 층 갱신 — _pickType()이 참조하는 풀이 바뀜 */
   setFloor(n) { this.floorNum = n; }
 
-  /** 보스방 진입 시 호출:
-   *   층 5·15 : FANG
-   *   층 10·20: OWL KING
-   *   층 15·20(구역 2)은 ZONE34 배수로 강화.
+  /** 보스방 진입 시 호출 (표시 5·10층):
+   *   구역 1·2 — 표시 5층: FANG / 표시 10층: OWL KING
+   *   구역 3·4 — 표시 5층: 사냥개 무리(3마리, 단일 보스 아님) / 표시 10층: 수석 사냥꾼(HunterBoss)
+   *   짝수 구역(2·4)은 isStrengthenedZone 배수로 강화.
    */
   spawnBoss(x, y) {
     this._clearAll();
     this._hadEnemies = true;
-    const BossCls = (this.floorNum === 10 || this.floorNum === 20) ? OwlKing : Fang;
-    const boss = new BossCls(this.scene, x, y);
+    const buffed = isStrengthenedZone(this.floorNum);
+    const zone = zoneOf(this.floorNum);
+    const df   = displayFloor(this.floorNum);
+
+    // 구역 3·4 표시 5층 — 사냥개 무리(다개체, this.boss 미설정)
+    if (zone >= 3 && df === 5) {
+      [-80, 0, 80].forEach(off => this._addBossUnit(new Hound(this.scene, x + off, y), buffed, 440));
+      return null;
+    }
+
+    let boss;
+    if (zone >= 3) boss = new HunterBoss(this.scene, x, y);
+    else           boss = new (df === 10 ? OwlKing : Fang)(this.scene, x, y);
     boss.gameObject.body.setMaxVelocity(500, 500);
     boss.gameObject.body.setCollideWorldBounds(true);
-    if (this.floorNum >= ZONE34_FLOOR) this._applyZoneBuff(boss);
+    if (buffed) this._applyZoneBuff(boss);
     this.enemies.push(boss);
     this.enemyGroup.add(boss.gameObject);
     this.boss = boss;
@@ -720,7 +776,8 @@ export default class EnemyManager {
   }
 
   /** 적 1마리를 엘리트로 변환: HP 4배, 나머지 능력치 2배, 코어 드롭 5배(최소 8), 붉은 틴트로 외형 강조 */
-  /** 구역 2(층 11~20) 적 강화 — 1구역 기준 대비 HP·공격력 ×1.4, 이동속도 ×1.1, 코어 드롭 ×1.5.
+  /** 강화 구역(짝수 구역 2·4 = isStrengthenedZone) 적 강화 — 직전 base 구역 대비 HP·공격력 ×1.4,
+   *  이동속도 ×1.1, 코어 드롭 ×1.5. (구역2=구역1 강화, 구역4=구역3 강화)
    *  변형값(maxHp·hp·damage·coreDrops·speedMult·baseSpeedMult·zoneBuffed)은 모두 숫자/불리언
    *  인스턴스 프로퍼티라 _snapshotEnemy/_restoreEnemy 로 자동 보존·복원된다(중복 적용 없음). */
   _applyZoneBuff(enemy) {

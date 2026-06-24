@@ -1,5 +1,5 @@
 /**
- * 패시브 아이템 픽업 — 총 24종 (코어 결정체 포함)
+ * 패시브 아이템 픽업 — 총 26종 (코어 결정체 포함)
  * 수집 시 플레이어 스탯에 영구 적용 (런 내 유지), 획득 이력 localStorage 저장
  * 스택형(core_crystal): stackable=true. 드롭/상점/시작방에 일반 아이템처럼 등장하되 보유 여부와 무관하게
  *   항상 후보(중복 획득) + 일반 패시브 전부 보유 시 확정 폴백 드롭. 인벤토리 ×N 누적
@@ -7,12 +7,13 @@
  * 근거리 강화: wide_claws(반경), sharp_claws(데미지), quick_claws(충전속도)
  * 근거리 상태이상: poison_claws(독), fire_claws(화상), ice_claws(빙결), thunder_claws(연쇄)
  * 치명타: cruel_claws(치명타율), precision_strike(둘 다), savage_strike(위력),
- *         blood_feast(치명 회복)
+ *         blood_feast(치명 회복), satiety(코어 비례 치명 피해)
  * 이동/생존: swift_feet(이동속도), tough_hide(최대HP), hunter_instinct(킬회복),
  *           bulletproof_vest(방어력)
  * 트랩 위장(스플래시+상태이상): fire_disguise(화상), ice_disguise(빙결), poison_disguise(중독)
  * 트랩 강화: frugal_instinct(코어소모↓), big_trap(크기)
  * 탐색/편의: map_sense(전체 지도 공개), secret_sense(비밀 벽 가시화), core_affinity(방 클리어 시 코어 자동 수집)
+ * 조건부 강화: hungry_spirit(코어 500 미만 시 부족분 비례 근접 피해 증가, 3~30% — _fireMelee 동적 적용)
  *
  * 스폰 규칙:
  *   시작 방 — 해금된 아이템 중 랜덤 1개 (첫 런은 미스폰)
@@ -173,6 +174,24 @@ export const ITEM_DEFS = {
     desc:  '방 클리어 시 남은 코어 전량 자동 수집',
     color: 0x00d4aa,
     apply: (player) => { player.autoCollectCores = true; },
+  },
+  hungry_spirit: {
+    name:  '헝그리 정신',
+    desc:  '코어 500 미만일 때 부족분 ×0.1%만큼 근접 피해 증가 (3~30%)',
+    dynDesc: (p) => p.hasHungrySpirit
+      ? `코어 500 미만 부족분 ×0.1% 근접 피해 증가 (3~30%, 현재 +${Math.round(p.hungerDamageBonus() * 100)}%)`
+      : '코어 500 미만일 때 부족분 ×0.1%만큼 근접 피해 증가 (3~30%)',
+    color: 0x99ff33,
+    apply: (player) => { player.hasHungrySpirit = true; },
+  },
+  satiety: {
+    name:  '포만감',
+    desc:  '코어 1개당 치명타 피해 +0.1% (최대 +100%)',
+    dynDesc: (p) => p.hasSatiety
+      ? `코어 1개당 치명타 피해 +0.1% (최대 +100%, 현재 +${Math.round(p.satietyCritBonus() * 100)}%)`
+      : '코어 1개당 치명타 피해 +0.1% (최대 +100%)',
+    color: 0xffaa33,
+    apply: (player) => { player.hasSatiety = true; },
   },
 };
 

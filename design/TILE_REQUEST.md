@@ -111,6 +111,38 @@ Top-down view, slightly 3D-looking chunk of rock. 5-color palette max. No anti-a
 
 ---
 
+## 구역 3·4 — 나무 건축물 (신규, 2026-06)
+
+구역 3·4(사냥꾼 영역)는 풀숲형 필드에 **나무로 지은 집·구조물**이 장애물/엄폐물로 배치된다.
+기존 바위 장애물(`tile_obstacle`)과 같은 **tileSprite 장애물 텍스처** 방식으로 추가한다(물리 충돌 포함).
+
+| 키 | 파일명 | 크기 | 설명 |
+|---|---|---|---|
+| `tile_wood_wall` | `tile_wood_wall.png` | 24×24 | 통나무 벽/오두막 외벽 (틸링용 장애물 텍스처) |
+| `tile_wood_floor` | `tile_wood_floor.png` | 40×40 | (선택) 오두막 내부 나무 바닥 변형 |
+
+- 저장 위치: `public/assets/tiles/`
+- 현 구현은 `BootScene._generatePurpleTiles()` 패턴으로 코드 생성 가능(에셋 없으면 placeholder).
+
+### tile_wood_wall — 통나무 벽 (틸링용 24×24)
+
+```
+Pixel art wooden wall/log-cabin texture tile, 24x24 px, seamlessly tileable.
+Used as an obstacle/cover texture in a grassy field. Stacked horizontal logs:
+base wood color #6B4A2A, log highlight #8B6438 on top edge, shadow gap #3A2818 between logs.
+Visible wood grain (1px darker streaks). Top-down 45-degree view. 5-color palette max. No anti-aliasing.
+```
+
+### tile_wood_floor — 오두막 나무 바닥 (선택, 40×40)
+
+```
+Pixel art wooden plank floor tile, 40x40 px, seamlessly tileable.
+Warm brown wooden planks (#6B4A2A base, #7B5635 plank highlights, #3A2818 plank seams),
+vertical plank seams every ~10px. Subtle grain. Top-down view. 5-color palette max. No anti-aliasing.
+```
+
+---
+
 ## AI 툴별 사용 팁
 
 - **Midjourney**: 각 프롬프트 뒤에 `--ar 1:1 --style raw --v 6 --tile` 추가  
