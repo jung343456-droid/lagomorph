@@ -4,6 +4,9 @@
  * 배치:
  *   - 중앙: 토끼가 잠들어있는 기상 기계 (탭/근접 시 런 시작)
  *   - 좌측(상점 한 번 이상 발견 시): GRIM NPC — 근접 시 영구 해금 메뉴 오픈
+ *   - 우측(기억 보관실을 한 번이라도 발견 시): '누군가의 기억'(비디오 테이프) — 발견한
+ *           기억 보관실(ENGRAM VAULT) 목록 메뉴. 선택 시 그 보관실이 고정 등장하는 층으로
+ *           바로 새 런 시작 (GameScene { startFloor })
  *   - 상단: 메타 코어 잔량 표시
  *   - 상단 우측: '초기화' 버튼 — 2단 확인 후 모든 메타 진행(코어/해금/패시브 이력) 삭제 + scene.restart()
  *
@@ -19,9 +22,11 @@ import { GAME_W, GAME_H, HUD_H } from '../constants';
 import Player from '../entities/Player';
 import InputManager from '../utils/InputManager';
 import Shopkeeper from '../entities/Shopkeeper';
+import MemoryTape from '../entities/MemoryTape';
 import Room, { ROOM_W, ROOM_H } from '../world/Room';
 import UnlockMenu from '../ui/UnlockMenu';
-import { getMetaCores, getShopDiscovered, resetAllProgress, getGrimIntroShown, markGrimIntroShown } from '../data/MetaProgress';
+import { getMetaCores, getShopDiscovered, resetAllProgress, getGrimIntroShown, markGrimIntroShown, getDiscoveredVaults } from '../data/MetaProgress';
+import { vaultMeta } from '../data/Vaults';
 import { hasRunSave } from '../data/SaveManager';
 import { randomGrimTip } from '../data/GrimDialogue';
 import { safeInsetBottom } from '../utils/SafeArea';
@@ -48,6 +53,10 @@ const WINDOW_COLOR    = 0x0c1118;
 
 const NPC_X_FROM_LEFT = 100; // 좌측 NPC 배치 x
 const NPC_Y_FACTOR    = 0.30; // ROOM_H * 비율
+
+// '누군가의 기억' — 우측 비디오 테이프(MemoryTape). 탭 시 발견한 기억 보관실로 바로 이동하는 메뉴.
+const TAPE_X_FROM_RIGHT = 56;   // 우측 가장자리에서 안쪽으로
+const TAPE_Y_FACTOR     = 0.30; // ROOM_H * 비율 (좌측 NPC 와 대칭)
 
 const PLAYER_START_Y_FACTOR = 0.78; // 하단에서 시작
 
@@ -85,6 +94,9 @@ export default class HubScene extends Phaser.Scene {
 
     // 중앙 기상 기계
     this._buildMachine();
+
+    // 우측 '누군가의 기억' 비디오 테이프 — 발견한 기억 보관실로 바로 이동
+    this._buildMemoryTape();
 
     // 저장된 런이 있으면 "이어하기" 버튼 노출 (기계 하단)
     if (hasRunSave()) this._buildContinueButton();
@@ -129,8 +141,8 @@ export default class HubScene extends Phaser.Scene {
   }
 
   update(_time, delta) {
-    // 대화·해금 메뉴가 열려 있으면 이동 차단 + 조이스틱 숨김 (오버레이 가림 방지)
-    const blocked = this._starting || this._grimDialogueOpen || this._unlockMenu?.alive;
+    // 대화·해금 메뉴·기억 메뉴가 열려 있으면 이동 차단 + 조이스틱 숨김 (오버레이 가림 방지)
+    const blocked = this._starting || this._grimDialogueOpen || this._unlockMenu?.alive || this._tapeMenuOpen;
     this.input$.setVisible(!blocked);
     if (blocked) return;
     this.player.update(this.input$.getDirection(), delta);
@@ -146,6 +158,9 @@ export default class HubScene extends Phaser.Scene {
       this._machinePrompt.setVisible(near);
       this._machineGlow.setStrokeStyle(near ? 3 : 2, MACHINE_GLOW, near ? 1 : 0.55);
     }
+
+    // '누군가의 기억' 테이프 근접 프롬프트 토글
+    if (this._tape) this._tape.update(this.player);
 
     // HUD 메타 코어 표시 동기화 (해금 구매로 잔량이 바뀔 수 있음)
     if (this._metaText && !this._unlockMenu) {
@@ -221,6 +236,96 @@ export default class HubScene extends Phaser.Scene {
       alpha: 0.6, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.InOut',
     });
     this._machinePromptActive = false;
+  }
+
+  // ── '누군가의 기억' 비디오 테이프 ────────────────────
+
+  _buildMemoryTape() {
+    this._tapeMenuOpen = false;
+    this._tape = null;
+    // 기억 보관실을 하나라도 발견했을 때만 허브에 테이프 등장.
+    if (getDiscoveredVaults().length === 0) return;
+    // 기억 보관실 중앙의 테이프와 동일 비주얼(MemoryTape). 허브에서는 가까이 가면 목록 메뉴를 연다.
+    // (닫은 뒤엔 한 번 멀어졌다 다시 와야 재오픈 — far→near 엣지.)
+    this._tape = new MemoryTape(this, ROOM_W - TAPE_X_FROM_RIGHT, ROOM_H * TAPE_Y_FACTOR, {
+      onApproach: () => this._openMemoryMenu(),
+    });
+  }
+
+  /** '누군가의 기억' 메뉴 — 발견한 기억 보관실 목록. 선택 시 해당 층으로 바로 진입. */
+  _openMemoryMenu() {
+    if (this._tapeMenuOpen || this._starting || this._grimDialogueOpen || this._unlockMenu?.alive) return;
+    this._tapeMenuOpen = true;
+    this.player.halt();
+
+    const cx = GAME_W / 2, cy = GAME_H / 2;
+    const found = getDiscoveredVaults().map(vaultMeta).filter(Boolean);
+    const rowH = 52;
+    const panelW = 300;
+    const panelH = 120 + Math.max(1, found.length) * rowH;
+    const els = [];
+    const close = () => {
+      els.forEach(el => { if (el?.active) el.destroy(); });
+      this._tapeMenuOpen = false;
+    };
+
+    const backdrop = this.add.rectangle(0, 0, GAME_W, GAME_H, 0x000000, 0.72)
+      .setOrigin(0).setScrollFactor(0).setDepth(200).setInteractive();
+    backdrop.on('pointerdown', close); // 바깥 탭 = 닫기
+    els.push(backdrop);
+
+    const panel = this.add.rectangle(cx, cy, panelW, panelH, 0x140c1e)
+      .setStrokeStyle(2, 0x7a4aaa).setScrollFactor(0).setDepth(201).setInteractive();
+    els.push(panel);
+
+    const top = cy - panelH / 2;
+    els.push(this.add.text(cx, top + 22, '누군가의 기억', {
+      fontSize: '15px', color: '#cc99ff', fontFamily: 'monospace', fontStyle: 'bold',
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(202));
+    els.push(this.add.text(cx, top + 44, '재생할 기억을 선택', {
+      fontSize: '11px', color: '#8877aa', fontFamily: 'monospace',
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(202));
+
+    if (found.length === 0) {
+      els.push(this.add.text(cx, cy, '아직 떠오르는 기억이 없다.\n\n던전 깊은 곳의 무너진 벽 너머에\n무언가 잠들어 있을지도.', {
+        fontSize: '12px', color: '#aa99bb', fontFamily: 'monospace', align: 'center', lineSpacing: 4,
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(202));
+    } else {
+      found.forEach((v, i) => {
+        const ry = top + 78 + i * rowH;
+        const idxLabel = String(v.idx + 1).padStart(2, '0');
+        const row = this.add.rectangle(cx, ry, panelW - 28, rowH - 10, 0x231634)
+          .setStrokeStyle(1, 0x6a4a8e, 0.9).setScrollFactor(0).setDepth(202)
+          .setInteractive({ cursor: 'pointer' });
+        const label = this.add.text(cx - panelW / 2 + 22, ry, `기억 보관실 ${idxLabel} — ${v.title}`, {
+          fontSize: '12px', color: '#ddccee', fontFamily: 'monospace', fontStyle: 'bold',
+        }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(203);
+        const floorTxt = this.add.text(cx + panelW / 2 - 22, ry, `▶ ${v.floor}층`, {
+          fontSize: '12px', color: '#bb88ff', fontFamily: 'monospace',
+        }).setOrigin(1, 0.5).setScrollFactor(0).setDepth(203);
+        row.on('pointerover', () => row.setFillStyle(0x32204a));
+        row.on('pointerout',  () => row.setFillStyle(0x231634));
+        row.on('pointerdown', () => { close(); this._startRunAtFloor(v.floor); });
+        els.push(row, label, floorTxt);
+      });
+    }
+
+    const closeBtn = this.add.text(cx, cy + panelH / 2 - 22, '닫기', {
+      fontSize: '12px', color: '#cccccc', fontFamily: 'monospace', fontStyle: 'bold',
+      backgroundColor: '#2a1f3a', padding: { x: 16, y: 6 },
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(202).setInteractive({ cursor: 'pointer' });
+    closeBtn.on('pointerdown', close);
+    els.push(closeBtn);
+  }
+
+  /** 기억 재생 — 지정한 층에서 새 런 시작 (허브 '누군가의 기억' 선택). */
+  _startRunAtFloor(floor) {
+    if (this._starting) return;
+    this._starting = true;
+    this.cameras.main.fadeOut(450, 0, 0, 0);
+    this.cameras.main.once('camerafadeoutcomplete', () => {
+      this.scene.start('GameScene', { startFloor: floor });
+    });
   }
 
   _buildHud() {

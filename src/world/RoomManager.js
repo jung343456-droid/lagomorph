@@ -229,10 +229,13 @@ export default class RoomManager {
         roomData.cleared = true;
         this._room.unlockDoors();
       } else {
-        // 엘리트 방: 출구 열린 상태 유지(도망 가능), 미클리어 상태면 엘리트 스폰
+        // 엘리트 방: 출구 열린 상태 유지(도망 가능), 미클리어 상태면 엘리트 스폰.
+        // 첫 진입에서 정한 타입을 roomData.eliteType 에 저장해 재진입 시 동일 캐릭터로 풀 HP 재스폰.
         this._room.unlockDoors();
         if (!roomData.cleared) {
-          this.enemyManager.spawnSecretElite(ROOM_W / 2, ROOM_H / 2);
+          roomData.eliteType = this.enemyManager.spawnSecretElite(
+            ROOM_W / 2, ROOM_H / 2, roomData.eliteType ?? null,
+          );
         }
       }
     } else {

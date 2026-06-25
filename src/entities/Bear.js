@@ -6,9 +6,10 @@
  *   idle          → chase(282px 이내 탐지)
  *   chase         → 121px/s 추격 (격노 시 165px/s)
  *   swipe_windup  → 80px 이내 접근 시 0.5초 예고 (2타째는 0.15초 — 플레이어 방향 재조준)
+ *                   힘을 모으는 차징 이펙트(_spawnWindupGfx): 사방 에너지 수렴 + 중심 글로우 + 방향 부채꼴 점등
  *   swipe         → 0.2초간 96px 반경 정면 120° 부채꼴 피해 (측면·등 뒤 안전), 시각 잔상 +0.1초
  *                   2회 연속 발동 — 타격마다 휘두르는 방향으로 200px/s 전진(한 걸음 ~40px), 타당 1회 피해
- *                   피격 스턴 시 콤보 취소(cooldown 으로 복귀)
+ *                   공격 동작(swipe_windup·swipe) 중 피격 시 캔슬 없이 진행 — 데미지·점멸만 입고 넉백·스턴 면역(돌진과 동일)
  *   cooldown      → 1.8초 정지 (격노 시 1.0초)
  *   stun          → 피격 시 0.3초 경직 + 넉백 (i-frame)
  *
@@ -82,6 +83,8 @@ export default class Bear {
     this._rage       = false;
     this._swipeHit   = false;  // 단일 swipe 회당 1회 피해
     this._swipesLeft = 0;      // 남은 연속 타격 수 (chase → windup 진입 시 SWIPE_COUNT 로 초기화)
+    this._windupGfx   = null;  // 차징 이펙트 graphics
+    this._windupTween = null;
 
     this._knockbackTimer    = 0;
     this._knockbackDuration = 0;
@@ -130,6 +133,7 @@ export default class Bear {
           this.state = 'swipe_windup';
           this._stateTimer = SWIPE_WINDUP;
           this.gameObject.body.setVelocity(0, 0);
+          this._spawnWindupGfx(SWIPE_WINDUP);
           break;
         }
         const speed = (this._rage ? RAGE_SPEED : CHASE_SPEED) * this.speedMult;
@@ -182,6 +186,7 @@ export default class Bear {
             this.state = 'swipe_windup';
             this._stateTimer = SWIPE_WINDUP_NEXT;
             this.gameObject.body.setVelocity(0, 0);
+            this._spawnWindupGfx(SWIPE_WINDUP_NEXT);
           } else {
             this.state = 'cooldown';
             this._stateTimer = this._rage ? SWIPE_CD_RAGE : SWIPE_CD;
@@ -221,18 +226,21 @@ export default class Bear {
     if (!this.alive || this.state === 'stun') return false;
     this.hp -= amount;
     if (this.hp <= 0) { this._die(); return true; }
-    if (knockback) {
-      const { dx, dy, force, duration } = knockback;
-      // 무거운 적: 넉백 50% 감산
-      this._knockbackTimer    = duration * 0.5;
-      this._knockbackDuration = duration * 0.5;
-      this._knockbackVx = dx * force * 0.5;
-      this._knockbackVy = dy * force * 0.5;
+    // 공격 동작(swipe_windup·swipe) 중에는 피격당해도 캔슬되지 않고 진행 — 돌진(Boar charge)과 동일.
+    // 데미지·점멸은 입되 넉백·스턴 없이 콤보를 이어간다.
+    if (this.state !== 'swipe_windup' && this.state !== 'swipe') {
+      if (knockback) {
+        const { dx, dy, force, duration } = knockback;
+        // 무거운 적: 넉백 50% 감산
+        this._knockbackTimer    = duration * 0.5;
+        this._knockbackDuration = duration * 0.5;
+        this._knockbackVx = dx * force * 0.5;
+        this._knockbackVy = dy * force * 0.5;
+      }
+      this._prevState = this.state;
+      this.state      = 'stun';
+      this.stunTimer  = 0.3;
     }
-    this._prevState = (this.state === 'swipe' || this.state === 'swipe_windup') ? 'cooldown' : this.state;
-    if (this._prevState === 'cooldown') this._stateTimer = this._rage ? SWIPE_CD_RAGE : SWIPE_CD;
-    this.state      = 'stun';
-    this.stunTimer  = 0.3;
     this._blinkHit();
     return false;
   }
@@ -246,6 +254,8 @@ export default class Bear {
 
   dispose() {
     if (this.destroyed) return;
+    if (this._windupTween) { this._windupTween.remove(); this._windupTween = null; }
+    if (this._windupGfx?.active) { this._windupGfx.destroy(); this._windupGfx = null; }
     if (this._blinkEvent) { this._blinkEvent.remove(); this._blinkEvent = null; }
     if (this._hpBg?.active)   this._hpBg.destroy();
     if (this._hpFill?.active) this._hpFill.destroy();
@@ -263,6 +273,53 @@ export default class Bear {
     this._rage = true;
     this.gameObject.setTint(TINT_RAGE);
     this.scene.cameras.main.flash(200, 200, 60, 30, false);
+  }
+
+  _spawnWindupGfx(duration) {
+    // 공격 선딜레이 동안 "힘을 모으는" 차징 연출 — 사방의 에너지가 곰에게 빨려들고,
+    // 중심 글로우가 강해지며 휘두를 방향 부채꼴이 점점 밝아진다.
+    if (this._windupTween) this._windupTween.remove();
+    if (this._windupGfx?.active) this._windupGfx.destroy();
+    const gfx = this.scene.add.graphics().setDepth(8);
+    const angle = Math.atan2(this._swipeDir.y, this._swipeDir.x);
+    const SPOKES = 10;
+    const state = { p: 0 };
+    this._windupGfx = gfx;
+    this._windupTween = this.scene.tweens.add({
+      targets: state, p: 1, duration: duration * 1000, ease: 'Quad.In',
+      onUpdate: () => {
+        if (!this.gameObject?.active) return;
+        const { x, y } = this.gameObject;
+        const p = state.p;
+        gfx.clear();
+        // 휘두를 방향 예고 부채꼴 — 힘이 모일수록 밝아짐
+        gfx.fillStyle(SWIPE_COLOR, p * p * 0.2);
+        gfx.slice(x, y, SWIPE_RADIUS, angle - SWIPE_HALF_ANGLE, angle + SWIPE_HALF_ANGLE, false);
+        gfx.fillPath();
+        // 사방에서 안쪽으로 빨려드는 에너지 스파크 (살짝 회전)
+        const inR = SWIPE_RADIUS * (1 - p) * 0.9 + 6;
+        gfx.lineStyle(2, SWIPE_COLOR, 0.3 + p * 0.6);
+        for (let i = 0; i < SPOKES; i++) {
+          const a  = (i / SPOKES) * Math.PI * 2 + p * 1.5;
+          const r1 = inR + 12 + p * 6;
+          gfx.beginPath();
+          gfx.moveTo(x + Math.cos(a) * r1, y + Math.sin(a) * r1);
+          gfx.lineTo(x + Math.cos(a) * inR, y + Math.sin(a) * inR);
+          gfx.strokePath();
+        }
+        // 중심 글로우 — 모일수록 커지고 밝아짐 (안쪽 코어는 더 밝은 색)
+        const glowR = 8 + p * 14;
+        gfx.fillStyle(SWIPE_COLOR, 0.15 + p * 0.4);
+        gfx.fillCircle(x, y, glowR);
+        gfx.fillStyle(0xffd0a0, 0.2 + p * 0.55);
+        gfx.fillCircle(x, y, glowR * 0.45);
+      },
+      onComplete: () => {
+        gfx.destroy();
+        this._windupGfx = null;
+        this._windupTween = null;
+      },
+    });
   }
 
   _spawnSwipeGfx() {
@@ -354,6 +411,8 @@ export default class Bear {
   _die() {
     this.alive = false;
     this.gameObject.body.setEnable(false);
+    if (this._windupTween) { this._windupTween.remove(); this._windupTween = null; }
+    if (this._windupGfx?.active) { this._windupGfx.destroy(); this._windupGfx = null; }
     if (this._blinkEvent) { this._blinkEvent.remove(); this._blinkEvent = null; }
     this._hpBg.destroy();
     this._hpFill.destroy();

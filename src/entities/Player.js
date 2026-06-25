@@ -214,6 +214,14 @@ export default class Player {
     if (duration > this._rootTimer) this._rootTimer = duration;
   }
 
+  /** 올가미 즉시 해제 — 덫을 5회 공격해 끊어냈을 때 호출(BowHunter). */
+  clearRoot() {
+    this._rootTimer = 0;
+  }
+
+  /** 뱀 독 중인지 — HUD HP바를 보라색으로 표시하는 데 사용(UIScene._updateHP). */
+  get isPoisoned() { return this._poisonTimer > 0; }
+
   /** 뱀 독 — dps 만큼 duration 동안 DoT(방어력 관통, 구역 3). 더 강하거나 긴 쪽으로 갱신. */
   applyPoison(dps, duration) {
     this._poisonDps   = Math.max(this._poisonDps, dps);

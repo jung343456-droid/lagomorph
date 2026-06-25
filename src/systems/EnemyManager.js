@@ -65,6 +65,12 @@ const BOSS_CLASSES = { fang: Fang, wolf: Wolf, blackbear: BlackBear, owlking: Ow
 const ALL_CLASSES   = { ...ENEMY_CLASSES, ...BOSS_CLASSES };
 const CLASS_TO_TYPE = new Map(Object.entries(ALL_CLASSES).map(([type, Cls]) => [Cls, type]));
 
+// 빙결 지속(초). 보스(단일·다개체·중간보스 모두)는 BOSS_FREEZE_MULT 로 단축.
+const FREEZE_DURATION  = 3;
+const BOSS_FREEZE_MULT = 0.5;
+const BOSS_CTORS  = Object.values(BOSS_CLASSES);
+const isBossEnemy = (e) => e.isBoss || BOSS_CTORS.some(C => e instanceof C);
+
 // 적 스칼라 스냅샷에서 제외할 키 — Phaser 객체/HP바/타이머 참조 (순환참조 방지)
 const SNAPSHOT_SKIP = new Set(['scene', 'gameObject', '_hpBg', '_hpFill', '_blinkEvent', '_eliteCleanup']);
 
@@ -509,7 +515,7 @@ export default class EnemyManager {
 
   /** 보스방 진입 시 호출 (표시 5·10층):
    *   구역 1·2 — 표시 5층: FANG / 표시 10층: OWL KING
-   *   구역 3·4 — 표시 5층: 사냥개 무리(3마리, 단일 보스 아님) / 표시 10층: 수석 사냥꾼(HunterBoss)
+   *   구역 3·4 — 표시 5층: 사냥개 2 + 정예 활사냥꾼 2(단일 보스 아님) / 표시 10층: 수석 사냥꾼(HunterBoss)
    *   짝수 구역(2·4)은 isStrengthenedZone 배수로 강화.
    */
   spawnBoss(x, y) {
@@ -519,9 +525,17 @@ export default class EnemyManager {
     const zone = zoneOf(this.floorNum);
     const df   = displayFloor(this.floorNum);
 
-    // 구역 3·4 표시 5층 — 사냥개 무리(다개체, this.boss 미설정)
+    // 구역 3·4 표시 5층 — 사냥개 2 + 정예 활사냥꾼 2 (다개체, this.boss 미설정).
+    // 활사냥꾼은 정예(강화 스탯+붉은 틴트)지만 개별 elite-killed 드롭은 억제(_noEliteDrop) —
+    // 방 클리어(boss-cleared) 시 패시브 아이템이 단 1개만 나오게 한다.
     if (zone >= 3 && df === 5) {
-      [-80, 0, 80].forEach(off => this._addBossUnit(new Hound(this.scene, x + off, y), buffed, 440));
+      this._addBossUnit(new Hound(this.scene, x - 50, y + 30), buffed, 440);
+      this._addBossUnit(new Hound(this.scene, x + 50, y + 30), buffed, 440);
+      [-90, 90].forEach(off => {
+        const hunter = this.spawnEnemy('bowhunter', x + off, y - 50);
+        this._makeElite(hunter);
+        hunter._noEliteDrop = true;
+      });
       return null;
     }
 
@@ -538,14 +552,16 @@ export default class EnemyManager {
     return boss;
   }
 
-  /** 비밀 엘리트 방: 현재 층 풀에서 1마리 선택 후 엘리트 변이. 도망용 출구는 항상 열려 있음. */
-  spawnSecretElite(x, y) {
+  /** 비밀 엘리트 방: 현재 층 풀에서 1마리 선택 후 엘리트 변이. 도망용 출구는 항상 열려 있음.
+   *  fixedType 이 주어지면 그 타입을 그대로 사용(방 재진입 시 동일 캐릭터 유지) — 항상 풀 HP 로 재스폰된다.
+   *  선택/확정된 타입을 반환해 호출측이 roomData 에 저장하도록 한다. */
+  spawnSecretElite(x, y, fixedType = null) {
     this._clearAll();
     this._hadEnemies = true;
-    const table = this._buildRoomTable(false);
-    const type  = this._pickType(table);
+    const type  = fixedType ?? this._pickType(this._buildRoomTable(false));
     const enemy = this.spawnEnemy(type, x, y);
     this._makeElite(enemy);
+    return type;
   }
 
   dropRareItem(x, y, healAmount) {
@@ -856,7 +872,7 @@ export default class EnemyManager {
 
   _applyFreeze(enemy) {
     if (this._frozen.has(enemy)) return;
-    this._frozen.set(enemy, { timer: 3 });
+    this._frozen.set(enemy, { timer: FREEZE_DURATION * (isBossEnemy(enemy) ? BOSS_FREEZE_MULT : 1) });
     enemy._hpFill?.setFillStyle(0x88ccff);
   }
 
@@ -1001,9 +1017,11 @@ export default class EnemyManager {
     return along >= 0 && along <= length && Math.abs(perp) <= halfW;
   }
 
-  /** 엘리트 처치 시 패시브 아이템 드롭 이벤트 발행 */
+  /** 엘리트 처치 시 패시브 아이템 드롭 이벤트 발행.
+   *  _noEliteDrop 가 설정된 개체(예: 사냥개 무리에 섞인 정예 활사냥꾼)는 개별 드롭을 억제 —
+   *  방 전체 클리어 시 boss-cleared 로 아이템 1개만 나오게 하기 위함. */
   dropEliteItem(enemy) {
-    if (!enemy.isElite) return;
+    if (!enemy.isElite || enemy._noEliteDrop) return;
     this.scene.events.emit('elite-killed', { x: enemy.x, y: enemy.y });
   }
 

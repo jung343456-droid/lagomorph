@@ -14,6 +14,7 @@
  * 거미줄: 플레이어 위에 있을 때 이동속도 ×0.3 슬로우 (Player._slowTimer 갱신)
  *         거미 본체는 거미줄 영향 없음 (slow는 player에게만 적용)
  *         거미 1마리당 활성 2개 (초과 시 가장 오래된 거미줄 소멸)
+ *         엘리트(isElite): throw 당 2개씩 생성(진행 방향 수직으로 60px 벌림), 활성 한도 4개
  *         거미 사망 후에도 거미줄 지속(매니저에 잔존 hazard 등록) — 지속시간 만료·dispose·방 전환(_clearAll) 시 소멸
  *
  * 시각: spider 스프라이트 + 검은 틴트, 거미줄은 spider-web 텍스처 사용
@@ -26,6 +27,8 @@ const WEB_RADIUS  = 55;   // 슬로우 판정 반경 — spider-web 프레임(11
 const WEB_IMG_SIZE = 110; // spider-web 텍스처 네이티브 프레임 (1:1 렌더)
 const WEB_DUR     = 15.0;
 const WEB_MAX     = 2;
+const WEB_MAX_ELITE = 4;  // 엘리트는 throw 당 2개 생성하므로 동시 잔존 한도도 2배
+const WEB_ELITE_OFFSET = 60; // 엘리트 두 번째 거미줄을 진행 방향 좌우로 벌리는 거리
 const LATERAL_FLIP = 1.5;
 const SPIDER_W    = 22;
 const SPIDER_H    = 22;
@@ -246,19 +249,34 @@ export default class Spider {
   }
 
   _throwWeb(dx, dy, dist, player) {
-    const len = dist > 0 ? dist : 1;
     // 플레이어 현 위치 + 약간 진행 방향 앞쪽 (속도 기준)
     const pvx = player.gameObject?.body?.velocity.x ?? 0;
     const pvy = player.gameObject?.body?.velocity.y ?? 0;
     const wx = player.x + pvx * 0.15;
     const wy = player.y + pvy * 0.15;
 
+    this._addWeb(wx, wy);
+
+    // 엘리트는 거미줄을 2개씩 생성 — 진행 방향에 수직으로 벌려 차단 범위를 넓힌다
+    if (this.isElite) {
+      const speed = Math.sqrt(pvx * pvx + pvy * pvy);
+      let ox = WEB_ELITE_OFFSET, oy = 0;
+      if (speed > 1) {
+        ox = (-pvy / speed) * WEB_ELITE_OFFSET;
+        oy = ( pvx / speed) * WEB_ELITE_OFFSET;
+      }
+      this._addWeb(wx + ox, wy + oy);
+    }
+  }
+
+  _addWeb(wx, wy) {
     const gfx = this.scene.add.image(wx, wy, 'spider-web')
       .setDisplaySize(WEB_IMG_SIZE, WEB_IMG_SIZE)
       .setDepth(7);
 
     this._webs.push({ gfx, timer: WEB_DUR, x: wx, y: wy });
-    while (this._webs.length > WEB_MAX) {
+    const max = this.isElite ? WEB_MAX_ELITE : WEB_MAX;
+    while (this._webs.length > max) {
       const old = this._webs.shift();
       if (old.gfx?.active) old.gfx.destroy();
     }

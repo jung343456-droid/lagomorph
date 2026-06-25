@@ -5,12 +5,15 @@
  *   lagomorph_meta_cores      메타 코어 잔량 (정수, 음수 불가)
  *   lagomorph_unlock_nodes    해금된 UNLOCK_NODES id 배열
  *   lagomorph_shop_discovered 상점방을 한 번이라도 진입했는지 (bool) — Hub NPC 등장 조건
+ *   lagomorph_vaults          발견한 기억 보관실 vaultIdx 배열 — Hub '누군가의 기억' 메뉴 조건
+ *   lagomorph_seen_dialogues  한 번 이상 본 대사 키 배열 — 재시청 시 건너뛰기 버튼 노출 조건
  *
  * 메타 코어 적립 규칙 (보존율 모델):
  *   - 게임 시작 시 부여되는 기본 코어(30) 및 점화의 잔해 추가 코어도 _runPicked 에 포함
  *   - 런 중 픽업한 코어는 즉시 적립되지 않고 _runPicked 카운터에만 누적
  *     (EnemyManager.update() 의 픽업 분기에서 addRunPickup() 호출)
- *   - 런 종료 시 commitMetaRun() 으로 정산: 클리어=픽업분 100%, 사망=보존율(기본 20%)만 적립
+ *   - 런 종료 시 commitMetaRun() 으로 정산: 클리어=픽업분 100%, 사망=보존율(기본 25%)만 적립
+ *     (적립량은 Math.round 반올림 — 표시 보존율과 체감 비율을 일치시키기 위함. floor 는 항상 내림이라 표시값보다 낮게 적립됐음)
  *   - 보존율은 Player.metaRetainRate (잔해 회수 해금으로 +5%p 씩 상승)
  */
 
@@ -21,6 +24,8 @@ const UNLOCK_NODES_KEY     = 'lagomorph_unlock_nodes';
 const SHOP_DISCOVERED_KEY  = 'lagomorph_shop_discovered';
 const GRIM_INTRO_KEY       = 'lagomorph_grim_intro'; // 해금상점 GRIM 첫 인사 대사를 본 적 있는지 (게임 전체 1회)
 const PASSIVE_ITEMS_KEY    = 'lagomorph_unlocked'; // PassiveItem.js 와 키 공유 — 초기화 대상에 포함
+const VAULTS_KEY           = 'lagomorph_vaults'; // 발견한 기억 보관실 vaultIdx 배열 — Hub '누군가의 기억' 메뉴 조건
+const SEEN_DLG_KEY         = 'lagomorph_seen_dialogues'; // 한 번 이상 본 대사 키 배열 — 재시청 시 건너뛰기 버튼 노출 조건
 
 // ── 메타 코어 ────────────────────────────────────────
 
@@ -65,7 +70,7 @@ export function getRunPicked() { return _runPicked; }
 export function commitMetaRun(survived, retainRate = 0.25) {
   const picked = _runPicked;
   const rate   = survived ? 1 : Math.max(0, Math.min(1, retainRate));
-  const gained = Math.floor(picked * rate);
+  const gained = Math.round(picked * rate);
   addMetaCores(gained);
   _runPicked = 0;
   return { picked, gained };
@@ -165,6 +170,53 @@ export function markGrimIntroShown() {
   try { localStorage.setItem(GRIM_INTRO_KEY, 'true'); } catch {}
 }
 
+// ── 발견한 기억 보관실 (ENGRAM VAULT) ────────────────
+//
+// 기억 보관실에 처음 진입하면 vaultIdx 를 영속 기록한다. 허브의 '누군가의 기억'(비디오 테이프)
+// 메뉴가 이 목록을 나열하고, 선택 시 해당 보관실이 있는 층으로 바로 진입한다.
+
+/** 발견한 보관실 vaultIdx 배열 (오름차순). */
+export function getDiscoveredVaults() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(VAULTS_KEY) || '[]');
+    return Array.isArray(raw) ? raw.filter(n => Number.isInteger(n)).sort((a, b) => a - b) : [];
+  } catch { return []; }
+}
+
+/** 보관실을 처음 진입하는 순간 호출 — 이후 모든 런에서 Hub 메뉴에 노출된다. */
+export function markVaultDiscovered(idx) {
+  if (!Number.isInteger(idx)) return;
+  const found = getDiscoveredVaults();
+  if (found.includes(idx)) return;
+  found.push(idx);
+  try { localStorage.setItem(VAULTS_KEY, JSON.stringify(found.sort((a, b) => a - b))); } catch {}
+}
+
+// ── 본 적 있는 대사 (건너뛰기 버튼 노출 조건) ────────
+//
+// 도입/기억 보관실 등 재시청 가능한 대사를 한 번 이상 보면 그 키를 영속 기록한다.
+// 이후 같은 대사를 다시 열 때 대화창 우측 상단에 '건너뛰기' 버튼이 노출된다.
+
+/** key 대사를 한 번이라도 본 적 있는지. */
+export function hasSeenDialogue(key) {
+  if (!key) return false;
+  try {
+    const raw = JSON.parse(localStorage.getItem(SEEN_DLG_KEY) || '[]');
+    return Array.isArray(raw) && raw.includes(key);
+  } catch { return false; }
+}
+
+/** key 대사를 봤다고 기록 (idempotent). */
+export function markDialogueSeen(key) {
+  if (!key || hasSeenDialogue(key)) return;
+  try {
+    const raw = JSON.parse(localStorage.getItem(SEEN_DLG_KEY) || '[]');
+    const arr = Array.isArray(raw) ? raw : [];
+    arr.push(key);
+    localStorage.setItem(SEEN_DLG_KEY, JSON.stringify(arr));
+  } catch {}
+}
+
 // ── 전체 초기화 ──────────────────────────────────────
 
 /** 메타 코어·해금 노드·상점 발견·패시브 획득 이력을 전부 삭제. Hub HUD 초기화 버튼에서 호출. */
@@ -175,5 +227,7 @@ export function resetAllProgress() {
     localStorage.removeItem(SHOP_DISCOVERED_KEY);
     localStorage.removeItem(GRIM_INTRO_KEY);
     localStorage.removeItem(PASSIVE_ITEMS_KEY);
+    localStorage.removeItem(VAULTS_KEY);
+    localStorage.removeItem(SEEN_DLG_KEY);
   } catch {}
 }

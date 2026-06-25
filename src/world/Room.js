@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { GAME_W, GAME_H, HUD_H, isStrengthenedZone } from '../constants';
+import { GAME_W, GAME_H, HUD_H, isStrengthenedZone, zoneOf } from '../constants';
 
 export const ROOM_W = GAME_W;           // 방 너비 = 캔버스 너비
 export const ROOM_H = GAME_H - HUD_H;  // 방 높이 = 게임플레이 뷰포트 높이 (스크롤 없음)
@@ -24,7 +24,9 @@ export default class Room {
   constructor(scene, data, floorNum = 1) {
     this.scene = scene;
     this.data  = data;
-    this._purple = isStrengthenedZone(floorNum);  // 강화 구역(2·4) → 보라톤 / base 구역(1·3) → 초록
+    this._purple = isStrengthenedZone(floorNum);  // 강화 구역(2·4) → 보라톤 / base 구역(1·3) → 원본 색
+    this._zone3  = zoneOf(floorNum) >= 3;         // 구역 3·4 → zone-3 타일셋 사용
+    this._wallKey = this._zone3 ? 'z3_ruin_wall' : 'obstacle_fence'; // 구역별 벽 텍스처
 
     this.wallGroup      = scene.physics.add.staticGroup();
     this.obstacleGroup  = scene.physics.add.staticGroup();
@@ -134,8 +136,17 @@ export default class Room {
 
   _buildFloor() {
     const T = 40;
-    // 가중치: grass_floor 50%, grass_floor_b 35%, grass_floor_flowers 10%, grass_floor_path 5%
-    const POOL = [
+    // 가중치: base 50%, b 35%, special_a 10%, special_b 5%
+    const POOL = this._zone3 ? [
+      // 구역 3·4: 사냥꾼 영역 — 폐허 바닥
+      'z3_grass_floor','z3_grass_floor','z3_grass_floor','z3_grass_floor','z3_grass_floor',
+      'z3_grass_floor','z3_grass_floor','z3_grass_floor','z3_grass_floor','z3_grass_floor',
+      'z3_grass_floor_b','z3_grass_floor_b','z3_grass_floor_b','z3_grass_floor_b',
+      'z3_grass_floor_b','z3_grass_floor_b','z3_grass_floor_b',
+      'z3_grass_floor_moss','z3_grass_floor_moss',
+      'z3_grass_floor_path',
+    ] : [
+      // 구역 1·2: 풀숲 바닥
       'grass_floor','grass_floor','grass_floor','grass_floor','grass_floor',
       'grass_floor','grass_floor','grass_floor','grass_floor','grass_floor',
       'grass_floor_b','grass_floor_b','grass_floor_b','grass_floor_b',
@@ -143,7 +154,7 @@ export default class Room {
       'grass_floor_flowers','grass_floor_flowers',
       'grass_floor_path',
     ];
-    // zone-1 타일은 좌·상단이 의도적으로 어두운 음영이므로 회전·플립을 적용하면
+    // 타일은 좌·상단이 의도적으로 어두운 음영이므로 회전·플립을 적용하면
     // 인접 타일의 어두운 가장자리가 마주쳐 검은 격자선이 도드라진다. 그대로 둔다.
     for (let row = 0; row * T < ROOM_H; row++) {
       for (let col = 0; col * T < ROOM_W; col++) {
@@ -159,7 +170,7 @@ export default class Room {
     const sd = this.data.secretDoor?.dir ?? null; // 비밀 벽이 차지하는 방향 (개구부 처리)
     const add = (x1, y1, x2, y2) => {
       const w = x2 - x1, h = y2 - y1;
-      const sprite = this.scene.add.tileSprite(x1 + w / 2, y1 + h / 2, w, h, this._tex('obstacle_fence'));
+      const sprite = this.scene.add.tileSprite(x1 + w / 2, y1 + h / 2, w, h, this._tex(this._wallKey));
       sprite.setDepth(2);
       this.scene.physics.add.existing(sprite, true);
       this.wallGroup.add(sprite);
@@ -206,7 +217,7 @@ export default class Room {
       case 'right': x1 = ROOM_W-WALL_T; y1 = 0;           x2 = ROOM_W;  y2 = ROOM_H;          break;
     }
     const w = x2 - x1, h = y2 - y1;
-    const sprite = this.scene.add.tileSprite(x1 + w/2, y1 + h/2, w, h, this._tex('obstacle_fence'));
+    const sprite = this.scene.add.tileSprite(x1 + w/2, y1 + h/2, w, h, this._tex(this._wallKey));
     sprite.setDepth(3);
     this.scene.physics.add.existing(sprite, true);
     this.wallGroup.add(sprite);
@@ -222,9 +233,15 @@ export default class Room {
       return;
     }
 
-    // zone-1 장애물 종류: tree(40×56) / bush(24×24) / stump(24×20)
-    // 같은 텍스처를 tileSprite로 겹쳐 쌓는 대신, 종류·스케일을 무작위로 골라 다양성 확보.
-    const TYPES = {
+    // 장애물 종류: 구역별 분기. stump(24×20)은 전 구역 공통.
+    // zone-1·2: tree(40×56) / bush(24×24) / stump
+    // zone-3·4: ruin_beam(40×20) / ruin_crate(28×28) / ruin_pillar(24×48) / stump
+    const TYPES = this._zone3 ? {
+      ruin_beam:   { key: 'z3_ruin_beam',   w: 40, h: 20, minS: 0.8, maxS: 1.3, weight: 2 },
+      ruin_crate:  { key: 'z3_ruin_crate',  w: 28, h: 28, minS: 0.9, maxS: 1.4, weight: 3 },
+      ruin_pillar: { key: 'z3_ruin_pillar', w: 24, h: 48, minS: 0.8, maxS: 1.2, weight: 2 },
+      stump:       { key: 'obstacle_stump', w: 24, h: 20, minS: 0.9, maxS: 1.4, weight: 2 },
+    } : {
       tree:  { key: 'obstacle_tree',  w: 40, h: 56, minS: 0.9, maxS: 1.3, weight: 2 },
       bush:  { key: 'obstacle_bush',  w: 24, h: 24, minS: 0.9, maxS: 1.5, weight: 3 },
       stump: { key: 'obstacle_stump', w: 24, h: 20, minS: 0.9, maxS: 1.4, weight: 2 },
@@ -275,15 +292,15 @@ export default class Room {
     } else {
       // 기존 저장된 레이아웃에서도 문 통로 막는 장애물은 제거 (구버전 호환)
       this.data.obstacleLayout = this.data.obstacleLayout.filter(o => {
-        const def = TYPES[o.type] || TYPES.bush;
+        const def = TYPES[o.type] || Object.values(TYPES)[0];
         const s   = o.scale ?? (o.w && o.h ? Math.max(o.w / def.w, o.h / def.h) : 1);
         return !blocksDoor(o.x, o.y, def.w * s, def.h * s);
       });
     }
 
     this.data.obstacleLayout.forEach(({ x, y, type, scale, w, h }) => {
-      // 구 포맷({x,y,w,h}) 호환: type이 없으면 bush 로 폴백
-      const def = TYPES[type] || TYPES.bush;
+      // 구 포맷({x,y,w,h}) 호환: type이 없으면 첫 번째 정의 타입으로 폴백
+      const def = TYPES[type] || Object.values(TYPES)[0];
       const s   = scale ?? (w && h ? Math.max(w / def.w, h / def.h) : 1);
       const obs = this.scene.add.image(x, y, this._tex(def.key)).setDepth(2).setScale(s);
       this.scene.physics.add.existing(obs, true);
@@ -392,7 +409,7 @@ export default class Room {
     const restAlpha = this.scene.player?.hasSecretSense ? SECRET_WALL_REVEAL_ALPHA : SECRET_WALL_ALPHA;
 
     const a = this._doorArea(dir);
-    const go = this.scene.add.tileSprite(a.cx, a.cy, a.w, a.h, this._tex('obstacle_fence'));
+    const go = this.scene.add.tileSprite(a.cx, a.cy, a.w, a.h, this._tex(this._wallKey));
     go.setDepth(2).setAlpha(restAlpha); // 일반 벽(depth 2)과 동일 톤, 투명도만 미세하게
     this.scene.physics.add.existing(go, true);
     this.wallGroup.add(go);

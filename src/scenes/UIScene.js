@@ -160,7 +160,7 @@ export default class UIScene extends Phaser.Scene {
     if (this._bagOpen || this._shopOpen || this._minimapOpen || this._dialogueOpen
         || this._pauseOpen || this._settingsOpen || this._layoutEditMode) return;
     const { player, attackManager, enemyManager } = this.gameScene ?? {};
-    if (player)        this._updateHP(player.hp, player.maxHp);
+    if (player)        this._updateHP(player.hp, player.maxHp, player.isPoisoned);
     if (attackManager) this._updateChargeGauge(attackManager);
     if (enemyManager)  this._coreText.setText(String(enemyManager.coreCount));
     if (attackManager && enemyManager) this._updateBSlot(attackManager, enemyManager);
@@ -226,10 +226,11 @@ export default class UIScene extends Phaser.Scene {
     }).setOrigin(0, 0.5);
   }
 
-  _updateHP(hp, maxHp) {
+  _updateHP(hp, maxHp, poisoned = false) {
     const r = Phaser.Math.Clamp(hp / maxHp, 0, 1);
     this._hpFill.width = HP_BAR_W * r;
-    this._hpFill.setFillStyle(r > 0.5 ? 0xe63946 : r > 0.25 ? 0xf4a261 : 0xff2222);
+    // 뱀 독 중이면 잔량과 무관하게 보라색(적 독 상태색 0xaa44ff 와 일치)
+    this._hpFill.setFillStyle(poisoned ? 0xaa44ff : r > 0.5 ? 0xe63946 : r > 0.25 ? 0xf4a261 : 0xff2222);
     this._hpText.setText(String(Math.ceil(hp)));
   }
 
@@ -1043,7 +1044,7 @@ export default class UIScene extends Phaser.Scene {
     if (this._shopMode === 'altar') em.recordAltarPurchase();
     else                            slot.sold = true;
     // 상점 오픈 중에는 update()가 스킵되므로 HP·코어 카운터를 즉시 반영
-    this._updateHP(player.hp, player.maxHp);
+    this._updateHP(player.hp, player.maxHp, player.isPoisoned);
     this._coreText.setText(String(em.coreCount));
     this._refreshShopCards();
   }
@@ -1690,15 +1691,26 @@ export default class UIScene extends Phaser.Scene {
       duration: 700, yoyo: true, repeat: -1,
     });
 
+    // 건너뛰기 — 대화창 패널 바깥, 패널 위쪽 우측에 텍스트만(테두리/배경 없음).
+    // 이미 본 대사일 때만 노출(openDialogue 에서 토글). 패널보다 위 depth + interactive.
+    this._dlgSkip = this.add.text(L + panelW - 5, T - 6, 'SKIP', {
+      fontSize: '12px', color: '#88aacc', fontFamily: 'monospace', fontStyle: 'bold',
+    }).setOrigin(1, 1).setDepth(93).setVisible(false)
+      .setInteractive({ useHandCursor: true });
+    this._dlgSkip.on('pointerover', () => this._dlgSkip.setColor('#cfe3ff'));
+    this._dlgSkip.on('pointerout',  () => this._dlgSkip.setColor('#88aacc'));
+    this._dlgSkip.on('pointerdown', (_p, _x, _y, e) => { e?.stopPropagation?.(); this._skipDialogue(); });
+
     this._dlgStaticEls = [backdrop, this._dlgPanel, this._dlgPortrait, this._dlgName,
                           this._dlgDivider, this._dlgText, this._dlgAdvance];
     this._dlgStaticEls.forEach(el => el.setVisible(false));
 
     // 열 때마다 안전영역 재측정 후 위치 보정용 — backdrop(전체화면) 제외 전 요소를 델타 이동
+    // (_dlgSkip 도 패널과 함께 이동해야 하므로 포함)
     this._dlgPanelY   = panelY;
     this._dlgPanelH   = panelH;
     this._dlgShiftEls = [this._dlgPanel, this._dlgPortrait, this._dlgName, this._dlgDivider,
-                         this._dlgText, this._dlgAdvance];
+                         this._dlgText, this._dlgAdvance, this._dlgSkip];
   }
 
   // 현재 안전영역 기준으로 대화 패널 y 를 재배치 (요소 일괄 델타 이동)
@@ -1711,7 +1723,7 @@ export default class UIScene extends Phaser.Scene {
     this._dlgPanelY = desiredY;
   }
 
-  openDialogue(lines, onComplete) {
+  openDialogue(lines, onComplete, showSkip = false) {
     if (this._dialogueOpen) return;
     this._dialogueOpen  = true;
     this._dlgLines      = lines;
@@ -1720,9 +1732,19 @@ export default class UIScene extends Phaser.Scene {
     this._repositionDialogue();
     this._dlgStaticEls.forEach(el => el.setVisible(true));
     this._dlgAdvance.setVisible(true);
+    // 건너뛰기 버튼 — 이미 본 적 있는 대사에서만 노출
+    this._dlgSkip.setVisible(!!showSkip);
     this._dlgText.setText('');
     this.scene.get('GameScene').scene.pause();
     this._typewriteLine(lines[0]);
+  }
+
+  /** 건너뛰기 — 남은 대사를 즉시 닫고 완료 콜백 실행 (마지막 줄 탭과 동일 효과). */
+  _skipDialogue() {
+    if (!this._dialogueOpen) return;
+    const cb = this._dlgOnComplete;
+    this.closeDialogue();
+    cb?.();
   }
 
   _typewriteLine(text) {
@@ -1771,7 +1793,8 @@ export default class UIScene extends Phaser.Scene {
     this._dialogueOpen = false;
     if (this._dlgTypeTimer) { this._dlgTypeTimer.remove(); this._dlgTypeTimer = null; }
     this._dlgStaticEls.forEach(el => el.setVisible(false));
-    this._dlgAdvance.setVisible(true);
+    this._dlgSkip.setVisible(false);
+    this._dlgAdvance.setVisible(false);  // 닫을 때 진행 표시 ▼ 도 숨김 (잔상 화살표 방지)
     this.scene.get('GameScene').scene.resume();
   }
 }

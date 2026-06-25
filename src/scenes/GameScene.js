@@ -10,7 +10,8 @@ import { ROOM_W, ROOM_H } from '../world/Room';
 import PassiveItem, { ITEM_DEFS } from '../entities/PassiveItem';
 import Shopkeeper from '../entities/Shopkeeper';
 import Altar from '../entities/Altar';
-import { getMetaCores, beginMetaRun, commitMetaRun, addRunPickup, getGrimIntroShown, markGrimIntroShown } from '../data/MetaProgress';
+import MemoryTape from '../entities/MemoryTape';
+import { getMetaCores, beginMetaRun, commitMetaRun, addRunPickup, getGrimIntroShown, markGrimIntroShown, markVaultDiscovered, hasSeenDialogue, markDialogueSeen } from '../data/MetaProgress';
 import { saveRunState, loadRunSave, clearRunSave } from '../data/SaveManager';
 import { randomGrimTip } from '../data/GrimDialogue';
 
@@ -29,6 +30,17 @@ const GRIM_FIRST_LINES = [
   '...자네, 토끼인가. 내가 이 입구 근처까지 내려온 게 얼마만인지. 아직 끝나지 않은 건가..',
   '이대로 있을 수는 없겠어. 거래를 하지. 코어를 가져오게. 자네가 살아남는 데 도움은 될 거야.',
   '필요한건 코어뿐이야. 이 지하에선 그게 전부지 — 돈이고, 목숨이고. 기억이기도 해. 그냥 그렇다고.',
+];
+
+// 신규 런으로 1층 진입 시 도입 대사 — VOSS-7 이 사냥꾼에게 가족을 잃던 밤의 꿈을 회상한다.
+// (이 기억이 거짓일 수 있다는 단서는 기억 보관실에서 단계적으로 드러난다 — 지금은 진실로 믿는다.)
+const FLOOR1_INTRO_LINES = [
+  '... 또 그 꿈이다.',
+  '풀숲이 짓밟히고 굴이 무너지던 밤.\n사냥꾼의 그림자가 달빛을 가렸다.',
+  '나는 숨어서 보았다. 가족이 하나씩\n그 두 발 달린 것의 손에 끌려가는 것을.\n아무도 돌아오지 않았다.',
+  '인간. 그 냄새도, 그 눈도 잊지 못한다.\n잊을 수가 없다.',
+  '약했기 때문이다. 그래서 빼앗겼다.\n다시는 그렇게 두지 않는다.',
+  '강해져야 한다. 놈들을 전부 찢어놓을 만큼.\n― 눈을 뜬다. 사냥을 시작한다.',
 ];
 
 export default class GameScene extends Phaser.Scene {
@@ -62,7 +74,17 @@ export default class GameScene extends Phaser.Scene {
       }
     }
 
-    this.currentFloor = save ? save.currentFloor : 1;
+    // 시작 층 — 복원이면 저장값, 아니면 data.startFloor(허브 '누군가의 기억'에서 보관실 층으로 바로 진입)
+    // 이 있으면 그 층, 없으면 1층. startFloor 는 1~MAX_FLOOR 로 클램프.
+    this.currentFloor = save
+      ? save.currentFloor
+      : Phaser.Math.Clamp(Math.floor(data?.startFloor ?? 1), 1, MAX_FLOOR);
+
+    // '누군가의 기억'으로 깊은 층에서 시작하면 시작 아이템을 추가 지급 — 기본 수에 더해
+    // 3개 층당 1개씩(floor/3): 6층 +2, 16층 +5, 26층 +8, 36층 +12. 일반 1층 시작·복원은 0.
+    this._memoryStartBonus = (!save && (data?.startFloor ?? 1) > 1)
+      ? Math.floor(this.currentFloor / 3)
+      : 0;
 
     // 던전 생성 → 첫 방 진입 (복원 모드는 아래 복원 블록에서 저장된 던전으로 진입)
     this.roomManager = new RoomManager(this, this.player, this.enemyManager);
@@ -86,6 +108,7 @@ export default class GameScene extends Phaser.Scene {
     // 계단 상태 (아래층 진입 트리거 — A 버튼 입력 필요)
     this._stairs           = null;
     this._altar            = null;   // 코어 제단 — 제단 비밀방(secret_cache/altar) 진입 시 스폰, 떠나면 정리 (room-entered 핸들러)
+    this._memoryTape       = null;   // '누군가의 기억' 테이프 — 기억 보관실(secret_vault) 중앙에 스폰, 떠나면 정리 (room-entered 핸들러)
     this._stairsRoomId     = null;
     this._stairsPos        = null;
     this._stairsTriggered  = false;
@@ -159,10 +182,8 @@ export default class GameScene extends Phaser.Scene {
       }
     });
 
-    // 기억 보관실 진입: 볼트 텍스트 표시
-    this.events.on('vault-entered', ({ vaultIdx }) => {
-      this._showVaultText(vaultIdx);
-    });
+    // 기억 보관실 진입 시 대사·발견 기록은 방 중앙의 비디오 테이프(MemoryTape) 근접에서 처리한다
+    // (room-entered 핸들러에서 스폰). RoomManager 의 vault-entered 이벤트는 더 이상 구독하지 않는다.
 
     // 보물방(보관함) 진입: 보상 아이템 스폰
     this.events.on('secret-cache-entered', ({ x, y, reward }) => {
@@ -197,6 +218,19 @@ export default class GameScene extends Phaser.Scene {
       } else if (!isAltarRoom && this._altar) {
         this._altar.dispose();
         this._altar = null;
+      }
+
+      // 기억 보관실(ENGRAM VAULT) — 방 중앙에 '누군가의 기억' 테이프 스폰, 떠나면 정리.
+      // 가까이 갈 때마다 그 보관실 대사를 재생하고 발견을 영속 기록(Hub 메뉴 해금)한다.
+      const isVaultRoom = roomData.type === 'secret_vault';
+      if (isVaultRoom && !this._memoryTape) {
+        const vIdx = roomData.vaultIdx;
+        this._memoryTape = new MemoryTape(this, ROOM_W / 2, ROOM_H / 2, {
+          onApproach: () => { markVaultDiscovered(vIdx); this._showVaultText(vIdx); },
+        });
+      } else if (!isVaultRoom && this._memoryTape) {
+        this._memoryTape.dispose();
+        this._memoryTape = null;
       }
 
       // 상점방 NPC 라이프사이클 — 방 바뀔 때마다 기존 NPC 정리 후 필요 시 재생성
@@ -271,6 +305,18 @@ export default class GameScene extends Phaser.Scene {
 
     this.scene.launch('UIScene', { gameScene: this });
 
+    // 신규 런으로 1층 진입 시 도입 대사 (이어하기·기억 재생 점프 startFloor>1 은 제외).
+    // openDialogue 는 UIScene.create 완료 후에만 동작하므로 'create' 이벤트를 기다려 재생한다.
+    if (!save && this.currentFloor === 1) {
+      // 한 번이라도 본 적 있으면 '건너뛰기' 버튼 노출. 본 직후 영속 기록(다음 런부터 건너뛰기 가능).
+      const introSeen = hasSeenDialogue('floor1_intro');
+      this.scene.get('UIScene').events.once('create', () => {
+        this.player.halt?.();
+        this.scene.get('UIScene').openDialogue?.(FLOOR1_INTRO_LINES, null, introSeen);
+      });
+      markDialogueSeen('floor1_intro');
+    }
+
     // 디버그: 숫자 1 → 누를 때마다 다음 층으로 이동
     this.input.keyboard.on('keydown-ONE', () => {
       if (this.currentFloor >= MAX_FLOOR) return;
@@ -300,14 +346,12 @@ export default class GameScene extends Phaser.Scene {
       this._advanceFloor();
     });
 
-    // 디버그: 숫자 7 → 21층(구역 3 시작) / 숫자 9 → 31층(구역 4 시작)
+    // 디버그: 숫자 7 → 21층(구역 3 시작) / 숫자 9 → 31층(구역 4 시작) — 현재 층 무관 언제든 점프
     this.input.keyboard.on('keydown-SEVEN', () => {
-      if (this.currentFloor >= 21) return;
       this.currentFloor = 20;
       this._advanceFloor();
     });
     this.input.keyboard.on('keydown-NINE', () => {
-      if (this.currentFloor >= 31) return;
       this.currentFloor = 30;
       this._advanceFloor();
     });
@@ -551,13 +595,34 @@ export default class GameScene extends Phaser.Scene {
         '익숙한 단어다.\n양지. 봄. 안정.\n01 보관실에서 본 그 기억이, 여기서는 파일 이름이다.',
         '「주의: 피험체가 메타데이터 불일치를 인지할 경우,\n  위화감으로 발현될 수 있음.」\n\n나는 그 풀밭을 기억한다. 분명히 안다고 생각했다.',
       ],
+      // Vault 03 — 원본
+      [
+        '[ 기억 보관실 03 — 「원본(原本)」 ]',
+        '마지막 벽이 무너진다. 영상도 보고서도 아닌,\n하나의 보관 캡슐. 그 안에서 코어가 박동하고 있다.',
+        '[ 코어 기록 / 분류: 원본 — 강제 열람됨 ]\n이 코어는 누군가의 것이었다.',
+        '양지의 봄을, 자신을 부르던 그 목소리를\n진짜로 가졌던 — 원래의 존재.',
+        'VOSS-7의 기억은 복제였다.\n원본은 코어에서 추출되어 나에게 이식됐다.\n나는 그 기억을 담을 일곱 번째 그릇이었다.',
+        '「원본 상태: 소실.  잔여 기억: VOSS-7에 귀속.」\n\n그 목소리는 내 것이 아니었다.\n하지만 나는 여전히 그것이 따뜻했다고 기억한다.',
+      ],
+      // Vault 04 — 잔향
+      [
+        '[ 기억 보관실 04 — 「잔향(殘響)」 ]',
+        '벽 너머는 텅 빈 정비실이다.\n해체된 사냥꾼 하나가 받침대 위에 누워 있다.',
+        '[ 정비 로그 / 분류: 구조체 ARC-H ]\n외피 아래로 합금 골격과 식은 회로가 드러난다.',
+        '내가 쫓던 것은 살아있지 않았다.\n분노를 쏟을 피도, 멈출 심장도 없는 — 기계.',
+        '그렇다면 나는 무엇에 복수하고 있었나.\n양지도, 봄도, 그 목소리도.\n누가 나에게 그것을 쥐여주고, 쫓게 만들었나.',
+        '「구조체 가동 로그: VOSS-7 추적 지속.  목표: 구역 4.」\n\n받침대 끝에 손으로 적은 메모가 있다.\n―미안해. 이번엔, 네가 끝까지 가길.',
+      ],
     ];
 
     const lines = VAULT_LINES[vaultIdx] ?? VAULT_LINES[0];
     const ui = this.scene.get('UIScene');
     if (ui?.openDialogue) {
       this.player.halt?.();
-      ui.openDialogue(lines, null);
+      // 이미 본 보관실 대사면 '건너뛰기' 노출. 본 직후 영속 기록.
+      const key = `vault_${vaultIdx}`;
+      ui.openDialogue(lines, null, hasSeenDialogue(key));
+      markDialogueSeen(key);
       return;
     }
 
@@ -584,22 +649,42 @@ export default class GameScene extends Phaser.Scene {
   _spawnStartRoomItem() {
     const owned = new Set(this._ownedItemIds());
     const pool  = PassiveItem.getUnlocked().filter(id => !owned.has(id));
-    // 영구 해금 '기억 단편화' 시 추가 슬롯 — 기본 1개 + extraStartItems
-    const desired   = 1 + (this.player.extraStartItems ?? 0);
+    // 기본 1개 + '기억 단편화' 해금(extraStartItems) + '누군가의 기억' 깊은 층 시작 보너스(_memoryStartBonus).
+    // 실제 개수는 미보유 해금 아이템 수(pool)가 상한 — 풀이 모자라면 거기서 잘린다.
+    const desired   = 1 + (this.player.extraStartItems ?? 0) + (this._memoryStartBonus ?? 0);
     const count     = Math.min(pool.length, desired);
-    const positions = [
-      { x: ROOM_W / 2 + 80, y: ROOM_H / 2 },
-      { x: ROOM_W / 2 - 80, y: ROOM_H / 2 },
-      { x: ROOM_W / 2,      y: ROOM_H / 2 - 80 },
-      { x: ROOM_W / 2,      y: ROOM_H / 2 + 80 },
-    ];
+    const positions = this._startItemPositions(count);
     // Fisher-Yates 부분 셔플 — 중복 없이 count 개 선택
     for (let i = 0; i < count; i++) {
       const j = i + Math.floor(Math.random() * (pool.length - i));
       [pool[i], pool[j]] = [pool[j], pool[i]];
-      const pos = positions[i] ?? positions[0];
+      const pos = positions[i] ?? positions[0] ?? { x: ROOM_W / 2, y: ROOM_H / 2 };
       this._passiveItems.push(this._makePassiveItem(pos.x, pos.y, pool[i]));
     }
+  }
+
+  /**
+   * 시작 방 아이템 배치 좌표 — 플레이어 스폰(방 중앙) 위쪽에 격자로 배치(행별 가운데 정렬).
+   * 스폰 지점과 겹치지 않게 충분히 띄워, 시작 즉시 자동 획득되지 않고 라벨을 보고 다가가 줍게 한다.
+   * (바닥 행이 가장 아래, 위로 쌓임.)
+   */
+  _startItemPositions(count) {
+    const cx = ROOM_W / 2;
+    const cols = 4, gap = 70;
+    // 바닥 행을 플레이어 스폰(ROOM_H/2)보다 위로 — 자동 획득 반경(30px)·라벨 반경(80px) 밖.
+    const bottomY = ROOM_H / 2 - 96;
+    const n   = Math.max(1, count);
+    const out = [];
+    for (let i = 0; i < n; i++) {
+      const r = Math.floor(i / cols);
+      const c = i % cols;
+      const rowCount = Math.min(cols, n - r * cols); // 이 행의 아이템 수 (가운데 정렬용)
+      out.push({
+        x: cx + (c - (rowCount - 1) / 2) * gap,
+        y: bottomY - r * gap, // 위로 쌓이게
+      });
+    }
+    return out;
   }
 
   _makePassiveItem(x, y, id) {
@@ -789,6 +874,7 @@ export default class GameScene extends Phaser.Scene {
     this.roomManager.update();
     if (this._shopkeeper) this._shopkeeper.update(this.player);
     if (this._altar) this._altar.update(this.player);
+    if (this._memoryTape) this._memoryTape.update(this.player);
 
     const _curRoomId = this.roomManager.currentRoomData?.id;
     for (const item of this._passiveItems) {

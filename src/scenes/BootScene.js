@@ -46,11 +46,19 @@ export default class BootScene extends Phaser.Scene {
     ['tile_floor', 'tile_floor_b', 'tile_crack', 'tile_moss', 'tile_wall', 'tile_obstacle']
       .forEach(key => this.load.image(key, `assets/tiles/${key}.png`));
 
-    // zone-1 용 (풀밭) — 바닥 4종 + 장애물 3종 + 울타리(벽)
+    // zone-1 용 (풀밭) — 바닥 4종 + 장애물 2종 + 울타리(벽)
     [
       'grass_floor', 'grass_floor_b', 'grass_floor_flowers', 'grass_floor_path',
-      'obstacle_fence', 'obstacle_bush', 'obstacle_stump', 'obstacle_tree',
+      'obstacle_fence', 'obstacle_bush', 'obstacle_tree',
     ].forEach(key => this.load.image(key, `assets/tiles/zone-1/${key}.png`));
+    // 그루터기(stump) — 전 구역 공통 장애물, 루트 tiles 에 보관
+    this.load.image('obstacle_stump', 'assets/tiles/obstacle_stump.png');
+
+    // zone-3 용 (사냥꾼 영역) — 바닥 4종 + 장애물 4종 + 벽 1종. 키 접두사 'z3_'
+    [
+      'grass_floor', 'grass_floor_b', 'grass_floor_moss', 'grass_floor_path',
+      'ruin_beam', 'ruin_crate', 'ruin_pillar', 'ruin_wall',
+    ].forEach(key => this.load.image(`z3_${key}`, `assets/tiles/zone-3/${key}.png`));
 
     // 적 방향 스프라이트 (8방향) + 액션 스프라이트
     const DIRS = ['n','ne','e','se','s','sw','w','nw'];
@@ -164,8 +172,12 @@ export default class BootScene extends Phaser.Scene {
   // brightness 로 더 밝게 만든다. 새 에셋 파일 없이 런타임 생성.
   _generatePurpleTiles() {
     const KEYS = [
+      // zone-1/2 타일
       'grass_floor', 'grass_floor_b', 'grass_floor_flowers', 'grass_floor_path',
       'obstacle_fence', 'obstacle_bush', 'obstacle_stump', 'obstacle_tree',
+      // zone-3/4 타일 (z3_ 접두사)
+      'z3_grass_floor', 'z3_grass_floor_b', 'z3_grass_floor_moss', 'z3_grass_floor_path',
+      'z3_ruin_beam', 'z3_ruin_crate', 'z3_ruin_pillar', 'z3_ruin_wall',
     ];
     // 초록(≈120°) → 어두운 진보라: +170° 회전. 채도 높이고 명도를 더 낮춰 깊고 어두운 보라톤.
     const FILTER = 'hue-rotate(170deg) saturate(1.7) brightness(0.7)';

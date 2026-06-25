@@ -1,4 +1,5 @@
 import { ITEM_DEFS } from '../entities/PassiveItem';
+import { VAULT_FLOOR_MAP } from '../data/Vaults';
 
 const GRID_COLS = 8;
 const GRID_ROWS = 6;
@@ -124,8 +125,7 @@ const OPP_DIR = { up: 'down', down: 'up', left: 'right', right: 'left' };
 const SECRET_CACHE_CHANCE_BASE = 0.5;  // 1층 보물방 출현 확률 (기본 50%)
 const SECRET_CACHE_CHANCE_MAX  = 0.75; // 출현 확률 상한 (75%)
 const SECRET_CACHE_CHANCE_STEP = 0.03; // 층당 증가폭 — 10층부터 상한 도달
-// 기억 보관실 고정 층 — 구역 1 후반(6층) / 구역 2 후반(16층)
-const VAULT_FLOOR_MAP = { 6: 0, 16: 1 };
+// 기억 보관실 고정 층(VAULT_FLOOR_MAP)·메타데이터는 src/data/Vaults.js 단일 출처에서 가져온다.
 
 /** combat 방에서 도어가 없는 방향 중 하나를 무작위 반환. 없으면 null. */
 function _getFreeWallDir(room) {

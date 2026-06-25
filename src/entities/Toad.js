@@ -12,6 +12,7 @@
  *
  * 독 웅덩이: 플레이어가 범위에 진입한 순간 즉시 5 피해, 이후 0.5초마다 5 피해 — 방어력(armor/damageReduction) 관통
  *           두꺼비 1마리당 활성 2개 (초과 시 가장 오래된 것 소멸)
+ *           엘리트(isElite): spit 당 2개씩 생성(착탄점에서 60px 벌림), 활성 한도 4개
  *           두꺼비 사망 후에도 웅덩이 지속(매니저에 잔존 hazard 등록) — 지속시간 만료·dispose·방 전환(_clearAll) 시 소멸
  *
  * 시각: toad 스프라이트 + 독초록 틴트, 독 웅덩이는 toad-puddle 텍스처 사용
@@ -29,6 +30,8 @@ const PUDDLE_RADIUS = 60;   // DoT 판정 반경 — toad-puddle 프레임(120px
 const PUDDLE_IMG_SIZE = 120; // toad-puddle 텍스처 네이티브 프레임 (1:1 렌더)
 const PUDDLE_DUR   = 15.0;
 const PUDDLE_MAX   = 2;
+const PUDDLE_MAX_ELITE = 4;  // 엘리트는 spit 당 2개 생성하므로 동시 잔존 한도도 2배
+const PUDDLE_ELITE_OFFSET = 60; // 엘리트 두 번째 웅덩이를 착탄점에서 벌리는 거리
 const PUDDLE_DMG   = 5;       // 틱당 데미지
 const PUDDLE_TICK  = 0.5;     // 0.5초마다 적용 (진입 시 즉시 1회)
 const TOAD_W       = 22;
@@ -265,11 +268,25 @@ export default class Toad {
   }
 
   _spawnPuddle(x, y) {
+    this._addPuddle(x, y);
+
+    // 엘리트는 독 웅덩이를 2개씩 생성 — 착탄점 옆에 하나 더 펼쳐 독 범위를 넓힌다
+    if (this.isElite) {
+      const ang = Math.random() * Math.PI * 2;
+      this._addPuddle(
+        x + Math.cos(ang) * PUDDLE_ELITE_OFFSET,
+        y + Math.sin(ang) * PUDDLE_ELITE_OFFSET,
+      );
+    }
+  }
+
+  _addPuddle(x, y) {
     const gfx = this.scene.add.image(x, y, 'toad-puddle')
       .setDisplaySize(PUDDLE_IMG_SIZE, PUDDLE_IMG_SIZE)
       .setDepth(7);
     this._puddles.push({ gfx, timer: PUDDLE_DUR, x, y, tickTimer: PUDDLE_TICK, wasInside: false });
-    while (this._puddles.length > PUDDLE_MAX) {
+    const max = this.isElite ? PUDDLE_MAX_ELITE : PUDDLE_MAX;
+    while (this._puddles.length > max) {
       const old = this._puddles.shift();
       if (old.gfx?.active) old.gfx.destroy();
     }

@@ -3,19 +3,22 @@
  * HP 45 / 속도 110 / 데미지 16(화살) / 코어 5
  *
  * 패턴:
- *   idle → kite(360px 이내 탐지)
+ *   idle → kite(DETECT_R=1000px 이내 탐지 — 사실상 맵 전체)
  *   kite → 선호 거리 220px 유지(멀면 접근, 100px 이내 후퇴)
  *          2.2초마다 aim 진입 (HP 30% 이하: 1.4초)
  *          5초마다 플레이어 위치에 올가미 덫 설치
  *   aim  → 0.8초 정지 + 조준선 표시 (HP 30% 이하: 0.6초) → 화살 발사 후 kite
  *   stun → 피격 시 0.3초 경직 + 넉백 (i-frame)
  *
- * 화살: 직선 360px/s, EnemyManager._enemyProjs 수동 이동(addEnemyProjectile)
+ * 화살: 직선 360px/s, EnemyManager._enemyProjs 수동 이동(addEnemyProjectile).
+ *        physics body 없는 단순 이미지라 장애물(boulder)을 통과 — 방 경계 벽에서만 소멸.
  * 올가미 덫: 바닥 hazard(거미줄 패턴 재사용) — 플레이어 진입 시 Player.applyRoot(1s) 속박.
+ *            덫 범위 안에서 근거리 공격(attack-fired)을 SNARE_BREAK_HITS(5)회 하면 끊어져 즉시 해제
+ *            (덫 제거 + Player.clearRoot). 진행도는 덫 알파로 표시.
  *            사망 후에도 지속(매니저 _lingeringHazards) — 만료·dispose·방 전환 시 정리.
  * speedMult: 공용 속도 배수 경유 (접근·후퇴에 적용)
  */
-const DETECT_R     = 360;
+const DETECT_R     = 1000;  // 방 대각선(≈850px) 초과 — 맵 어디서든 교전·사격(사거리 사실상 맵 전체)
 const PREFER_DIST  = 220;
 const CLOSE_DIST   = 100;
 const KITE_SPEED   = 110;
@@ -31,6 +34,7 @@ const SNARE_IMG    = 80;    // snare 텍스처 표시 크기 (1:1)
 const SNARE_DUR    = 6.0;
 const SNARE_MAX    = 1;
 const ROOT_DUR     = 1.0;
+const SNARE_BREAK_HITS = 5;   // 덫 범위 안에서 근거리 공격 N회 시 덫 해제
 const BH_W         = 24;
 const BH_H         = 40;
 const BH_DW        = 40;
@@ -90,6 +94,9 @@ export default class BowHunter {
     this._applyBodySize();
     this.gameObject.body.setCollideWorldBounds(true);
     this.gameObject.setDepth(9);
+
+    // 근거리 공격으로 덫을 끊어내기 위한 구독 (덫이 사망 후에도 잔존하므로 disposeHazards 에서 해제)
+    scene.events.on('attack-fired', this._onPlayerAttack, this);
 
     this._buildHpBar();
   }
@@ -218,6 +225,7 @@ export default class BowHunter {
   disposeHazards() {
     this._snares.forEach(s => { if (s.gfx?.active) s.gfx.destroy(); });
     this._snares = [];
+    this.scene.events.off('attack-fired', this._onPlayerAttack, this);
     this.scene.enemyManager?.unregisterLingeringHazard?.(this);
   }
 
@@ -252,7 +260,7 @@ export default class BowHunter {
 
   _placeSnare(x, y) {
     const gfx = this.scene.add.image(x, y, 'snare').setDisplaySize(SNARE_IMG, SNARE_IMG).setDepth(7);
-    this._snares.push({ gfx, timer: SNARE_DUR, x, y });
+    this._snares.push({ gfx, timer: SNARE_DUR, x, y, struggle: 0 });
     while (this._snares.length > SNARE_MAX) {
       const old = this._snares.shift();
       if (old.gfx?.active) old.gfx.destroy();
@@ -263,13 +271,31 @@ export default class BowHunter {
     this._snares = this._snares.filter(s => {
       s.timer -= dt;
       if (s.timer <= 0) { if (s.gfx?.active) s.gfx.destroy(); return false; }
-      if (s.timer < 0.8 && s.gfx?.active) s.gfx.setAlpha(s.timer / 0.8);
+      // 만료 페이드와 struggle(끊기 진행도)을 함께 반영 — 더 옅은 쪽을 적용
+      if (s.gfx?.active) {
+        const timerA    = s.timer < 0.8 ? s.timer / 0.8 : 1;
+        const struggleA = 1 - 0.55 * (s.struggle / SNARE_BREAK_HITS);
+        s.gfx.setAlpha(Math.min(timerA, struggleA));
+      }
       const dx = player.x - s.x;
       const dy = player.y - s.y;
       if (dx * dx + dy * dy < SNARE_R * SNARE_R) {
         player.applyRoot?.(ROOT_DUR);
       }
       return true;
+    });
+  }
+
+  /** 근거리 공격(attack-fired): 덫 범위 안에서 맞으면 끊기 진행 — 5회째에 덫 제거 + 속박 즉시 해제. */
+  _onPlayerAttack({ playerX, playerY }) {
+    this._snares = this._snares.filter(s => {
+      const dx = playerX - s.x;
+      const dy = playerY - s.y;
+      if (dx * dx + dy * dy >= SNARE_R * SNARE_R) return true;   // 덫 밖 공격 — 무관
+      if (++s.struggle < SNARE_BREAK_HITS) return true;
+      if (s.gfx?.active) s.gfx.destroy();
+      this._player?.clearRoot?.();   // 끊어낸 즉시 이동 가능
+      return false;
     });
   }
 
