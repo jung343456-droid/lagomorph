@@ -882,13 +882,13 @@ export default class UIScene extends Phaser.Scene {
   }
 
   /**
-   * 코어 제단 오버레이 — 상점 UI 를 재사용. 매 호출마다 ALTAR_POOL 에서 n개를 랜덤 추첨.
+   * 코어 제단 오버레이 — 상점 UI 를 재사용. slots 는 GameScene 이 층당 1회 추첨해 캐시한 목록.
    * 슬롯 가격은 baked 하지 않고 _refreshShopCards 에서 현재 누진가(em.altarCost)로 채운다.
    * 구매 시 sold 처리하지 않고 누진 카운터만 올려 반복 구매 가능(가격은 매번 상승).
    */
-  openAltar() {
+  openAltar(slots) {
     if (this._shopOpen) return;
-    const slots = this._rollAltarSlots(3);
+    if (!slots) slots = this._rollAltarSlots(1);  // 폴백 (직접 호출 시)
     this._shopMode = 'altar';
     this._shopTitle.setText('코어 제단');
     this._resizeShopPanelForSlots(slots.length);
@@ -1667,6 +1667,15 @@ export default class UIScene extends Phaser.Scene {
         .setStrokeStyle(1, 0x556688, 0.7).setDepth(92);
     }
 
+    // "?" 초상화 라벨 — 화자 미상(???) 일 때 초상화 대신 표시
+    this._dlgPortraitLabel = this.add.text(L + 34, T + 100, '?', {
+      fontSize: '32px', color: '#6688aa', fontFamily: 'monospace', fontStyle: 'bold',
+    }).setOrigin(0.5).setDepth(92).setVisible(false);
+
+    // 플레이어 초상화 — soma-walk 스프라이트시트 frame 0 (정면 정지)
+    this._dlgPortraitPlayer = this.add.image(L + 34, T + 100, 'soma-walk', 0)
+      .setDisplaySize(56, 56).setDepth(92).setVisible(false);
+
     // 이름 + 구분선 (헤더 영역)
     this._dlgName = this.add.text(L + 66, T + 18, 'GRIM', {
       fontSize: '13px', color: '#aabbcc', fontFamily: 'monospace', fontStyle: 'bold',
@@ -1709,8 +1718,9 @@ export default class UIScene extends Phaser.Scene {
     // (_dlgSkip 도 패널과 함께 이동해야 하므로 포함)
     this._dlgPanelY   = panelY;
     this._dlgPanelH   = panelH;
-    this._dlgShiftEls = [this._dlgPanel, this._dlgPortrait, this._dlgName, this._dlgDivider,
-                         this._dlgText, this._dlgAdvance, this._dlgSkip];
+    this._dlgShiftEls = [this._dlgPanel, this._dlgPortrait, this._dlgPortraitLabel,
+                         this._dlgPortraitPlayer, this._dlgName,
+                         this._dlgDivider, this._dlgText, this._dlgAdvance, this._dlgSkip];
   }
 
   // 현재 안전영역 기준으로 대화 패널 y 를 재배치 (요소 일괄 델타 이동)
@@ -1723,7 +1733,7 @@ export default class UIScene extends Phaser.Scene {
     this._dlgPanelY = desiredY;
   }
 
-  openDialogue(lines, onComplete, showSkip = false) {
+  openDialogue(lines, onComplete, showSkip = false, speakerName = 'GRIM') {
     if (this._dialogueOpen) return;
     this._dialogueOpen  = true;
     this._dlgLines      = lines;
@@ -1734,6 +1744,13 @@ export default class UIScene extends Phaser.Scene {
     this._dlgAdvance.setVisible(true);
     // 건너뛰기 버튼 — 이미 본 적 있는 대사에서만 노출
     this._dlgSkip.setVisible(!!showSkip);
+    // 화자 이름 + 초상화 전환
+    this._dlgName.setText(speakerName);
+    const unknown = speakerName === '???';
+    const isPlayer = speakerName === 'PLAYER';
+    this._dlgPortrait.setVisible(!unknown && !isPlayer);
+    this._dlgPortraitLabel.setVisible(unknown);
+    this._dlgPortraitPlayer.setVisible(isPlayer);
     this._dlgText.setText('');
     this.scene.get('GameScene').scene.pause();
     this._typewriteLine(lines[0]);
@@ -1795,6 +1812,8 @@ export default class UIScene extends Phaser.Scene {
     this._dlgStaticEls.forEach(el => el.setVisible(false));
     this._dlgSkip.setVisible(false);
     this._dlgAdvance.setVisible(false);  // 닫을 때 진행 표시 ▼ 도 숨김 (잔상 화살표 방지)
+    this._dlgPortraitLabel.setVisible(false);
+    this._dlgPortraitPlayer.setVisible(false);
     this.scene.get('GameScene').scene.resume();
   }
 }

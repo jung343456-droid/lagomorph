@@ -43,6 +43,23 @@ const FLOOR1_INTRO_LINES = [
   '강해져야 한다. 놈들을 전부 찢어놓을 만큼.\n― 눈을 뜬다. 사냥을 시작한다.',
 ];
 
+// 구역 4 보스 처치 후 대화창 — 사냥꾼의 정체 자각, 스파크·침묵·고철로 은유적 표현
+const ZONE4_BOSS_CLEAR_LINES = [
+  '사냥꾼이 쓰러진다.\n굉음이 울렸다. 몸에서 전기 스파크가 튀었다.',
+  '내가 뭘 보고 있는 거지?\n대답해.\n대답하라고!!!!',
+  '.......',
+  '신호가 사라졌다.\n남은 건 차갑게 식은 고철 덩어리뿐.\n누구도 대답하지 않았다.',
+];
+
+// 구역 3 보스 처치 후 대화창 — 마침내 복수를 이루었으나 허무함이 간접적으로 드러나는 독백
+const ZONE3_BOSS_CLEAR_LINES = [
+  '쓰러졌다.\n마침내, 쓰러졌다.',
+  '그 밤이 떠오른다.\n달빛이 가려지고 굴이 무너지던 소리,\n이름을 잃어버린 얼굴들.',
+  '이 손으로, 직접 끝을 냈다.\n복수는 이루어졌다.',
+  '...........................................................',
+  '........................',
+];
+
 export default class GameScene extends Phaser.Scene {
   constructor() {
     super({ key: 'GameScene' });
@@ -108,6 +125,7 @@ export default class GameScene extends Phaser.Scene {
     // 계단 상태 (아래층 진입 트리거 — A 버튼 입력 필요)
     this._stairs           = null;
     this._altar            = null;   // 코어 제단 — 제단 비밀방(secret_cache/altar) 진입 시 스폰, 떠나면 정리 (room-entered 핸들러)
+    this._altarSlots       = null;   // 이번 층 제단 슬롯 — 층 진입 첫 방문 시 추첨, 층 전환 시 초기화
     this._memoryTape       = null;   // '누군가의 기억' 테이프 — 기억 보관실(secret_vault) 중앙에 스폰, 떠나면 정리 (room-entered 핸들러)
     this._stairsRoomId     = null;
     this._stairsPos        = null;
@@ -125,7 +143,7 @@ export default class GameScene extends Phaser.Scene {
     //   일반 출구방               → 계단
     //   표시 3·8층 (중간보스)      → 레어 아이템 추가 드롭 + 계단
     //   표시 5·10층 (보스)         → 계단. 표시 10층이 구역 경계면(비최종) "ZONE n+1 진입" 안내
-    //   30층(구역3 보스)           → "공허함" 서사 배너
+    //   30층(구역3 보스)           → 복수 완수 + 허무 독백 대화창 → onComplete 계단+구역 전환
     //   MAX_FLOOR=40(구역4 보스)   → "사냥꾼=로봇" 자각 연출 → ZONE 4 CLEAR (런 종료)
     this.events.on('boss-cleared', ({ x, y, floor, roomId }) => {
       // 실제 보스(표시 5·10층)·중간보스(표시 3·8층) 층에서만 패시브 아이템 드롭.
@@ -142,9 +160,17 @@ export default class GameScene extends Phaser.Scene {
       }
       // 중간보스(표시 3·8층): 회복 레어 아이템 추가 드롭
       if (isMidBossFloor) this.enemyManager.dropRareItem(x - 40, y);
-      // 구역 3 보스(표시 10층, 비최종): "드디어 죽였지만 공허함" 연출
+      // 구역 3 보스(표시 10층, 비최종): 복수 완수 + 허무 독백 → onComplete 에서 계단+구역 전환
       if (zone === 3 && df === 10) {
-        this.time.delayedCall(600, () => this._showStoryBanner('…사냥꾼을 죽였다. 그런데, 왜 아무것도 느껴지지 않지?'));
+        this.time.delayedCall(600, () => {
+          const ui = this.scene.get('UIScene');
+          this.player.halt?.();
+          ui.openDialogue?.(ZONE3_BOSS_CLEAR_LINES, () => {
+            this._markStairs(roomId, x, y + 90);
+            this.time.delayedCall(400, () => this._showZoneTransition(zone + 1));
+          }, false, 'PLAYER');
+        });
+        return;
       }
       this.time.delayedCall(800, () => this._markStairs(roomId, x, y + 90));
       // 구역 경계(표시 10층) 통과 안내
@@ -215,6 +241,10 @@ export default class GameScene extends Phaser.Scene {
       const isAltarRoom = roomData.type === 'secret_cache' && roomData.cacheSubtype === 'altar';
       if (isAltarRoom && !this._altar) {
         this._altar = new Altar(this, ROOM_W / 2, ROOM_H / 2);
+        // 이번 층 슬롯이 없을 때만 추첨 — 나갔다 들어와도 동일한 목록 유지
+        if (!this._altarSlots) {
+          this._altarSlots = this.scene.get('UIScene')._rollAltarSlots(1);
+        }
       } else if (!isAltarRoom && this._altar) {
         this._altar.dispose();
         this._altar = null;
@@ -274,7 +304,7 @@ export default class GameScene extends Phaser.Scene {
     this.events.on('altar-open-requested', () => {
       if (!this._altar) return;
       this.player.halt();  // 진입 시 잔여 속도로 미끄러지는 것 방지
-      this.scene.get('UIScene').openAltar?.();
+      this.scene.get('UIScene').openAltar?.(this._altarSlots);
     });
 
     // 카메라 뷰포트를 HUD 아래 영역으로 제한 → 게임/HUD 영역 시각적 분리
@@ -312,7 +342,7 @@ export default class GameScene extends Phaser.Scene {
       const introSeen = hasSeenDialogue('floor1_intro');
       this.scene.get('UIScene').events.once('create', () => {
         this.player.halt?.();
-        this.scene.get('UIScene').openDialogue?.(FLOOR1_INTRO_LINES, null, introSeen);
+        this.scene.get('UIScene').openDialogue?.(FLOOR1_INTRO_LINES, null, introSeen, 'PLAYER');
       });
       markDialogueSeen('floor1_intro');
     }
@@ -621,7 +651,7 @@ export default class GameScene extends Phaser.Scene {
       this.player.halt?.();
       // 이미 본 보관실 대사면 '건너뛰기' 노출. 본 직후 영속 기록.
       const key = `vault_${vaultIdx}`;
-      ui.openDialogue(lines, null, hasSeenDialogue(key));
+      ui.openDialogue(lines, null, hasSeenDialogue(key), '???');
       markDialogueSeen(key);
       return;
     }
@@ -721,6 +751,7 @@ export default class GameScene extends Phaser.Scene {
     this._disposeStairs();
     this._stairsRoomId    = null;
     this._stairsPos       = null;
+    this._altarSlots      = null;
     this._stairsTriggered = false;
     this.currentFloor++;
     const cam = this.cameras.main;
@@ -824,26 +855,11 @@ export default class GameScene extends Phaser.Scene {
     });
   }
 
-  /** 최종 보스(구역 4) 처치 — 쓰러진 사냥꾼이 로봇이었음을 자각하는 연출 후 런 종료 */
+  /** 최종 보스(구역 4) 처치 — 사냥꾼의 정체를 자각하는 대화창 후 런 종료 */
   _showHunterTruth(zone = MAX_ZONE) {
-    const bg = this.add.rectangle(0, 0, GAME_W, GAME_H, 0x000000, 0)
-      .setOrigin(0).setScrollFactor(0).setDepth(95);
-    const txt = this.add.text(GAME_W / 2, (GAME_H - HUD_H) / 2,
-      '쓰러진 사냥꾼의 몸에서\n부서진 회로가 드러난다.\n\n…전부, 기계였다.', {
-        fontSize: '18px', color: '#ff6666', fontFamily: 'monospace', fontStyle: 'bold',
-        align: 'center', stroke: '#000000', strokeThickness: 4, lineSpacing: 6,
-      }).setOrigin(0.5).setScrollFactor(0).setDepth(96).setAlpha(0);
-    this.tweens.add({ targets: bg,  alpha: 0.85, duration: 700 });
-    this.tweens.add({
-      targets: txt, alpha: 1, duration: 800, ease: 'Quad.Out',
-      onComplete: () => {
-        this.time.delayedCall(2600, () => {
-          if (bg.active)  bg.destroy();
-          if (txt.active) txt.destroy();
-          this._showZoneClear(zone);
-        });
-      },
-    });
+    this.player.halt?.();
+    const ui = this.scene.get('UIScene');
+    ui.openDialogue?.(ZONE4_BOSS_CLEAR_LINES, () => this._showZoneClear(zone), false, 'PLAYER');
   }
 
   _showFloorBanner(floor) {
