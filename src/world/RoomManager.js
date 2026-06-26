@@ -1,6 +1,6 @@
 import Room, { ROOM_W, ROOM_H, WALL_T, DOOR_W, DOOR_HX, DOOR_VY } from './Room';
 import { markShopDiscovered } from '../data/MetaProgress';
-import { displayFloor } from '../constants';
+import { displayFloor, zoneOf } from '../constants';
 
 const TRIGGER_MARGIN  = 45;  // 문 전환 트리거 여백: 플레이어 center 가 방 가장자리에서 이 거리 이내일 때 전환 (px). 플레이어 body half-size(≈27) 보다 커야 함 — 월드 경계에 막혀 center 가 더 가까이 못 감.
 const TRIGGER_VEL_MIN = 30;  // 문 트리거 발화에 필요한 최소 속도 (px/s) — 의도된 진입만 허용
@@ -84,16 +84,18 @@ export default class RoomManager {
 
   // ── private ─────────────────────────────────────────
 
-  /** 일반 전투방 적 수:
-   *   구역 1 — 층1=2~3, 층2=3~4, 층3=3~4, 층4=4~5, 층5=4~5
-   *   구역 2 — 층6=3~4, 층7=3~4, 층8=4~5, 층9=4~5, 층10=4~5
-   *   구역 2(11~20) — 구역 1 후반과 동일 분포 (적은 ZONE34 배수로 강화됨)
+  /** 일반 전투방 적 수 (구역별 최대 확장):
+   *   구역 1 — 층1=2~4, 층2=3~5, 층4·5=4~6, 층6·7=3~5, 층8~10=4~6
+   *   구역 2 — 최소 동일, 최대+1 (층1=2~5, 층2=3~6, ...)
+   *   구역 3 — 최소 동일, 최대+2
+   *   구역 4 — 최소 동일, 최대+3
    */
   _normalRoomCount() {
     // 표시층(1~10) 기준 — 모든 구역 공용. 적은 구역별로 강화/교체되므로 수만 표시층으로 통일.
     const byDisplay = { 1: 2, 2: 3, 3: 3, 4: 4, 5: 4, 6: 3, 7: 3, 8: 4, 9: 4, 10: 4 };
     const base = byDisplay[displayFloor(this.floorNum)] ?? 3;
-    return base + Math.floor(Math.random() * 2);
+    const zoneMod = zoneOf(this.floorNum) - 1; // 구역2=+1, 구역3=+2, 구역4=+3
+    return base + Math.floor(Math.random() * (3 + zoneMod));
   }
 
   /** 출구방(보스 없는 층의 가장 먼 방) 적 수: 일반 +2 */

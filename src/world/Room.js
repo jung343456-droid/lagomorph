@@ -269,25 +269,30 @@ export default class Room {
       const margin = 40;
       const count  = 2 + Math.floor(Math.random() * 3);  // 2~4
       const MAX_TRY = 30;
-      this.data.obstacleLayout = [];
-      for (let i = 0; i < count; i++) {
-        const type  = POOL[Math.floor(Math.random() * POOL.length)];
-        const def   = TYPES[type];
-        const scale = def.minS + Math.random() * (def.maxS - def.minS);
-        const dw = def.w * scale, dh = def.h * scale;
-        const minX = WALL_T + margin + dw / 2;
-        const maxX = ROOM_W - WALL_T - margin - dw / 2;
-        const minY = WALL_T + margin + dh / 2;
-        const maxY = ROOM_H - WALL_T - margin - dh / 2;
-        let placed = false;
-        for (let t = 0; t < MAX_TRY && !placed; t++) {
-          const x = minX + Math.random() * (maxX - minX);
-          const y = minY + Math.random() * (maxY - minY);
-          if (blocksDoor(x, y, dw, dh)) continue;
-          this.data.obstacleLayout.push({ x, y, type, scale });
-          placed = true;
+      // 구역 3·4: 50% 확률로 울타리형 / 나머지 50%는 일반 무작위 배치 (zone-3 타입 사용)
+      if (this._zone3 && Math.random() < 0.5) {
+        this.data.obstacleLayout = this._generateZone3FenceLayout(keepouts);
+      } else {
+        this.data.obstacleLayout = [];
+        for (let i = 0; i < count; i++) {
+          const type  = POOL[Math.floor(Math.random() * POOL.length)];
+          const def   = TYPES[type];
+          const scale = def.minS + Math.random() * (def.maxS - def.minS);
+          const dw = def.w * scale, dh = def.h * scale;
+          const minX = WALL_T + margin + dw / 2;
+          const maxX = ROOM_W - WALL_T - margin - dw / 2;
+          const minY = WALL_T + margin + dh / 2;
+          const maxY = ROOM_H - WALL_T - margin - dh / 2;
+          let placed = false;
+          for (let t = 0; t < MAX_TRY && !placed; t++) {
+            const x = minX + Math.random() * (maxX - minX);
+            const y = minY + Math.random() * (maxY - minY);
+            if (blocksDoor(x, y, dw, dh)) continue;
+            this.data.obstacleLayout.push({ x, y, type, scale });
+            placed = true;
+          }
+          // MAX_TRY 안에 자리를 못 찾으면 이 장애물은 스킵 (개수가 1~2개 적어질 수 있음)
         }
-        // MAX_TRY 안에 자리를 못 찾으면 이 장애물은 스킵 (개수가 1~2개 적어질 수 있음)
       }
     } else {
       // 기존 저장된 레이아웃에서도 문 통로 막는 장애물은 제거 (구버전 호환)
@@ -324,6 +329,77 @@ export default class Room {
       };
       this.scene.events.on('attack-fired', this._onAttackBreakable, this);
     }
+  }
+
+  /**
+   * 구역 3·4 전용: 이어붙인 ruin_beam/ruin_pillar/ruin_crate 조합으로 울타리형 장애물 배치 생성.
+   * 4가지 템플릿 중 하나를 랜덤 선택:
+   *   0 "지그재그" — 좌상/우하 수평 빔 울타리, 플레이어가 S자 경로로 이동해야 함
+   *   1 "L자 요새" — 좌상·우하 코너에 L형 구조, 각 코너가 BowHunter 거점
+   *   2 "기둥 복도" — 좌우 수직 필라 열(엇갈림), 3개 통로 생성
+   *   3 "혼합 바리케이드" — 상단 빔 울타리 + 하단 크레이트 클러스터
+   */
+  _generateZone3FenceLayout(keepouts) {
+    const layout = [];
+    const DIMS = {
+      ruin_beam:   { w: 40, h: 20 },
+      ruin_crate:  { w: 28, h: 28 },
+      ruin_pillar: { w: 24, h: 48 },
+    };
+
+    const tryAdd = (x, y, type) => {
+      const { w, h } = DIMS[type];
+      if (x - w / 2 < WALL_T + 20 || x + w / 2 > ROOM_W - WALL_T - 20) return;
+      if (y - h / 2 < WALL_T + 20 || y + h / 2 > ROOM_H - WALL_T - 20) return;
+      const ox1 = x - w / 2, oy1 = y - h / 2, ox2 = x + w / 2, oy2 = y + h / 2;
+      if (keepouts.some(k => ox1 < k.x + k.w && ox2 > k.x && oy1 < k.y + k.h && oy2 > k.y)) return;
+      layout.push({ x, y, type, scale: 1.0 });
+    };
+
+    // n개 ruin_beam 수평 연결 (startX 기준 우측으로)
+    const beamRow = (sx, y, n) => { for (let i = 0; i < n; i++) tryAdd(sx + i * 40, y, 'ruin_beam'); };
+    // n개 ruin_pillar 수직 연결 (startY 기준 아래로)
+    const pillarDown = (x, sy, n) => { for (let i = 0; i < n; i++) tryAdd(x, sy + i * 48, 'ruin_pillar'); };
+    // n개 ruin_pillar 수직 연결 (endY 기준 위로)
+    const pillarUp = (x, ey, n) => { for (let i = 0; i < n; i++) tryAdd(x, ey - i * 48, 'ruin_pillar'); };
+
+    const jy = Math.round((Math.random() - 0.5) * 30);  // ±15px 수직 편차
+
+    switch (Math.floor(Math.random() * 4)) {
+      case 0: {
+        // 지그재그: 좌측 상단 + 우측 하단 수평 빔 울타리
+        beamRow(60, 220 + jy, 5);   // x=60,100,140,180,220
+        beamRow(170, 490 - jy, 5);  // x=170,210,250,290,330
+        break;
+      }
+      case 1: {
+        // L자 요새: 좌상 L(빔→아래 필라) + 우하 역L(위 필라→빔)
+        // 좌상: 빔 3개 + 왼쪽 끝에서 아래로 필라 3개
+        beamRow(70, 215, 3);                      // 빔: x=70,110,150  y=215 (h20, bottom=225)
+        pillarDown(70, 215 + 10 + 24, 3);         // 필라: y=249,297,345 (top=225 → 빔 하단에 맞닿음)
+        // 우하: 위로 필라 3개 + 오른쪽 끝에서 빔 3개
+        beamRow(220, 545, 3);                     // 빔: x=220,260,300  y=545 (top=535)
+        pillarUp(300, 545 - 10 - 24, 3);          // 필라: y=511,463,415 (bottom=535 → 빔 상단에 맞닿음)
+        break;
+      }
+      case 2: {
+        // 기둥 복도: 좌·우 수직 필라 열 (높이 엇갈려 대각 통로 유도)
+        pillarDown(100, 200 + jy, 5);   // 좌열: y=200,248,296,344,392
+        pillarDown(290, 370 - jy, 5);   // 우열: y=370,418,466,514,562 (엇갈림)
+        break;
+      }
+      case 3: {
+        // 혼합 바리케이드: 상단 빔 울타리 + 끝단 크레이트 + 하단 크레이트 클러스터
+        beamRow(80, 225 + jy, 4);                        // 빔: x=80,120,160,200
+        tryAdd(228, 225 + jy, 'ruin_crate');             // 빔 끝 크레이트 접합
+        for (let r = 0; r < 2; r++)
+          for (let c = 0; c < 3; c++)
+            tryAdd(145 + c * 34, 490 - jy + r * 34, 'ruin_crate');  // 2×3 클러스터
+        break;
+      }
+    }
+
+    return layout;
   }
 
   /** stump 파괴 — 충돌 즉시 해제 + 붕괴 연출 후 destroy, obstacle-broken 이벤트로 드롭 위임 */

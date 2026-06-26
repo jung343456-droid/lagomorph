@@ -16,7 +16,7 @@
  * ※ 메타 적립(MetaProgress._runPicked)은 픽업 기준이라 제단 소모와 무관 — 소모해도 메타 속도 불변.
  */
 
-export const ALTAR_BASE   = 20;   // 첫 구매(n=0) 가격
+export const ALTAR_BASE   = 30;   // 첫 구매(n=0) 가격
 export const ALTAR_GROWTH = 1.5;  // 구매마다 ×1.5 누진
 
 /** 런 누적 구매 수 n 에 대한 현재 제단 가격. */
@@ -31,19 +31,19 @@ export const ALTAR_POOL = {
     apply: (p) => { p.maxHp += 20; p.heal(20); },
   },
   altar_melee: {
-    name: '예리한 발톱', desc: '근접 피해 +10%',
-    apply: (p) => { p.meleeDamageMult += 0.10; },
+    name: '예리한 발톱', desc: '근접 피해 +5%',
+    apply: (p) => { p.meleeDamageMult += 0.05; },
   },
   altar_charge: {
-    name: '신속 충전', desc: '충전 속도 +10%',
-    apply: (p) => { p.chargeSpeedMult += 0.10; },
+    name: '신속 충전', desc: '충전 속도 +5%',
+    apply: (p) => { p.chargeSpeedMult += 0.05; },
   },
   altar_trap: {
     name: '덫 증설', desc: '설치 덫 최대 +1',
     apply: (p) => { p.trapMaxBonus += 1; },
   },
   altar_radius: {
-    name: '확장 파동', desc: '근접 범위 +8%',
-    apply: (p) => { p.meleeRadiusMult += 0.08; },
+    name: '확장 파동', desc: '근접 범위 +4%',
+    apply: (p) => { p.meleeRadiusMult += 0.04; },
   },
 };

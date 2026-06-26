@@ -13,7 +13,8 @@
  * 트랩 위장(스플래시+상태이상): fire_disguise(화상), ice_disguise(빙결), poison_disguise(중독)
  * 트랩 강화: frugal_instinct(코어소모↓), big_trap(크기)
  * 탐색/편의: map_sense(전체 지도 공개), secret_sense(비밀 벽 가시화), core_affinity(방 클리어 시 코어 자동 수집)
- * 조건부 강화: hungry_spirit(코어 500 미만 시 부족분 비례 근접 피해 증가, 3~30% — _fireMelee 동적 적용)
+ * 조건부 강화: hungry_spirit(코어 500 미만 시 부족분 비례 근접 피해 증가, 하한 3% 상한 없음 — _fireMelee 동적 적용)
+ * 트랩 다중 설치: rabbit_poop(트랩 3개 동시 설치·최대 ×3·피해 ×0.5)
  *
  * 스폰 규칙:
  *   시작 방 — 해금된 아이템 중 랜덤 1개 (첫 런은 미스폰)
@@ -40,7 +41,7 @@ export const ITEM_DEFS = {
     name:  '코어 결정체',
     desc:  '기본 공격력 +1 (중복 획득 가능)',
     color: 0x00e0ff,
-    stackable: true,   // 중복 소유 가능. 드롭·상점(45코어)·시작방에 일반 아이템처럼 섞여 등장 + 일반 패시브 소진 시 폴백 드롭
+    stackable: true,   // 중복 소유 가능. 드롭·상점(60코어)·시작방에 일반 아이템처럼 섞여 등장 + 일반 패시브 소진 시 폴백 드롭
     apply: (player) => { player.baseAttack += 1; },
   },
   poison_claws: {
@@ -177,10 +178,10 @@ export const ITEM_DEFS = {
   },
   hungry_spirit: {
     name:  '헝그리 정신',
-    desc:  '코어 500 미만일 때 부족분 ×0.1%만큼 근접 피해 증가 (3~30%)',
+    desc:  '코어 500 미만일 때 부족분 ×0.1%만큼 근접 피해 증가 (하한 3%)',
     dynDesc: (p) => p.hasHungrySpirit
-      ? `코어 500 미만 부족분 ×0.1% 근접 피해 증가 (3~30%, 현재 +${Math.round(p.hungerDamageBonus() * 100)}%)`
-      : '코어 500 미만일 때 부족분 ×0.1%만큼 근접 피해 증가 (3~30%)',
+      ? `코어 500 미만 부족분 ×0.1% 근접 피해 증가 (하한 3%, 현재 +${Math.round(p.hungerDamageBonus() * 100)}%)`
+      : '코어 500 미만일 때 부족분 ×0.1%만큼 근접 피해 증가 (하한 3%)',
     color: 0x99ff33,
     apply: (player) => { player.hasHungrySpirit = true; },
   },
@@ -192,6 +193,12 @@ export const ITEM_DEFS = {
       : '코어 1개당 치명타 피해 +0.1% (최대 +100%)',
     color: 0xffaa33,
     apply: (player) => { player.hasSatiety = true; },
+  },
+  rabbit_poop: {
+    name:  '토끼똥',
+    desc:  '트랩 3개 동시 설치, 최대 설치 수 ×3 (피해 ×0.5)',
+    color: 0xaa7722,
+    apply: (player) => { player.hasRabbitPoop = true; },
   },
 };
 

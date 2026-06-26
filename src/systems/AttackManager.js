@@ -312,22 +312,32 @@ export default class AttackManager {
   _startPlace() {
     const em   = this.scene.enemyManager;
     const cost = Math.max(1, POOP_COST - this.player.trapCostBonus);
-    const maxTraps = MAX_POOPS + (this.player.trapMaxBonus ?? 0);
+    const base = MAX_POOPS + (this.player.trapMaxBonus ?? 0);
+    const maxTraps = this.player.hasRabbitPoop ? base * 3 : base;
     if (this._bCooldown > 0)            return;
     if (this._poops.length >= maxTraps)  return;
     if (em.coreCount < cost)            return;
 
     em.coreCount -= cost;
-    this._placePoop();
+    const count = this.player.hasRabbitPoop ? 3 : 1;
+    const slots  = maxTraps - this._poops.length;
+    for (let i = 0; i < Math.min(count, slots); i++) this._placePoop(i);
     this._bCooldown          = POOP_COOLDOWN;
     this.bCooldownNormalized = 1;
   }
 
-  _placePoop() {
+  _placePoop(slot = 0) {
     const { x: px, y: py } = this.player;
-    const size = POOP_SIZE * this.player.trapSizeMult;
+    // 토끼똥: 3개를 120° 간격으로 20px 퍼뜨려 배치
+    const spread = this.player.hasRabbitPoop ? 20 : 0;
+    const angle  = (slot / 3) * Math.PI * 2;
+    const x = px + Math.cos(angle) * spread;
+    const y = py + Math.sin(angle) * spread;
+    const sizeMult = this.player.trapSizeMult * (this.player.hasRabbitPoop ? 0.3 : 1);
+    const size = POOP_SIZE * sizeMult;
+    const dmg  = this.player.baseAttack * TRAP_DMG_MULT * (this.player.hasRabbitPoop ? 0.5 : 1);
     // 원형 표시: 흰 원 텍스처(poop_circle 80px)에 tint·displaySize 적용 (Arc 금지 규칙 준수)
-    const go = this.scene.add.image(px, py, 'poop_circle').setTint(POOP_COLOR);
+    const go = this.scene.add.image(x, y, 'poop_circle').setTint(POOP_COLOR);
     go.setDisplaySize(size, size);
     go.setDepth(5);
     this.scene.physics.add.existing(go);
@@ -335,9 +345,9 @@ export default class AttackManager {
     go.body.setCircle(40);
     go.body.setImmovable(true);
     go.body.setAllowGravity(false);
-    this._poops.push({ go, damage: this.player.baseAttack * TRAP_DMG_MULT, size });
+    this._poops.push({ go, damage: dmg, size });
     this._poopGroup.add(go);
-    this._spawnRing(px, py, POOP_COLOR, size * 2);
+    this._spawnRing(x, y, POOP_COLOR, size * 2);
   }
 
   _onPoopHitEnemy(poopGO, enemyGO) {

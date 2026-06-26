@@ -42,8 +42,9 @@
  *   metaRetainRate   0.25   사망 시 메타 픽업분 보존율 (영구 해금 '잔해 회수 I~IV' +0.05 씩 → 최대 0.45) — MetaProgress.commitMetaRun 참조
  *   autoCollectCores false  방 클리어 시 남은 코어 전량 자석 흡수 — 기본 해제, 패시브 아이템으로 활성화 (EnemyManager._collectAllCores 게이팅)
  *   corePickupRange  55     코어 자동 흡수 시작 반경(px) — 해금 '코어 흡수 I~III' +15 씩 (→ 70/85/100)
- *   hasHungrySpirit  false  헝그리 정신 — 코어 < 500 일 때 부족분 ×0.1% 근접(A) 피해 증가(3~30% 클램프, 코어 500↑ 이어도 하한 3%). AttackManager._fireMelee 에 반영
+ *   hasHungrySpirit  false  헝그리 정신 — 코어 < 500 일 때 부족분 ×0.1% 근접(A) 피해 증가(하한 3%, 상한 없음, 코어 500↑ 이어도 하한 3%). AttackManager._fireMelee 에 반영
  *   hasSatiety       false  포만감 — 코어 ×0.1% 치명타 피해 증가(최대 +100%, 코어 1000 에서 도달). rollAttackDamage 에서 critMult 에 합산
+ *   hasRabbitPoop    false  토끼똥 — B 트랩 3개 동시 설치, 최대 설치 수 ×3, 트랩 피해 ×0.5. AttackManager._startPlace/_placePoop 에 반영
  *
  * 임시 저장: serialize() 로 좌표·스탯·플래그·인벤토리를 평문 객체로 추출, applySave(data) 로 복원한다.
  *   복원 시 저장된 스탯으로 전부 덮어쓴다 — 런 중 패시브 아이템이 변경한 값까지 반영하기 위함
@@ -130,8 +131,9 @@ export default class Player {
     this.metaRetainRate   = 0.25; // 사망 시 메타 픽업분 보존율 — 잔해 회수 해금으로 +0.05 씩 (MetaProgress.commitMetaRun 참조)
     this.autoCollectCores = false; // 방 클리어 시 남은 코어 전량 자석 흡수 — 기본 해제, 패시브 아이템으로 활성화 (EnemyManager._collectAllCores 참조)
     this.corePickupRange  = 55;  // 코어 자동 흡수 시작 반경(px) — 해금 '코어 흡수 I~III' +15 씩 (EnemyManager update 자석 분기 참조)
-    this.hasHungrySpirit  = false; // 헝그리 정신 — 코어 < 500 일 때 부족분 ×0.1% 근접 피해 증가(3~30%), AttackManager._fireMelee 에서 적용
+    this.hasHungrySpirit  = false; // 헝그리 정신 — 코어 < 500 일 때 부족분 ×0.1% 근접 피해 증가(하한 3%, 상한 없음), AttackManager._fireMelee 에서 적용
     this.hasSatiety       = false; // 포만감 — 코어 ×0.1% 만큼 치명타 피해 증가(최대 +100%), rollAttackDamage 에서 critMult 에 합산
+    this.hasRabbitPoop    = false; // 토끼똥 — B 트랩 3개 동시 설치, 최대 설치 수 ×3, 트랩 피해 ×0.5
     this.inventory        = [];
     this._dir            = 'bottom';
     this._row            = DIR_ROW.bottom; // 현재 방향 행
@@ -376,14 +378,14 @@ export default class Player {
    * @returns {{ damage:number, isCrit:boolean }} 적용할 정수 데미지와 치명타 여부
    */
   /**
-   * 헝그리 정신 근접 피해 보너스 비율 — 코어 < 500 이면 부족분 ×0.1%, 3~30% 클램프.
+   * 헝그리 정신 근접 피해 보너스 비율 — 코어 < 500 이면 부족분 ×0.1%, 하한 3%.
    * 코어 ≥ 500 이어도 하한 3% 는 항상 적용. 미보유 시만 0. 코어 잔량은 EnemyManager 에서 실시간 조회.
    * AttackManager._fireMelee 에서 근접(A) 데미지에만 곱한다.
    */
   hungerDamageBonus() {
     if (!this.hasHungrySpirit) return 0;
     const cores = this.scene?.enemyManager?.coreCount ?? 0;
-    return Math.min(0.30, Math.max(0.03, (500 - cores) * 0.001));
+    return Math.max(0.03, (500 - cores) * 0.001);
   }
 
   /**

@@ -37,7 +37,8 @@
       "Bash(npm i *)",
       "Bash(rtk grep *)",
       "Bash(dir C:\\\\projects\\\\lagomorph\\\\dist\\\\assets\\\\characters\\\\motion *)",
-      "Bash(python *)"
+      "Bash(python *)",
+      "PowerShell(git *)"
     ]
   }
 }

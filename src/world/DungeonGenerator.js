@@ -48,14 +48,14 @@ function _entryToSlot(entry, excludeItemIds, priceMult = 1) {
 
   if (entry.kind === 'item') {
     // 생성 시점에 패시브 1개 미리 선정 → 카드에 실제 이름/설명 표시.
-    // 스택형(코어 결정체)은 보유 중이어도 항상 후보 — 가격은 일반 패시브와 동일(45).
+    // 스택형(코어 결정체)은 보유 중이어도 항상 후보 — 가격은 일반 패시브와 동일(60).
     const ids = Object.keys(ITEM_DEFS).filter(id => !excludeItemIds.has(id) || ITEM_DEFS[id].stackable);
     if (ids.length === 0) return null; // 가용 패시브 없음 — 호출부에서 다른 엔트리 재추첨
     const id  = ids[Math.floor(Math.random() * ids.length)];
     const def = ITEM_DEFS[id];
     return {
       kind: 'item', id, name: def.name, desc: def.desc, color: def.color,
-      cost: price(45), sold: false,
+      cost: price(60), sold: false,
     };
   }
   if (entry.kind === 'heal') {
@@ -106,7 +106,7 @@ export function pickPriceWeightedDrop(ownedItemIds = []) {
   const entries = [];
   for (const id of Object.keys(ITEM_DEFS)) {
     if (owned.has(id) && !ITEM_DEFS[id].stackable) continue;
-    entries.push({ kind: 'item', id, cost: 45 });
+    entries.push({ kind: 'item', id, cost: 60 });
   }
   for (const t of HEAL_TIERS) entries.push({ kind: 'heal', amount: t.amount, cost: t.cost });
   entries.push({ kind: 'heal_pct', ratio: 0.5, cost: 50 });
