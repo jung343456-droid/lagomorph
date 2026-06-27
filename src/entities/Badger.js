@@ -1,12 +1,12 @@
 /**
  * 오소리 (Badger) — 잠행 돌격 탱커 (구역 3, 동물)
- * HP 95 / 속도 95 / 데미지 18(할퀴기) / 코어 6
+ * HP 220 / 속도 115 / 데미지 28(할퀴기) / 코어 9
  *
  * 패턴:
  *   chase  → 플레이어 추격. 80px 이내 진입 시 할퀴기 방향 고정 → windup
  *   windup → 0.4초 예고(정지)
- *   claw   → 정면 부채꼴(반경 90px, 전방 반원) 1회 판정. 등 뒤는 안전
- *   burrow → 8초마다 1.2초 땅속 이동(무적·untargetable, 플레이어 근처로 접근) → emerge
+ *   claw   → 정면 부채꼴(반경 100px, 전방 반원) 1회 판정. 등 뒤는 안전
+ *   burrow → 5.5초마다 1.2초 땅속 이동(무적·untargetable, 플레이어 근처로 접근) → emerge
  *   emerge → 0.3초 출현 예고 → 기습 claw
  *   stun   → 피격 시 0.3초 경직 + 넉백 (i-frame)
  *
@@ -14,19 +14,19 @@
  * speedMult: 공용 속도 배수 경유 (추격·잠행 이동에 적용)
  */
 const DETECT_R    = 330;
-const CHASE_SPEED = 95;
+const CHASE_SPEED = 115;
 const CLAW_RANGE  = 80;
-const CLAW_R      = 90;    // 할퀴기 판정 반경
+const CLAW_R      = 100;   // 할퀴기 판정 반경
 const WINDUP_DUR  = 0.4;
 const CLAW_DUR    = 0.3;
 const EMERGE_DUR  = 0.3;
-const BURROW_CD   = 8.0;
+const BURROW_CD   = 5.5;
 const BURROW_DUR  = 1.2;
-const BURROW_SPEED = 150;
+const BURROW_SPEED = 200;
 const BG_W        = 32;
 const BG_H        = 26;
-const BG_DW       = 44;
-const BG_DH       = 34;
+const BG_DW       = 60;
+const BG_DH       = 60;
 
 function calcDir(vx, vy) {
   if (Math.abs(vx) < 1 && Math.abs(vy) < 1) return null;
@@ -46,10 +46,10 @@ export default class Badger {
   constructor(scene, x, y) {
     this.scene = scene;
 
-    this.hp     = 95;
-    this.maxHp  = 95;
+    this.hp     = 220;
+    this.maxHp  = 220;
     this.speed  = CHASE_SPEED;
-    this.damage = 18;
+    this.damage = 28;
     this.displayName = '오소리';
 
     this.state      = 'chase';
@@ -59,7 +59,7 @@ export default class Badger {
 
     this.alive     = true;
     this.destroyed = false;
-    this.coreDrops = 6;
+    this.coreDrops = 9;
     this.speedMult = 1.0;
 
     this._stateTimer = 0;
@@ -269,8 +269,8 @@ export default class Badger {
 
   _buildHpBar() {
     const { x, y } = this.gameObject;
-    this._hpBg   = this.scene.add.rectangle(x, y - 24, BG_DW, 4, 0x333333).setDepth(11);
-    this._hpFill = this.scene.add.rectangle(x - BG_DW / 2, y - 24, BG_DW, 4, 0x44dd44)
+    this._hpBg   = this.scene.add.rectangle(x, y - 35, BG_DW, 4, 0x333333).setDepth(11);
+    this._hpFill = this.scene.add.rectangle(x - BG_DW / 2, y - 35, BG_DW, 4, 0x44dd44)
       .setOrigin(0, 0.5).setDepth(11);
   }
 

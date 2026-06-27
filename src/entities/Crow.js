@@ -1,12 +1,12 @@
 /**
  * 까마귀 (Crow) — 공중 정찰·표식 지원형 (구역 3, 동물)
- * HP 18 / 속도 150 / 데미지 7(쪼기 접촉) / 코어 3
+ * HP 55 / 속도 190 / 데미지 14(쪼기 접촉) / 코어 4
  *
  * 패턴:
  *   circle → 플레이어 주위 180px 선회
- *   mark   → 5초마다 0.5초 정지(울음) → 플레이어에 표식 3초 부여
- *            표식 동안 주변 260px 사냥꾼(단검/활)의 speedMult ×1.15 (Wolf 오라 패턴)
- *   dive   → 7초마다 0.4초 급강하 직선 돌진(접촉 데미지) 후 circle 복귀
+ *   mark   → 3.5초마다 0.5초 정지(울음) → 플레이어에 표식 3초 부여
+ *            표식 동안 주변 260px 사냥꾼(단검/활)의 speedMult ×1.25 (Wolf 오라 패턴)
+ *   dive   → 5초마다 0.4초 급강하 직선 돌진(접촉 데미지) 후 circle 복귀
  *   stun   → 피격 시 0.3초 경직 + 넉백 (i-frame)
  *
  * 약점: mark 시전 0.5초 정지. 사망/표식 만료 시 버프 즉시 복원(_restoreAura).
@@ -14,19 +14,19 @@
  */
 const DETECT_R    = 360;
 const ORBIT_DIST  = 180;
-const ORBIT_SPEED = 150;
-const MARK_CD     = 5.0;
+const ORBIT_SPEED = 190;
+const MARK_CD     = 3.5;
 const MARK_WIND   = 0.5;
 const MARK_DUR    = 3.0;
 const MARK_R      = 260;
-const MARK_MULT   = 1.15;
-const DIVE_CD     = 7.0;
+const MARK_MULT   = 1.25;
+const DIVE_CD     = 5.0;
 const DIVE_DUR    = 0.4;
-const DIVE_SPEED  = 300;
+const DIVE_SPEED  = 400;
 const CROW_W      = 22;
 const CROW_H      = 16;
-const CROW_DW     = 32;
-const CROW_DH     = 26;
+const CROW_DW     = 60;
+const CROW_DH     = 60;
 
 function calcDir(vx, vy) {
   if (Math.abs(vx) < 1 && Math.abs(vy) < 1) return null;
@@ -46,10 +46,10 @@ export default class Crow {
   constructor(scene, x, y) {
     this.scene = scene;
 
-    this.hp     = 18;
-    this.maxHp  = 18;
+    this.hp     = 55;
+    this.maxHp  = 55;
     this.speed  = ORBIT_SPEED;
-    this.damage = 7;
+    this.damage = 14;
     this.displayName = '까마귀';
 
     this.state      = 'circle';
@@ -59,7 +59,7 @@ export default class Crow {
 
     this.alive     = true;
     this.destroyed = false;
-    this.coreDrops = 3;
+    this.coreDrops = 4;
     this.speedMult = 1.0;
 
     this._markCd     = MARK_CD * (0.4 + Math.random() * 0.6);
@@ -266,8 +266,8 @@ export default class Crow {
 
   _buildHpBar() {
     const { x, y } = this.gameObject;
-    this._hpBg   = this.scene.add.rectangle(x, y - 18, CROW_DW, 3, 0x333333).setDepth(11);
-    this._hpFill = this.scene.add.rectangle(x - CROW_DW / 2, y - 18, CROW_DW, 3, 0x44dd44)
+    this._hpBg   = this.scene.add.rectangle(x, y - 35, CROW_DW, 3, 0x333333).setDepth(11);
+    this._hpFill = this.scene.add.rectangle(x - CROW_DW / 2, y - 35, CROW_DW, 3, 0x44dd44)
       .setOrigin(0, 0.5).setDepth(11);
   }
 

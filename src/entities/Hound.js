@@ -1,13 +1,13 @@
 /**
  * 사냥개 (Hound) — 구역 3 표시 5층 보스 "사냥개 무리" 구성원 (2마리 + 정예 활사냥꾼 2와 함께 스폰)
  *   ※ 표시 3층 중간보스(Hound×2)에서도 사용. 무리 분노는 살아있는 사냥개 수만 셈.
- * HP 130 / 속도 200 / 데미지 16(접촉/돌진) / 코어 8
+ * HP 290 / 속도 240 / 데미지 28(접촉/돌진) / 코어 14
  *
  * 패턴 (Weasel 대시 + 무리 분노 응용):
  *   chase    → 플레이어 추격
  *   windup   → 0.25초 예고(돌진 방향 고정)  ※220px 이내 + 돌진 쿨다운 0 일 때
- *   lunge    → 380px/s 도약 돌진 0.35초(접촉 데미지)
- *   cooldown → 0.6초 대기 → chase
+ *   lunge    → 470px/s 도약 돌진 0.35초(접촉 데미지)
+ *   cooldown → 0.35초 대기 → chase
  *   stun     → 피격 시 0.3초 경직 + 넉백 (i-frame)
  *
  * 무리 분노: 살아있는 사냥개가 1마리만 남으면 속도 ×1.3 + 돌진 쿨다운 단축.
@@ -15,19 +15,19 @@
  * speedMult: 공용 속도 배수 경유 (추격에 적용, 돌진 속도는 고정).
  */
 const DETECT_R    = 460;
-const CHASE_SPEED = 200;
+const CHASE_SPEED = 240;
 const LUNGE_RANGE = 220;
-const LUNGE_SPEED = 380;
+const LUNGE_SPEED = 470;
 const WINDUP_DUR  = 0.25;
 const LUNGE_DUR   = 0.35;
-const COOL_DUR    = 0.6;
-const COOL_RAGE   = 0.3;
-const RAGE_SPD    = 1.3;
-const LUNGE_CD    = 2.5;
+const COOL_DUR    = 0.35;
+const COOL_RAGE   = 0.18;
+const RAGE_SPD    = 1.4;
+const LUNGE_CD    = 1.6;
 const HOUND_W     = 26;
 const HOUND_H     = 22;
-const HOUND_DW    = 42;
-const HOUND_DH    = 34;
+const HOUND_DW    = 60;
+const HOUND_DH    = 60;
 
 function calcDir(vx, vy) {
   if (Math.abs(vx) < 1 && Math.abs(vy) < 1) return null;
@@ -47,10 +47,10 @@ export default class Hound {
   constructor(scene, x, y) {
     this.scene = scene;
 
-    this.hp     = 130;
-    this.maxHp  = 130;
+    this.hp     = 290;
+    this.maxHp  = 290;
     this.speed  = CHASE_SPEED;
-    this.damage = 16;
+    this.damage = 28;
     this.displayName = '사냥개';
 
     this.state      = 'chase';
@@ -60,7 +60,7 @@ export default class Hound {
 
     this.alive     = true;
     this.destroyed = false;
-    this.coreDrops = 8;
+    this.coreDrops = 14;
     this.speedMult = 1.0;
 
     this._stateTimer = 0;
@@ -231,15 +231,15 @@ export default class Hound {
 
   _buildHpBar() {
     const { x, y } = this.gameObject;
-    this._hpBg   = this.scene.add.rectangle(x, y - 24, HOUND_DW, 4, 0x333333).setDepth(11);
-    this._hpFill = this.scene.add.rectangle(x - HOUND_DW / 2, y - 24, HOUND_DW, 4, 0xdd4444)
+    this._hpBg   = this.scene.add.rectangle(x, y - 35, HOUND_DW, 4, 0x333333).setDepth(11);
+    this._hpFill = this.scene.add.rectangle(x - HOUND_DW / 2, y - 35, HOUND_DW, 4, 0xdd4444)
       .setOrigin(0, 0.5).setDepth(11);
   }
 
   _syncHpBar() {
     const { x, y } = this.gameObject;
-    this._hpBg.setPosition(x, y - 24);
-    this._hpFill.setPosition(x - HOUND_DW / 2, y - 24);
+    this._hpBg.setPosition(x, y - 35);
+    this._hpFill.setPosition(x - HOUND_DW / 2, y - 35);
     this._hpFill.width = HOUND_DW * Math.max(0, this.hp / this.maxHp);
     const vis = this.hp < this.maxHp;
     this._hpBg.setVisible(vis);

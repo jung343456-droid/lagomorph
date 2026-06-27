@@ -1,13 +1,13 @@
 /**
  * 활 사냥꾼 (BowHunter) — 원거리 조준 사격형 + 올가미 덫 (구역 3, 인간)
- * HP 45 / 속도 110 / 데미지 16(화살) / 코어 5
+ * HP 105 / 속도 145 / 데미지 26(화살) / 코어 6
  *
  * 패턴:
  *   idle → kite(DETECT_R=1000px 이내 탐지 — 사실상 맵 전체)
  *   kite → 선호 거리 220px 유지(멀면 접근, 100px 이내 후퇴)
- *          2.2초마다 aim 진입 (HP 30% 이하: 1.4초)
- *          5초마다 플레이어 위치에 올가미 덫 설치
- *   aim  → 0.8초 정지 + 조준선 표시 (HP 30% 이하: 0.6초) → 화살 발사 후 kite
+ *          1.6초마다 aim 진입 (HP 30% 이하: 1.0초)
+ *          3.5초마다 플레이어 위치에 올가미 덫 설치
+ *   aim  → 0.6초 정지 + 조준선 표시 (HP 30% 이하: 0.45초) → 화살 발사 후 kite
  *   stun → 피격 시 0.3초 경직 + 넉백 (i-frame)
  *
  * 화살: 직선 360px/s, EnemyManager._enemyProjs 수동 이동(addEnemyProjectile).
@@ -21,14 +21,14 @@
 const DETECT_R     = 1000;  // 방 대각선(≈850px) 초과 — 맵 어디서든 교전·사격(사거리 사실상 맵 전체)
 const PREFER_DIST  = 220;
 const CLOSE_DIST   = 100;
-const KITE_SPEED   = 110;
-const AIM_CD       = 2.2;
-const AIM_CD_RAGE  = 1.4;
-const AIM_DUR      = 0.8;
-const AIM_DUR_RAGE = 0.6;
-const ARROW_SPEED  = 360;
+const KITE_SPEED   = 145;
+const AIM_CD       = 1.6;
+const AIM_CD_RAGE  = 1.0;
+const AIM_DUR      = 0.6;
+const AIM_DUR_RAGE = 0.45;
+const ARROW_SPEED  = 440;
 const ARROW_SIZE   = 16;
-const SNARE_CD     = 5.0;
+const SNARE_CD     = 3.5;
 const SNARE_R      = 40;    // 속박 판정 반경
 const SNARE_IMG    = 80;    // snare 텍스처 표시 크기 (1:1)
 const SNARE_DUR    = 6.0;
@@ -37,8 +37,8 @@ const ROOT_DUR     = 1.0;
 const SNARE_BREAK_HITS = 5;   // 덫 범위 안에서 근거리 공격 N회 시 덫 해제
 const BH_W         = 24;
 const BH_H         = 40;
-const BH_DW        = 40;
-const BH_DH        = 56;
+const BH_DW        = 60;
+const BH_DH        = 60;
 
 function calcDir(vx, vy) {
   if (Math.abs(vx) < 1 && Math.abs(vy) < 1) return null;
@@ -58,10 +58,10 @@ export default class BowHunter {
   constructor(scene, x, y) {
     this.scene = scene;
 
-    this.hp     = 45;
-    this.maxHp  = 45;
+    this.hp     = 105;
+    this.maxHp  = 105;
     this.speed  = KITE_SPEED;
-    this.damage = 16;
+    this.damage = 26;
     this.displayName = '활 사냥꾼';
 
     this.state      = 'idle';
@@ -71,7 +71,7 @@ export default class BowHunter {
 
     this.alive     = true;
     this.destroyed = false;
-    this.coreDrops = 5;
+    this.coreDrops = 6;
     this.speedMult = 1.0;
 
     this._aimCd     = AIM_CD * (0.4 + Math.random() * 0.6);
@@ -320,8 +320,8 @@ export default class BowHunter {
 
   _buildHpBar() {
     const { x, y } = this.gameObject;
-    this._hpBg   = this.scene.add.rectangle(x, y - 32, BH_DW, 4, 0x333333).setDepth(11);
-    this._hpFill = this.scene.add.rectangle(x - BH_DW / 2, y - 32, BH_DW, 4, 0x44dd44)
+    this._hpBg   = this.scene.add.rectangle(x, y - 35, BH_DW, 4, 0x333333).setDepth(11);
+    this._hpFill = this.scene.add.rectangle(x - BH_DW / 2, y - 35, BH_DW, 4, 0x44dd44)
       .setOrigin(0, 0.5).setDepth(11);
   }
 

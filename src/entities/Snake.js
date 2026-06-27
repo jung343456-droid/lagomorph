@@ -1,31 +1,31 @@
 /**
  * 뱀 (Snake) — 잠복 기습 + 독 (구역 3, 동물)
- * HP 26 / 속도 70 / 데미지 9(물기) + 독 4dps×3s / 코어 4
+ * HP 80 / 속도 140 / 데미지 18(물기) + 독 6dps×3.5s / 코어 5
  *
  * 패턴:
- *   lurk   → 저속 배회(풀숲 잠복). 110px 이내 진입 시 windup 전환
+ *   lurk   → 저속 배회(풀숲 잠복). 140px 이내 진입 시 windup 전환
  *   windup → 0.3초 예고(정지, 대시 방향 고정)
- *   strike → 260px/s 직선 런지 0.35초. 물기 명중 시 플레이어 독 부여(applyPoison)
+ *   strike → 360px/s 직선 런지 0.35초. 물기 명중 시 플레이어 독 부여(applyPoison)
  *   retreat→ 0.4초 후퇴 후 lurk 복귀
  *   stun   → 피격 시 0.3초 경직 + 넉백 (이 시간 동안 추가 피격 무시 = i-frame)
  *
  * 독: 플레이어 측 DoT (Player.applyPoison) — 두꺼비 독 웅덩이와 별개 경로. 방어력 관통.
  * speedMult: Wolf 오라 등 공용 속도 배수 경유 (배회·후퇴에 적용, 런지 속도는 고정)
  */
-const DETECT_R    = 110;
-const LURK_SPEED  = 70;
-const STRIKE_SPEED = 260;
+const DETECT_R    = 140;
+const LURK_SPEED  = 140;
+const STRIKE_SPEED = 360;
 const WINDUP_DUR  = 0.3;
 const STRIKE_DUR  = 0.35;
 const RETREAT_DUR = 0.4;
 const BITE_R      = 28;   // 물기 명중 판정 반경 (독 부여)
-const POISON_DPS  = 4;
-const POISON_DUR  = 3;
+const POISON_DPS  = 6;
+const POISON_DUR  = 3.5;
 const LURK_FLIP   = 1.6;  // 배회 방향 전환 주기 (s)
 const SNAKE_W     = 22;
 const SNAKE_H     = 16;
-const SNAKE_DW    = 36;
-const SNAKE_DH    = 26;
+const SNAKE_DW    = 60;
+const SNAKE_DH    = 60;
 
 function calcDir(vx, vy) {
   if (Math.abs(vx) < 1 && Math.abs(vy) < 1) return null;
@@ -45,10 +45,10 @@ export default class Snake {
   constructor(scene, x, y) {
     this.scene = scene;
 
-    this.hp     = 26;
-    this.maxHp  = 26;
+    this.hp     = 80;
+    this.maxHp  = 80;
     this.speed  = LURK_SPEED;
-    this.damage = 9;
+    this.damage = 18;
     this.displayName = '뱀';
 
     this.state      = 'lurk';
@@ -58,7 +58,7 @@ export default class Snake {
 
     this.alive     = true;
     this.destroyed = false;
-    this.coreDrops = 4;
+    this.coreDrops = 5;
     this.speedMult = 1.0;
 
     this._stateTimer  = 0;
@@ -240,8 +240,8 @@ export default class Snake {
 
   _buildHpBar() {
     const { x, y } = this.gameObject;
-    this._hpBg   = this.scene.add.rectangle(x, y - 18, SNAKE_DW, 3, 0x333333).setDepth(11);
-    this._hpFill = this.scene.add.rectangle(x - SNAKE_DW / 2, y - 18, SNAKE_DW, 3, 0x44dd44)
+    this._hpBg   = this.scene.add.rectangle(x, y - 35, SNAKE_DW, 3, 0x333333).setDepth(11);
+    this._hpFill = this.scene.add.rectangle(x - SNAKE_DW / 2, y - 35, SNAKE_DW, 3, 0x44dd44)
       .setOrigin(0, 0.5).setDepth(11);
   }
 

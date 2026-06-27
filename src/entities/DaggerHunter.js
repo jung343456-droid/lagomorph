@@ -1,31 +1,31 @@
 /**
  * 단검 사냥꾼 (DaggerHunter) — 근접 연타 추격형 (구역 3, 인간)
- * HP 70 / 속도 150 / 데미지 14(베기 접촉) / 코어 5
+ * HP 160 / 속도 185 / 데미지 24(베기 접촉) / 코어 7
  *
  * 패턴:
  *   idle   → chase(340px 이내 탐지)
  *   chase  → 플레이어 추격. 60px 이내 진입 시 베기 방향 고정 → windup
  *   windup → 0.35초 예고(정지)
- *   slash  → 280px/s 전진 베기 0.25초(방향 고정, 접촉 데미지)
- *   recover→ 0.6초 경직(약점 노출) → chase 복귀
+ *   slash  → 370px/s 전진 베기 0.25초(방향 고정, 접촉 데미지)
+ *   recover→ 0.45초 경직(약점 노출) → chase 복귀
  *   stun   → 피격 시 0.3초 경직 + 넉백 (i-frame)
  *
- * 분노(HP 30% 이하): recover 0.35초, 추격 속도 ×1.15
+ * 분노(HP 30% 이하): recover 0.25초, 추격 속도 ×1.15
  * speedMult: Wolf 오라·구역 강화·까마귀 표식 등 공용 속도 배수 경유 (추격에 적용, 베기 속도는 고정)
  */
 const DETECT_R     = 340;
-const CHASE_SPEED  = 150;
+const CHASE_SPEED  = 185;
 const SLASH_RANGE  = 60;
-const SLASH_SPEED  = 280;
+const SLASH_SPEED  = 370;
 const WINDUP_DUR   = 0.35;
 const SLASH_DUR    = 0.25;
-const RECOVER_DUR  = 0.6;
-const RECOVER_RAGE = 0.35;
+const RECOVER_DUR  = 0.45;
+const RECOVER_RAGE = 0.25;
 const RAGE_SPD     = 1.15;
 const DH_W         = 24;
 const DH_H         = 40;
-const DH_DW        = 40;
-const DH_DH        = 56;
+const DH_DW        = 60;
+const DH_DH        = 60;
 
 function calcDir(vx, vy) {
   if (Math.abs(vx) < 1 && Math.abs(vy) < 1) return null;
@@ -45,10 +45,10 @@ export default class DaggerHunter {
   constructor(scene, x, y) {
     this.scene = scene;
 
-    this.hp     = 70;
-    this.maxHp  = 70;
+    this.hp     = 160;
+    this.maxHp  = 160;
     this.speed  = CHASE_SPEED;
-    this.damage = 14;
+    this.damage = 24;
     this.displayName = '단검 사냥꾼';
 
     this.state      = 'idle';
@@ -58,7 +58,7 @@ export default class DaggerHunter {
 
     this.alive     = true;
     this.destroyed = false;
-    this.coreDrops = 5;
+    this.coreDrops = 7;
     this.speedMult = 1.0;
 
     this._stateTimer = 0;
@@ -230,8 +230,8 @@ export default class DaggerHunter {
 
   _buildHpBar() {
     const { x, y } = this.gameObject;
-    this._hpBg   = this.scene.add.rectangle(x, y - 32, DH_DW, 4, 0x333333).setDepth(11);
-    this._hpFill = this.scene.add.rectangle(x - DH_DW / 2, y - 32, DH_DW, 4, 0x44dd44)
+    this._hpBg   = this.scene.add.rectangle(x, y - 35, DH_DW, 4, 0x333333).setDepth(11);
+    this._hpFill = this.scene.add.rectangle(x - DH_DW / 2, y - 35, DH_DW, 4, 0x44dd44)
       .setOrigin(0, 0.5).setDepth(11);
   }
 

@@ -142,7 +142,7 @@ export default class GameScene extends Phaser.Scene {
     // 보스 클리어: 패시브 드롭 + 계단 표시 / 구역 전환 / 런 종료 (모두 displayFloor·zoneOf 기준).
     //   일반 출구방               → 계단
     //   표시 3·8층 (중간보스)      → 레어 아이템 추가 드롭 + 계단
-    //   표시 5·10층 (보스)         → 계단. 표시 10층이 구역 경계면(비최종) "ZONE n+1 진입" 안내
+    //   표시 5·10층 (보스)         → 계단. 표시 10층이 구역 경계면(비최종) "ZONE n CLEAR" 안내
     //   30층(구역3 보스)           → 복수 완수 + 허무 독백 대화창 → onComplete 계단+구역 전환
     //   MAX_FLOOR=40(구역4 보스)   → "사냥꾼=로봇" 자각 연출 → ZONE 4 CLEAR (런 종료)
     this.events.on('boss-cleared', ({ x, y, floor, roomId }) => {
@@ -819,7 +819,8 @@ export default class GameScene extends Phaser.Scene {
 
   /** 구역 경계 통과 안내 — 5층 보스 처치 후 계단 등장 시점에 잠깐 표시 */
   _showZoneTransition(nextZone) {
-    const txt = this.add.text(ROOM_W / 2, ROOM_H / 2 - 60, `ZONE ${nextZone} 진입`, {
+    const clearedZone = nextZone - 1;
+    const txt = this.add.text(ROOM_W / 2, ROOM_H / 2 - 60, `ZONE ${clearedZone} CLEAR`, {
       fontSize: '22px', color: '#4ecca3', fontFamily: 'monospace', fontStyle: 'bold',
       stroke: '#000000', strokeThickness: 4,
     }).setOrigin(0.5).setScrollFactor(0).setDepth(90).setAlpha(0);
