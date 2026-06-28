@@ -45,6 +45,11 @@
 | `hungry_spirit` | 헝그리 정신 | 연두 `0x99ff33` | 부족분(500−코어) ×0.1% 만큼 **근거리(A) 공격 피해 증가**, 하한 3% (코어 ≥ 500 이어도 하한 3% 상시, 상한 없음). 실시간 코어량으로 매 공격 재계산 (트랩·스플래시 미적용) | `player.hasHungrySpirit = true` |
 | `satiety` | 포만감 | 호박 `0xffaa33` | 코어 1개당 **치명타 피해 +0.1%**, 최대 +100% (코어 1000개에서 도달). `critMult` 에 합산되어 모든 치명타(근거리·트랩 직격·스플래시)에 적용. 실시간 코어량으로 매 공격 재계산. 헝그리 정신의 정반대(코어를 쌓을수록 강화) | `player.hasSatiety = true` |
 | `rabbit_poop` | 토끼똥 | 갈색 `0xaa7722` | B 버튼 1회 입력으로 트랩 **3개 동시 설치** (120° 간격 20px 퍼짐). 최대 설치 수 **×3** (기본 5→15). 각 트랩 피해 **×0.5**, 크기 **×0.3** (스플래시·코어 소모는 무관). 코어 소모는 1회 | `player.hasRabbitPoop = true` |
+| `constipation` | 변비 | 진갈색 `0x6b4423` | 설치한 트랩이 1회로 부서지지 않고 **적 2마리**를 맞춤(`trapHits` 1→2). 트랩당 적별 1회만 데미지·내구 소모(같은 적 반복 발동 차단), 마지막 피격에서만 파괴+위장 스플래시 | `player.trapHits += 1` |
+| `enteritis` | 장염 | 누런녹 `0xc2a83e` | **7초마다** 발밑에 트랩 1개 **자동 설치**(코어 무소모, 쿨다운 무관). 최대 설치 수 도달 시 해당 주기 건너뜀. 방 입장 시 타이머 리셋 | `player.hasAutoTrap = true` |
+| `thick_fur` | 두꺼운 모피 | 카키 `0xb5a07a` | 받는 피해 **-12%** (`damageReduction += 0.12`, 독·화상 DoT 는 관통) | `player.damageReduction += 0.12` |
+| `afterimage` | 잔상 | 청백 `0xcfe7ff` | 받는 공격을 **15% 확률로 완전 회피**(피해·넉백 무효). 독·화상 DoT 는 회피 불가. `takeDamage` 진입부 굴림 | `player.dodgeRate += 0.15` |
+| `feral` | 야성 | 진주황 `0xe24a1a` | **HP가 낮을수록 피해 증가** — 만피 +0%, 0HP +50% 선형(`0.5×(1−hp/maxHp)`). `rollAttackDamage` 가 base 에 곱해 근거리·트랩 직격·스플래시 전부 적용, 실시간 재계산 | `player.hasBerserk = true` |
 
 ---
 
@@ -80,6 +85,7 @@
 | `trapSizeMult` | `1` | 트랩 크기 배율 |
 | `healItemMult` | `1.0` | 회복 아이템(상점 heal/heal_pct + 보스 RareItem) 효과 배율. heal_full(전체 회복)은 미적용 |
 | `armor` | `0` | 받는 피해 평탄 감산. amount -= armor 후 ≤0 이면 피격 전체 무효 (HP 감소·무적·넉백·숫자 모두 스킵). 방탄조끼 +2 |
+| `damageReduction` | `0` | 받는 피해 비율 감산. `amount × (1−reduction)`, 최소 1. 독·화상 DoT(`bypassArmor`)는 관통. 두꺼운 모피 +0.12 / 영구 해금 '두꺼운 가죽 I' |
 | `critRate` | `0.15` | 치명타율 (0~1). `rollAttackDamage` 가 매 공격마다 굴림 |
 | `critMult` | `1.5` | 치명타 피해 배율 (damage × critMult) |
 | `critHealAmount` | `0` | 치명타 명중 시 즉시 회복할 HP량 (근거리/트랩 직격/스플래시 모두) |
@@ -89,6 +95,10 @@
 | `hasHungrySpirit` | `false` | 헝그리 정신 — 부족분(500−코어) ×0.1% 근거리 피해 증가(하한 3%, 상한 없음, 코어 500↑ 이어도 하한 3%). `AttackManager._fireMelee` 가 `hungerDamageBonus()` 로 근거리(A) base 에만 곱함 |
 | `hasSatiety` | `false` | 포만감 — 코어 ×0.1% 치명타 피해 증가(최대 +100%, 코어 1000개에서 도달). `Player.rollAttackDamage` 가 `satietyCritBonus()` 를 `critMult` 에 합산해 모든 치명타에 적용 |
 | `hasRabbitPoop` | `false` | 토끼똥 — B 트랩 3개 동시 설치, 최대 설치 수 ×3, 트랩 직격 피해 ×0.5, 트랩 크기 ×0.3. `AttackManager._startPlace/_placePoop` 에 반영 |
+| `trapHits` | `1` | 변비 — 트랩 1개가 버티는 피격 횟수. `AttackManager._onPoopHitEnemy` 가 적별 1회 소모, 소진(0) 시에만 파괴+스플래시. 트랩의 `hitEnemies` Set 으로 같은 적 중복 발동 차단 |
+| `hasAutoTrap` | `false` | 장염 — 7초마다 발밑에 무료 트랩 1개 자동 설치(코어·쿨다운 무관). `AttackManager.update` 의 `_autoTrapTimer` → `_tryAutoTrap` (최대치 도달 시 무시) |
+| `dodgeRate` | `0` | 잔상 — 받는 공격 회피 확률(0~1). `takeDamage` 진입부에서 굴림, 성공 시 피해·넉백 무효(DoT `bypassArmor` 는 제외). 두꺼운 모피와 별개 |
+| `hasBerserk` | `false` | 야성 — HP 낮을수록 피해 증가(최대 +50% @0HP). `berserkDamageBonus()` = `0.5×(1−hp/maxHp)`, `rollAttackDamage` 가 base 에 곱(근거리·트랩·스플래시 공통, 실시간) |
 
 ---
 

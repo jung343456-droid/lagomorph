@@ -10,9 +10,11 @@
  *   aim  → 0.6초 정지 + 조준선 표시 (HP 30% 이하: 0.45초) → 화살 발사 후 kite
  *   stun → 피격 시 0.3초 경직 + 넉백 (i-frame)
  *
- * 화살: 직선 360px/s, EnemyManager._enemyProjs 수동 이동(addEnemyProjectile).
+ * 화살: 직선 580px/s, EnemyManager._enemyProjs 수동 이동(addEnemyProjectile).
  *        physics body 없는 단순 이미지라 장애물(boulder)을 통과 — 방 경계 벽에서만 소멸.
- * 올가미 덫: 바닥 hazard(거미줄 패턴 재사용) — 플레이어 진입 시 Player.applyRoot(1s) 속박.
+ * 올가미 덫: 사냥꾼 위치에서 목표 지점으로 던지는 모션(포물선 호+회전, _throwSnare) 후 착지 시 발동.
+ *            비행 중(flying)에는 속박·끊기·만료 미적용. 바닥 hazard(거미줄 패턴 재사용) — 플레이어 진입 시
+ *            Player.applyRoot(1s) 속박.
  *            덫 범위 안에서 근거리 공격(attack-fired)을 SNARE_BREAK_HITS(5)회 하면 끊어져 즉시 해제
  *            (덫 제거 + Player.clearRoot). 진행도는 덫 알파로 표시.
  *            사망 후에도 지속(매니저 _lingeringHazards) — 만료·dispose·방 전환 시 정리.
@@ -26,7 +28,7 @@ const AIM_CD       = 1.6;
 const AIM_CD_RAGE  = 1.0;
 const AIM_DUR      = 0.6;
 const AIM_DUR_RAGE = 0.45;
-const ARROW_SPEED  = 440;
+const ARROW_SPEED  = 580;
 const ARROW_SIZE   = 16;
 const SNARE_CD     = 3.5;
 const SNARE_R      = 40;    // 속박 판정 반경
@@ -223,7 +225,7 @@ export default class BowHunter {
 
   /** 올가미 정리 — dispose() 및 EnemyManager.clearLingeringHazards() 공용 호출 */
   disposeHazards() {
-    this._snares.forEach(s => { if (s.gfx?.active) s.gfx.destroy(); });
+    this._snares.forEach(s => { if (s.gfx?.active) { this.scene.tweens.killTweensOf(s.gfx); s.gfx.destroy(); } });
     this._snares = [];
     this.scene.events.off('attack-fired', this._onPlayerAttack, this);
     this.scene.enemyManager?.unregisterLingeringHazard?.(this);
@@ -259,16 +261,42 @@ export default class BowHunter {
   }
 
   _placeSnare(x, y) {
-    const gfx = this.scene.add.image(x, y, 'snare').setDisplaySize(SNARE_IMG, SNARE_IMG).setDepth(7);
-    this._snares.push({ gfx, timer: SNARE_DUR, x, y, struggle: 0 });
+    // 활사냥꾼 위치에서 목표 지점으로 던지는 모션 — 비행 중(flying)에는 함정 미발동
+    const sx = this.gameObject.x, sy = this.gameObject.y;
+    const gfx = this.scene.add.image(sx, sy, 'snare').setDisplaySize(SNARE_IMG, SNARE_IMG).setDepth(8);
+    const snare = { gfx, timer: SNARE_DUR, x, y, struggle: 0, flying: true };
+    this._snares.push(snare);
     while (this._snares.length > SNARE_MAX) {
       const old = this._snares.shift();
-      if (old.gfx?.active) old.gfx.destroy();
+      if (old.gfx?.active) { this.scene.tweens.killTweensOf(old.gfx); old.gfx.destroy(); }
     }
+    this._throwSnare(snare, sx, sy, x, y);
+  }
+
+  /** 덫 던지기 — 포물선 호(떠올랐다 착지) + 회전으로 날아가 착지 시 함정 발동 */
+  _throwSnare(snare, sx, sy, tx, ty) {
+    const gfx  = snare.gfx;
+    const dist = Math.hypot(tx - sx, ty - sy);
+    const dur  = Math.min(520, 200 + dist * 0.7);
+    const hop  = Math.min(40, 16 + dist * 0.06);
+    this.scene.tweens.add({
+      targets: gfx,
+      x: tx, y: ty,
+      angle: 540,
+      duration: dur,
+      ease: 'Sine.Out',
+      onUpdate: (tw) => { gfx.y -= Math.sin(tw.progress * Math.PI) * hop; },  // 떠오르는 호
+      onComplete: () => {
+        if (!gfx.active) return;
+        snare.flying = false;
+        gfx.setAngle(0).setPosition(tx, ty).setDepth(7);
+      },
+    });
   }
 
   _tickSnares(dt, player) {
     this._snares = this._snares.filter(s => {
+      if (s.flying) return true;   // 비행 중 — 착지 전이라 속박·페이드·만료 미적용
       s.timer -= dt;
       if (s.timer <= 0) { if (s.gfx?.active) s.gfx.destroy(); return false; }
       // 만료 페이드와 struggle(끊기 진행도)을 함께 반영 — 더 옅은 쪽을 적용
@@ -289,6 +317,7 @@ export default class BowHunter {
   /** 근거리 공격(attack-fired): 덫 범위 안에서 맞으면 끊기 진행 — 5회째에 덫 제거 + 속박 즉시 해제. */
   _onPlayerAttack({ playerX, playerY }) {
     this._snares = this._snares.filter(s => {
+      if (s.flying) return true;   // 비행 중 덫은 끊을 수 없음
       const dx = playerX - s.x;
       const dy = playerY - s.y;
       if (dx * dx + dy * dy >= SNARE_R * SNARE_R) return true;   // 덫 밖 공격 — 무관

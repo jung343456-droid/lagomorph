@@ -27,6 +27,8 @@ const SPLASH_RADIUS = 40;  // 위장 트랩 스플래시 반경 (px)
 const SPLASH_DMG    = 15;  // 위장 트랩 스플래시 데미지
 const DISGUISE_PROC = 0.5; // 위장 트랩 상태이상 발동 확률 (명중 enemy 1마리당, 위장 종류별 독립)
 
+const AUTO_TRAP_INTERVAL = 7; // 장염(hasAutoTrap) 자동 트랩 설치 간격 (초)
+
 // 슬롯 탭 판정: 위치는 Settings.getSlotPos, 반지름은 getSlotRadius 가 제공
 // (개별 자유 배치·크기 조절 가능). 시각이 원형이라 판정도 원형 거리로 맞춘다.
 
@@ -51,9 +53,10 @@ export default class AttackManager {
     this._mAimDir     = { x: 1, y: 0 };
 
     // 설치형(B/X) 상태
-    this._bCooldown = 0;
-    this._poops     = [];
-    this._poopGroup = scene.physics.add.group();
+    this._bCooldown    = 0;
+    this._autoTrapTimer = 0;   // 장염(hasAutoTrap) 자동 설치 누적 타이머 (초)
+    this._poops        = [];
+    this._poopGroup    = scene.physics.add.group();
 
     this._previewGfx = scene.add.graphics().setDepth(30);
 
@@ -70,6 +73,7 @@ export default class AttackManager {
       this._poops = [];
       this._bCooldown          = 0;
       this.bCooldownNormalized = 0;
+      this._autoTrapTimer      = 0;  // 방 입장 직후 즉시 설치 방지
     }, this);
 
     this._bindPointers();
@@ -113,6 +117,15 @@ export default class AttackManager {
       this.bCooldownNormalized = this._bCooldown / POOP_COOLDOWN;
     } else {
       this.bCooldownNormalized = 0;
+    }
+
+    // 장염: 7초마다 발밑에 무료 트랩 자동 설치 (최대치 도달 시 이번 주기는 건너뜀)
+    if (!this._disabled && this.player.hasAutoTrap) {
+      this._autoTrapTimer += dt;
+      if (this._autoTrapTimer >= AUTO_TRAP_INTERVAL) {
+        this._autoTrapTimer = 0;
+        this._tryAutoTrap();
+      }
     }
 
     if (this._mCharging) {
@@ -163,7 +176,7 @@ export default class AttackManager {
       bCooldown: this._bCooldown,
       poops: this._poops
         .filter(p => p.go.active)
-        .map(p => ({ x: p.go.x, y: p.go.y, damage: p.damage })),
+        .map(p => ({ x: p.go.x, y: p.go.y, damage: p.damage, hits: p.hits })),
     };
   }
 
@@ -172,13 +185,13 @@ export default class AttackManager {
     if (!data) return;
     this._poops.forEach(p => { if (p.go.active) this._poopGroup.remove(p.go, true, true); });
     this._poops = [];
-    for (const t of data.poops ?? []) this._restorePoop(t.x, t.y, t.damage);
+    for (const t of data.poops ?? []) this._restorePoop(t.x, t.y, t.damage, t.hits);
     this._bCooldown          = data.bCooldown ?? 0;
     this.bCooldownNormalized = this._bCooldown > 0 ? this._bCooldown / POOP_COOLDOWN : 0;
   }
 
   /** 저장된 좌표에 트랩 1개 재생성 — _placePoop 의 물리 셋업과 동일(코어 소모·링 이펙트 제외). */
-  _restorePoop(x, y, damage) {
+  _restorePoop(x, y, damage, hits) {
     const size = POOP_SIZE * this.player.trapSizeMult;
     const go = this.scene.add.image(x, y, 'poop_circle').setTint(POOP_COLOR);
     go.setDisplaySize(size, size);
@@ -187,7 +200,7 @@ export default class AttackManager {
     go.body.setCircle(40);
     go.body.setImmovable(true);
     go.body.setAllowGravity(false);
-    this._poops.push({ go, damage: damage ?? POOP_DMG, size });
+    this._poops.push({ go, damage: damage ?? POOP_DMG, size, hits: hits ?? 1, hitEnemies: new Set() });
     this._poopGroup.add(go);
   }
 
@@ -312,8 +325,7 @@ export default class AttackManager {
   _startPlace() {
     const em   = this.scene.enemyManager;
     const cost = Math.max(1, POOP_COST - this.player.trapCostBonus);
-    const base = MAX_POOPS + (this.player.trapMaxBonus ?? 0);
-    const maxTraps = this.player.hasRabbitPoop ? base * 3 : base;
+    const maxTraps = this._maxTraps();
     if (this._bCooldown > 0)            return;
     if (this._poops.length >= maxTraps)  return;
     if (em.coreCount < cost)            return;
@@ -324,6 +336,18 @@ export default class AttackManager {
     for (let i = 0; i < Math.min(count, slots); i++) this._placePoop(i);
     this._bCooldown          = POOP_COOLDOWN;
     this.bCooldownNormalized = 1;
+  }
+
+  /** 동시 설치 가능한 최대 트랩 수 (덫꾼의 손 +trapMaxBonus, 토끼똥 ×3). */
+  _maxTraps() {
+    const base = MAX_POOPS + (this.player.trapMaxBonus ?? 0);
+    return this.player.hasRabbitPoop ? base * 3 : base;
+  }
+
+  /** 장염: 발밑에 무료 트랩 1개 자동 설치 (코어·쿨다운 무관, 최대치 도달 시 무시). */
+  _tryAutoTrap() {
+    if (this._poops.length >= this._maxTraps()) return;
+    this._placePoop(0);
   }
 
   _placePoop(slot = 0) {
@@ -345,7 +369,8 @@ export default class AttackManager {
     go.body.setCircle(40);
     go.body.setImmovable(true);
     go.body.setAllowGravity(false);
-    this._poops.push({ go, damage: dmg, size });
+    // 변비(trapHits): 트랩 1개가 버티는 피격 횟수. hitEnemies 로 같은 적의 매 프레임 중복 발동 차단.
+    this._poops.push({ go, damage: dmg, size, hits: this.player.trapHits ?? 1, hitEnemies: new Set() });
     this._poopGroup.add(go);
     this._spawnRing(x, y, POOP_COLOR, size * 2);
   }
@@ -358,6 +383,11 @@ export default class AttackManager {
     const em     = this.scene.enemyManager;
     const enemy  = em.enemies.find(e => e.gameObject === enemyGO);
     if (!enemy || !enemy.alive) return;
+
+    // 변비(trapHits>1): 같은 적이 트랩 위에서 매 프레임 반복 발동하는 것을 막는다.
+    // 트랩당 적별 1회만 데미지/내구 소모 — 서로 다른 적이 밟아야 추가로 닳는다.
+    if (poop.hitEnemies.has(enemy)) return;
+    poop.hitEnemies.add(enemy);
 
     // 고슴도치 가시 상태: 무적 — 데미지 숫자 표시 안 함 (takeDamage 가 내부에서 넉백 반사 처리)
     const isSpike = enemy.state === 'spike';
@@ -390,6 +420,10 @@ export default class AttackManager {
     if (this._anyDisguise() && !isSpike && !dead) {
       this._applyDisguiseStatus(enemy, em);
     }
+
+    // 변비: 내구 1 소모. 아직 남았으면 트랩 유지 — 파괴·스플래시는 마지막 피격에서만.
+    poop.hits -= 1;
+    if (poop.hits > 0) return;
 
     const splashX = poopGO.x;
     const splashY = poopGO.y;

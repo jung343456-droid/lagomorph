@@ -30,7 +30,7 @@
  *   hpPerRoomClear   0      방 클리어 시 회복량 (영구 해금 '전투 적응' +2, '거듭난 숨결' +2)
  *   shopSlotBonus    0      상점 슬롯 추가 수 (영구 해금 '상인의 호의' / '상인의 계약' — 기본 3 + 보너스)
  *   armor            0      받는 피해 평탄 감산 (방탄조끼 +2, 영구 해금 '강화 외피' +1) — amount = max(0, amount - armor), 0 이면 피격 자체 무효. 독·화상 피해(bypassArmor) 는 관통.
- *   damageReduction  0      받는 피해 감산 비율 (영구 해금 '두꺼운 가죽 I' — amount × (1-reduction), 최소 1). 독·화상 피해(bypassArmor) 는 관통.
+ *   damageReduction  0      받는 피해 감산 비율 (영구 해금 '두꺼운 가죽 I' / 패시브 '두꺼운 모피' +0.12 — amount × (1-reduction), 최소 1). 독·화상 피해(bypassArmor) 는 관통.
  *   extraLives       0      런당 사망 무효 횟수 (영구 해금 '최후의 발버둥' — 치명타 흡수 후 maxHp×30% 복원)
  *   extraStartItems  0      시작 방 추가 아이템 수 (영구 해금 '기억 단편화' — 기본 1 + 보너스)
  *   shopPriceMult    1      상점 가격 배율 (영구 해금 '상인의 신용' ×0.9, '흥정 II' ×0.95, DungeonGenerator._generateShopSlots 참조)
@@ -45,6 +45,10 @@
  *   hasHungrySpirit  false  헝그리 정신 — 코어 < 500 일 때 부족분 ×0.1% 근접(A) 피해 증가(하한 3%, 상한 없음, 코어 500↑ 이어도 하한 3%). AttackManager._fireMelee 에 반영
  *   hasSatiety       false  포만감 — 코어 ×0.1% 치명타 피해 증가(최대 +100%, 코어 1000 에서 도달). rollAttackDamage 에서 critMult 에 합산
  *   hasRabbitPoop    false  토끼똥 — B 트랩 3개 동시 설치, 최대 설치 수 ×3, 트랩 피해 ×0.5. AttackManager._startPlace/_placePoop 에 반영
+ *   trapHits         1      트랩 1개가 버티는 피격 횟수 (변비 +1) — AttackManager._onPoopHitEnemy 가 소진 시에만 파괴+스플래시
+ *   hasAutoTrap      false  장염 — 7초마다 발밑에 무료 트랩 1개 자동 설치(코어 무소모). AttackManager.update 타이머
+ *   dodgeRate        0      잔상 — 받는 공격을 확률로 완전 회피(피해·넉백 무효). takeDamage 진입부 굴림(DoT bypassArmor 는 제외)
+ *   hasBerserk       false  야성 — HP 가 낮을수록 피해 증가(최대 +50% @0HP, 만피 +0%). rollAttackDamage 가 base 에 곱 → 근거리·트랩·스플래시 전부
  *
  * 임시 저장: serialize() 로 좌표·스탯·플래그·인벤토리를 평문 객체로 추출, applySave(data) 로 복원한다.
  *   복원 시 저장된 스탯으로 전부 덮어쓴다 — 런 중 패시브 아이템이 변경한 값까지 반영하기 위함
@@ -59,6 +63,8 @@ const BODY_W       = 40;    // 물리 히트박스 너비 (px)
 const BODY_H       = 38;    // 물리 히트박스 높이 (px)
 const WALK_FPS_MS  = 125;   // 걷기 프레임 전환 간격 (ms) ≈ 8fps
 const POISON_TICK  = 0.5;   // 플레이어 독 DoT 틱 간격 (s) — 구역 3 뱀
+const STRUGGLE_ANGLE = 13;  // 올가미 속박 중 이동 시도 시 좌우 발버둥 회전 진폭 (deg)
+const STRUGGLE_MS    = 45;  // 발버둥 흔들림 주기 계수 (작을수록 빠름) — sin(phase/STRUGGLE_MS)
 
 // soma-walk 시트: 8행(방향) × 4열(걷기 프레임). 행 = 반시계 방향 순서.
 // 프레임 인덱스 = row*4 + frame (Phaser 스프라이트시트 행우선 인덱싱)
@@ -76,7 +82,8 @@ const SAVE_STAT_KEYS = [
   'healItemMult', 'coreDropMult', 'hpPerRoomClear', 'shopSlotBonus', 'armor', 'damageReduction',
   'trapMaxBonus', 'startingCores', 'invulnDurationMult', 'hasMapReveal', 'hasSecretSense', 'extraLives',
   'extraStartItems', 'shopPriceMult', 'metaRetainRate', 'autoCollectCores', 'corePickupRange',
-  'baseAttack', 'hasHungrySpirit', 'hasSatiety',
+  'baseAttack', 'hasHungrySpirit', 'hasSatiety', 'hasRabbitPoop', 'trapHits', 'hasAutoTrap',
+  'dodgeRate', 'hasBerserk',
 ];
 
 export default class Player {
@@ -91,6 +98,7 @@ export default class Player {
     this._knockbackTimer = 0;
     this._slowTimer      = 0;     // 구역 2 거미줄 — applySlow(dur) 로 갱신, > 0 동안 이동속도 ×0.4
     this._rootTimer      = 0;     // 구역 3 올가미 덫 — applyRoot(dur) 로 갱신, > 0 동안 이동 0 (속박)
+    this._strugglePhase  = 0;     // 속박 중 이동 시도 시 좌우 발버둥(angle) 위상
     this._poisonTimer    = 0;     // 구역 3 뱀 독 — applyPoison(dps,dur) 로 갱신, POISON_TICK 마다 DoT
     this._poisonDps      = 0;     // 독 초당 피해 (틱당 dps×POISON_TICK 적용, 방어력 관통)
     this._poisonTick     = 0;     // 다음 독 틱까지 남은 시간 (s)
@@ -134,6 +142,10 @@ export default class Player {
     this.hasHungrySpirit  = false; // 헝그리 정신 — 코어 < 500 일 때 부족분 ×0.1% 근접 피해 증가(하한 3%, 상한 없음), AttackManager._fireMelee 에서 적용
     this.hasSatiety       = false; // 포만감 — 코어 ×0.1% 만큼 치명타 피해 증가(최대 +100%), rollAttackDamage 에서 critMult 에 합산
     this.hasRabbitPoop    = false; // 토끼똥 — B 트랩 3개 동시 설치, 최대 설치 수 ×3, 트랩 피해 ×0.5
+    this.trapHits         = 1;     // 변비 — 트랩 1개가 버티는 피격 횟수(+1). AttackManager._onPoopHitEnemy 소진 시에만 파괴
+    this.hasAutoTrap      = false; // 장염 — 7초마다 발밑에 무료 트랩 자동 설치. AttackManager.update 타이머
+    this.dodgeRate        = 0;     // 잔상 — 받는 공격 회피 확률(0~1). takeDamage 진입부 굴림, 성공 시 피해·넉백 무효
+    this.hasBerserk       = false; // 야성 — HP 낮을수록 피해 증가(최대 +50% @0HP). rollAttackDamage 에서 base 에 곱
     this.inventory        = [];
     this._dir            = 'bottom';
     this._row            = DIR_ROW.bottom; // 현재 방향 행
@@ -176,8 +188,17 @@ export default class Player {
       this._animFrame = 0;
       this._animTimer = 0;
       this.gameObject.setFrame(this._row * 4, false, false);
+      // 이동을 시도하면 좌우로 흔들리는 발버둥 모션 (회전 — AABB 바디엔 영향 없음)
+      if (x !== 0 || y !== 0) {
+        this._strugglePhase += delta;
+        this.gameObject.setAngle(Math.sin(this._strugglePhase / STRUGGLE_MS) * STRUGGLE_ANGLE);
+      } else {
+        this._strugglePhase = 0;
+        this.gameObject.setAngle(0);
+      }
       return;
     }
+    if (this.gameObject.angle !== 0) this.gameObject.setAngle(0);  // 속박 해제 시 기울기 복원
     const slowMult = this._slowTimer > 0 ? 0.3 : 1;
     this.gameObject.body.setVelocity(x * this.speed * slowMult, y * this.speed * slowMult);
 
@@ -259,6 +280,12 @@ export default class Player {
     if (this._invincible) return false;
 
     const bypassArmor = options.bypassArmor === true;
+
+    // 잔상 — 일반 피격을 확률로 완전 회피(피해·넉백 무효). 독·화상 DoT(bypassArmor) 는 회피 불가.
+    if (!bypassArmor && amount > 0 && this.dodgeRate > 0 && Math.random() < this.dodgeRate) {
+      this._showDodgeFX();
+      return false;
+    }
 
     // 방탄조끼 — 평탄 감산. armor 이하 공격은 통째로 무시 (무적/넉백/숫자 모두 스킵).
     // 독·화상 등 상태이상 DoT (bypassArmor=true) 는 방어력 관통.
@@ -350,6 +377,22 @@ export default class Player {
     });
   }
 
+  /** 잔상 회피 연출 — 받은 피해 무효 시 청백색 '회피!' 텍스트 부유 */
+  _showDodgeFX() {
+    const txt = this.scene.add.text(this.x, this.y - DISPLAY_H, '회피!', {
+      fontSize: '13px', color: '#cfe7ff', fontFamily: 'monospace', fontStyle: 'bold',
+      stroke: '#000000', strokeThickness: 3,
+    }).setOrigin(0.5).setDepth(60);
+    this.scene.tweens.add({
+      targets:  txt,
+      y:        txt.y - 30,
+      alpha:    0,
+      duration: 700,
+      ease:     'Quad.Out',
+      onComplete: () => { if (txt.active) txt.destroy(); },
+    });
+  }
+
   /** 즉시 정지 — 대화/메뉴 진입 시 잔여 속도로 미끄러지는 것 방지 (정지 프레임 고정) */
   halt() {
     this.gameObject.body.setVelocity(0, 0);
@@ -399,9 +442,19 @@ export default class Player {
     return Math.min(1.0, cores * 0.001);
   }
 
+  /**
+   * 야성 피해 보너스 비율 — HP 가 낮을수록 증가(만피 +0%, 0HP 에서 +50%). 미보유 시 0.
+   * rollAttackDamage 에서 base 에 곱해 근거리·트랩 직격·스플래시 전부에 실시간 적용.
+   */
+  berserkDamageBonus() {
+    if (!this.hasBerserk || this.maxHp <= 0) return 0;
+    return 0.5 * (1 - Math.max(0, Math.min(1, this.hp / this.maxHp)));
+  }
+
   rollAttackDamage(base) {
+    const scaled = this.hasBerserk ? Math.round(base * (1 + this.berserkDamageBonus())) : base;
     const isCrit = Math.random() < this.critRate;
-    const damage = isCrit ? Math.round(base * (this.critMult + this.satietyCritBonus())) : base;
+    const damage = isCrit ? Math.round(scaled * (this.critMult + this.satietyCritBonus())) : scaled;
     return { damage, isCrit };
   }
 

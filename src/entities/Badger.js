@@ -1,32 +1,48 @@
 /**
  * 오소리 (Badger) — 잠행 돌격 탱커 (구역 3, 동물)
- * HP 220 / 속도 115 / 데미지 28(할퀴기) / 코어 9
+ * HP 220 / 속도 115 / 데미지 28(돌진 접촉·할퀴기) / 코어 9
  *
- * 패턴:
- *   chase  → 플레이어 추격. 80px 이내 진입 시 할퀴기 방향 고정 → windup
- *   windup → 0.4초 예고(정지)
- *   claw   → 정면 부채꼴(반경 100px, 전방 반원) 1회 판정. 등 뒤는 안전
- *   burrow → 5.5초마다 1.2초 땅속 이동(무적·untargetable, 플레이어 근처로 접근) → emerge
- *   emerge → 0.3초 출현 예고 → 기습 claw
- *   stun   → 피격 시 0.3초 경직 + 넉백 (i-frame)
+ * 패턴 (돌진 + 근접 콤보 + 잠행 기습):
+ *   chase   → 플레이어 추격
+ *              · 80px 이내 → 할퀴기 콤보(windup)
+ *              · 80~320px + 돌진 쿨다운 0 → 돌진 예고(chargeWind)
+ *              · 그 외 + 잠행 쿨다운 0 → burrow
+ *   chargeWind → 0.45초 예고. 예고 동안 조준 방향을 천천히 추적(완전 회피는 어렵게) → 막판 고정
+ *   charge   → 360px/s 박치기 0.75초(접촉 데미지). 벽에 들이받으면 즉시 종료 → 긴 경직(슬램)
+ *   chargeRec→ 박치기 후 경직(약점 노출). 벽 슬램 0.95초 / 일반 0.35초 → chase
+ *   windup   → 0.3초 할퀴기 예고(정지)
+ *   claw     → 정면 부채꼴(반경 105px) 판정 + 전진 비집기. 최대 2연타(플레이어가 사거리에 남아있으면 추가타)
+ *   burrow   → 1.2초 땅속 이동(무적·untargetable, 플레이어 근처로) → emerge
+ *   emerge   → 0.3초 출현 예고 → 기습 할퀴기
+ *   stun     → 피격 시 0.3초 경직 + 넉백 (i-frame)
  *
- * burrow 중에는 피격 무효(takeDamage false) + 접촉 데미지 없음(attackCooldown 강제 유지).
- * speedMult: 공용 속도 배수 경유 (추격·잠행 이동에 적용)
+ * charge·burrow 중에는 넉백·경직 면역(탱커 무게감). burrow 중에는 피격 무효 + 접촉 무해.
+ * speedMult: 공용 속도 배수 경유 (추격·잠행 이동에 적용, 돌진 속도는 고정)
  */
-const DETECT_R    = 330;
-const CHASE_SPEED = 115;
-const CLAW_RANGE  = 80;
-const CLAW_R      = 100;   // 할퀴기 판정 반경
-const WINDUP_DUR  = 0.4;
-const CLAW_DUR    = 0.3;
-const EMERGE_DUR  = 0.3;
-const BURROW_CD   = 5.5;
-const BURROW_DUR  = 1.2;
-const BURROW_SPEED = 200;
-const BG_W        = 32;
-const BG_H        = 26;
-const BG_DW       = 60;
-const BG_DH       = 60;
+const DETECT_R      = 360;
+const CHASE_SPEED   = 115;
+const CLAW_RANGE    = 80;
+const CLAW_R        = 105;   // 할퀴기 판정 반경
+const CLAW_LUNGE    = 120;   // 스윙 중 전진 속도
+const WINDUP_DUR    = 0.3;
+const CLAW_DUR      = 0.2;   // 한 스윙당 지속
+const CLAW_COMBO    = 2;     // 최대 연타 수
+const CHARGE_MAX    = 320;   // 돌진 발동 최대 거리
+const CHARGE_WIND   = 0.45;
+const CHARGE_SPEED  = 360;
+const CHARGE_DUR    = 0.75;  // 돌진 최대 지속
+const CHARGE_CD     = 3.2;
+const CHARGE_RECOVER = 0.35;
+const SLAM_RECOVER  = 0.95;  // 벽 슬램 시 경직(약점 노출)
+const TRACK_RATE    = 3.5;   // 예고 중 조준 추적 속도
+const BURROW_CD     = 6.0;
+const BURROW_DUR    = 1.2;
+const BURROW_SPEED  = 200;
+const EMERGE_DUR    = 0.3;
+const BG_W          = 32;
+const BG_H          = 26;
+const BG_DW         = 60;
+const BG_DH         = 60;
 
 function calcDir(vx, vy) {
   if (Math.abs(vx) < 1 && Math.abs(vy) < 1) return null;
@@ -41,7 +57,7 @@ function calcDir(vx, vy) {
   return 'ne';
 }
 
-// 상태: chase | windup | claw | burrow | emerge | stun
+// 상태: chase | chargeWind | charge | chargeRec | windup | claw | burrow | emerge | stun
 export default class Badger {
   constructor(scene, x, y) {
     this.scene = scene;
@@ -64,9 +80,13 @@ export default class Badger {
 
     this._stateTimer = 0;
     this._burrowCd   = BURROW_CD * (0.5 + Math.random() * 0.5);
+    this._chargeCd   = CHARGE_CD * (0.3 + Math.random() * 0.6);
     this._faceX = 0;
     this._faceY = 1;
-    this._clawDone = false;
+    this._clawDone  = false;
+    this._clawIndex = 0;
+    this._chargeVx = 0;
+    this._chargeVy = 0;
 
     this._knockbackTimer    = 0;
     this._knockbackDuration = 0;
@@ -100,19 +120,73 @@ export default class Badger {
       case 'chase': {
         if (dist >= DETECT_R) { this.gameObject.body.setVelocity(0, 0); break; }
         this._burrowCd -= dt;
-        if (this._burrowCd <= 0 && dist > CLAW_RANGE) {
+        this._chargeCd -= dt;
+        if (dist <= CLAW_RANGE) {
+          this._enterWindup(dx, dy, dist);
+          break;
+        }
+        if (this._chargeCd <= 0 && dist <= CHARGE_MAX) {
+          this._faceX = dist > 0 ? dx / dist : 0;
+          this._faceY = dist > 0 ? dy / dist : 1;
+          this.state = 'chargeWind';
+          this._stateTimer = CHARGE_WIND;
+          this.gameObject.body.setVelocity(0, 0);
+          break;
+        }
+        if (this._burrowCd <= 0) {
           this.state = 'burrow';
           this._stateTimer = BURROW_DUR;
           this.gameObject.setAlpha(0.35);
           break;
         }
-        if (dist <= CLAW_RANGE) {
-          this._enterWindup(dx, dy, dist);
-          break;
-        }
         this._moveTo(dx, dy, dist, CHASE_SPEED * this.speedMult);
         break;
       }
+
+      case 'chargeWind': {
+        this.gameObject.body.setVelocity(0, 0);
+        // 예고 동안 조준을 천천히 추적 → 막판 고정 (완전 회피는 어렵지만 텔레그래프는 공정)
+        if (dist > 0) {
+          const tx = dx / dist, ty = dy / dist;
+          this._faceX += (tx - this._faceX) * Math.min(1, TRACK_RATE * dt);
+          this._faceY += (ty - this._faceY) * Math.min(1, TRACK_RATE * dt);
+        }
+        this._stateTimer -= dt;
+        if (this._stateTimer <= 0) {
+          const m = Math.hypot(this._faceX, this._faceY) || 1;
+          this._chargeVx = (this._faceX / m) * CHARGE_SPEED;
+          this._chargeVy = (this._faceY / m) * CHARGE_SPEED;
+          this.state = 'charge';
+          this._stateTimer = CHARGE_DUR;
+        }
+        break;
+      }
+
+      case 'charge': {
+        this.gameObject.body.setVelocity(this._chargeVx, this._chargeVy);
+        this._stateTimer -= dt;
+        const b = this.gameObject.body;
+        const slammed = b.blocked.left || b.blocked.right || b.blocked.up || b.blocked.down ||
+                        b.touching.left || b.touching.right || b.touching.up || b.touching.down;
+        if (slammed) {
+          this.state = 'chargeRec';
+          this._stateTimer = SLAM_RECOVER;
+          this._chargeCd = CHARGE_CD;
+          this.gameObject.body.setVelocity(0, 0);
+        } else if (this._stateTimer <= 0) {
+          this.state = 'chargeRec';
+          this._stateTimer = CHARGE_RECOVER;
+          this._chargeCd = CHARGE_CD;
+          this.gameObject.body.setVelocity(0, 0);
+        }
+        break;
+      }
+
+      case 'chargeRec':
+        this.gameObject.body.setVelocity(0, 0);
+        this._stateTimer -= dt;
+        if (this._stateTimer <= 0) this.state = 'chase';
+        break;
 
       case 'windup':
         this.gameObject.body.setVelocity(0, 0);
@@ -121,17 +195,31 @@ export default class Badger {
           this.state = 'claw';
           this._stateTimer = CLAW_DUR;
           this._clawDone = false;
+          this._clawIndex = 0;
         }
         break;
 
       case 'claw':
-        this.gameObject.body.setVelocity(0, 0);
+        // 스윙 중 정면으로 비집고 들어간다 (묵직한 전진)
+        this.gameObject.body.setVelocity(this._faceX * CLAW_LUNGE, this._faceY * CLAW_LUNGE);
         if (!this._clawDone) {
           this._clawDone = true;
           this._doClaw(player, dx, dy, dist);
         }
         this._stateTimer -= dt;
-        if (this._stateTimer <= 0) this.state = dist < DETECT_R ? 'chase' : 'chase';
+        if (this._stateTimer <= 0) {
+          this._clawIndex++;
+          // 플레이어가 아직 사거리에 남아있으면 추가타 (탱커 추적 콤보)
+          if (this._clawIndex < CLAW_COMBO && dist <= CLAW_R + 30) {
+            this._faceX = dist > 0 ? dx / dist : this._faceX;
+            this._faceY = dist > 0 ? dy / dist : this._faceY;
+            this._stateTimer = CLAW_DUR;
+            this._clawDone = false;
+          } else {
+            this.gameObject.body.setVelocity(0, 0);
+            this.state = 'chase';
+          }
+        }
         break;
 
       case 'burrow':
@@ -157,6 +245,7 @@ export default class Badger {
           this.state = 'claw';
           this._stateTimer = CLAW_DUR;
           this._clawDone = false;
+          this._clawIndex = 0;
           this._burrowCd = BURROW_CD;
         }
         break;
@@ -186,16 +275,20 @@ export default class Badger {
     if (!this.alive || this.state === 'stun' || this.state === 'burrow') return false;
     this.hp -= amount;
     if (this.hp <= 0) { this._die(); return true; }
-    if (knockback) {
-      const { dx, dy, force, duration } = knockback;
-      this._knockbackTimer    = duration;
-      this._knockbackDuration = duration;
-      this._knockbackVx = dx * force;
-      this._knockbackVy = dy * force;
+    // 돌진 중엔 넉백·경직 면역 (탱커가 박치기를 멈추지 않는다)
+    if (this.state !== 'charge') {
+      if (knockback) {
+        const { dx, dy, force, duration } = knockback;
+        this._knockbackTimer    = duration;
+        this._knockbackDuration = duration;
+        this._knockbackVx = dx * force;
+        this._knockbackVy = dy * force;
+      }
+      this._prevState = (this.state === 'windup' || this.state === 'emerge' ||
+                         this.state === 'claw'   || this.state === 'chargeWind') ? 'chase' : this.state;
+      this.state      = 'stun';
+      this.stunTimer  = 0.3;
     }
-    this._prevState = (this.state === 'windup' || this.state === 'emerge' || this.state === 'claw') ? 'chase' : this.state;
-    this.state      = 'stun';
-    this.stunTimer  = 0.3;
     this._blinkHit();
     return false;
   }
@@ -251,7 +344,14 @@ export default class Badger {
   _updateSprite() {
     if (this.state === 'stun') return;
     // 액션 상태도 전용 스프라이트 없이 이동 방향 스프라이트를 그대로 사용한다.
-    const dir = calcDir(this.gameObject.body.velocity.x, this.gameObject.body.velocity.y);
+    // 돌진·할퀴기처럼 조준 방향이 고정된 상태에서는 face 벡터로 방향을 잡는다.
+    let dir;
+    if (this.state === 'chargeWind' || this.state === 'charge' ||
+        this.state === 'windup' || this.state === 'claw' || this.state === 'emerge') {
+      dir = calcDir(this._faceX, this._faceY);
+    } else {
+      dir = calcDir(this.gameObject.body.velocity.x, this.gameObject.body.velocity.y);
+    }
     if (dir) this._lastDir = dir;
     const key = `badger-${this._lastDir}`;
     if (this._curKey !== key) {
@@ -276,8 +376,8 @@ export default class Badger {
 
   _syncHpBar() {
     const { x, y } = this.gameObject;
-    this._hpBg.setPosition(x, y - 24);
-    this._hpFill.setPosition(x - BG_DW / 2, y - 24);
+    this._hpBg.setPosition(x, y - 35);
+    this._hpFill.setPosition(x - BG_DW / 2, y - 35);
     this._hpFill.width = BG_DW * Math.max(0, this.hp / this.maxHp);
     const vis = this.hp < this.maxHp;
     this._hpBg.setVisible(vis);

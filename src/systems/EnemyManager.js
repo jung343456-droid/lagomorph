@@ -479,9 +479,14 @@ export default class EnemyManager {
         this._addBossUnit(new Hound(this.scene, x - 60, y), buffed, 440);
         this._addBossUnit(new Hound(this.scene, x + 60, y), buffed, 440);
       } else {
-        // 표시 8층: 정예 사냥꾼 듀오 (spawnEnemy 가 구역 강화 + push 처리, 이후 엘리트 변이)
-        this._makeElite(this.spawnEnemy('daggerhunter', x - 60, y));
-        this._makeElite(this.spawnEnemy('bowhunter',    x + 60, y));
+        // 표시 8층: 정예 사냥꾼 듀오 (spawnEnemy 가 구역 강화 + push 처리, 이후 엘리트 변이).
+        // 정예지만 개별 elite-killed 드롭은 억제(_noEliteDrop) — 방 클리어(boss-cleared) 시
+        // 다른 보스방처럼 패시브 아이템이 단 1개만 나오게 한다 (표시 5층 사냥개 무리와 동일).
+        [['daggerhunter', -60], ['bowhunter', 60]].forEach(([type, off]) => {
+          const hunter = this.spawnEnemy(type, x + off, y);
+          this._makeElite(hunter);
+          hunter._noEliteDrop = true;
+        });
       }
       return;
     }

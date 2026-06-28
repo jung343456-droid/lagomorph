@@ -3,16 +3,17 @@
  *   ※ 표시 3층 중간보스(Hound×2)에서도 사용. 무리 분노는 살아있는 사냥개 수만 셈.
  * HP 290 / 속도 240 / 데미지 28(접촉/돌진) / 코어 14
  *
- * 패턴 (Weasel 대시 + 무리 분노 응용):
- *   chase    → 플레이어 추격
- *   windup   → 0.25초 예고(돌진 방향 고정)  ※220px 이내 + 돌진 쿨다운 0 일 때
+ * 패턴 (무리 포위 + 치고 빠지기):
+ *   chase    → 측면 포위 접근(_stalk): 멀면 직진 접근, 가까우면 선회해 플레이어를 에워쌈
+ *              (_flankSign 좌/우 분산 — 무리가 사방에서 압박)
+ *   windup   → 0.25초 예고(돌진 방향 고정)  ※220px 이내 + 돌진 쿨다운 0 일 때, 흔히 측면에서 진입
  *   lunge    → 470px/s 도약 돌진 0.35초(접촉 데미지)
- *   cooldown → 0.35초 대기 → chase
+ *   cooldown → 0.3초 후퇴(치고 빠지기) 후 chase, 가끔 포위 방향 전환
  *   stun     → 피격 시 0.3초 경직 + 넉백 (i-frame)
  *
- * 무리 분노: 살아있는 사냥개가 1마리만 남으면 속도 ×1.3 + 돌진 쿨다운 단축.
+ * 무리 분노: 살아있는 사냥개가 1마리만 남으면 속도 ×1.4 + 돌진 쿨다운 단축 + 선회를 줄이고 직선 돌격 위주.
  * 보스 처치는 방 타입('boss')으로 처리 — 마지막 1마리 사망 시 boss-cleared (Wolf×2 와 동일).
- * speedMult: 공용 속도 배수 경유 (추격에 적용, 돌진 속도는 고정).
+ * speedMult: 공용 속도 배수 경유 (추격·포위에 적용, 돌진 속도는 고정).
  */
 const DETECT_R    = 460;
 const CHASE_SPEED = 240;
@@ -20,8 +21,9 @@ const LUNGE_RANGE = 220;
 const LUNGE_SPEED = 470;
 const WINDUP_DUR  = 0.25;
 const LUNGE_DUR   = 0.35;
-const COOL_DUR    = 0.35;
+const COOL_DUR    = 0.3;
 const COOL_RAGE   = 0.18;
+const BACKSTEP_SPEED = 190;   // cooldown 후퇴 속도 (치고 빠지기)
 const RAGE_SPD    = 1.4;
 const LUNGE_CD    = 1.6;
 const HOUND_W     = 26;
@@ -67,6 +69,7 @@ export default class Hound {
     this._lungeCd    = LUNGE_CD * (0.4 + Math.random() * 0.8); // 묶음 스폰 시 돌진 타이밍 분산
     this._lungeVx = 0;
     this._lungeVy = 0;
+    this._flankSign = Math.random() < 0.5 ? 1 : -1;            // 좌/우 포위 방향 분산
 
     this._knockbackTimer    = 0;
     this._knockbackDuration = 0;
@@ -110,7 +113,7 @@ export default class Hound {
           break;
         }
         const spd = CHASE_SPEED * this.speedMult * (rage ? RAGE_SPD : 1);
-        this._moveTo(dx, dy, dist, spd);
+        this._stalk(dx, dy, dist, spd, rage);
         break;
       }
 
@@ -130,11 +133,19 @@ export default class Hound {
         }
         break;
 
-      case 'cooldown':
-        this.gameObject.body.setVelocity(0, 0);
+      case 'cooldown': {
+        // 치고 빠지기 — 도약 후 그 자리에 멈추지 않고 플레이어에게서 짧게 후퇴
+        const len = dist > 0 ? dist : 1;
+        const bspd = BACKSTEP_SPEED * this.speedMult;
+        this.gameObject.body.setVelocity((-dx / len) * bspd, (-dy / len) * bspd);
         this._stateTimer -= dt;
-        if (this._stateTimer <= 0) { this.state = 'chase'; this._lungeCd = rage ? LUNGE_CD * 0.5 : LUNGE_CD; }
+        if (this._stateTimer <= 0) {
+          this.state = 'chase';
+          this._lungeCd = rage ? LUNGE_CD * 0.5 : LUNGE_CD;
+          if (Math.random() < 0.4) this._flankSign *= -1;   // 가끔 포위 방향 전환 (흔들기)
+        }
         break;
+      }
 
       case 'stun':
         this.stunTimer -= dt;
@@ -208,6 +219,29 @@ export default class Hound {
   _moveTo(dx, dy, dist, speed) {
     if (dist < 1) { this.gameObject.body.setVelocity(0, 0); return; }
     this.gameObject.body.setVelocity((dx / dist) * speed, (dy / dist) * speed);
+  }
+
+  /**
+   * 측면 포위 접근 — 직진(접근) 성분과 접선(선회) 성분을 거리에 따라 섞는다.
+   * 멀면 직진 위주로 거리를 좁히고, 도약 사거리 부근에선 선회 위주로 플레이어를 에워싼다.
+   * 분노 시엔 선회를 거의 버리고 직선 돌격.
+   */
+  _stalk(dx, dy, dist, speed, rage) {
+    const len = dist > 0 ? dist : 1;
+    const toX = dx / len, toY = dy / len;
+    const perpX = -toY * this._flankSign;
+    const perpY =  toX * this._flankSign;
+    let tang;
+    if (rage) {
+      tang = 0.15;
+    } else {
+      const t = Math.max(0, Math.min(1, (dist - LUNGE_RANGE) / 220)); // 멀수록 1
+      tang = 0.6 - 0.4 * t;   // 멀면 0.2(접근 위주), 가까우면 0.6(포위 위주)
+    }
+    let vx = toX * (1 - tang) + perpX * tang;
+    let vy = toY * (1 - tang) + perpY * tang;
+    const m = Math.hypot(vx, vy) || 1;
+    this.gameObject.body.setVelocity((vx / m) * speed, (vy / m) * speed);
   }
 
   _updateSprite() {

@@ -1,35 +1,60 @@
 /**
  * 사냥꾼 보스 ("수석 사냥꾼", HunterBoss) — 구역 3 표시 10층 / 구역 4 표시 10층 보스 (인간, 다페이즈)
- * HP 520 / 속도 150 / 데미지: 화살 18 · 단검 22 / 코어 22
+ * HP 750 / 속도 155 / 데미지: 화살 18 · 단검 접촉 22 · 연타 14×n / 코어 22
  *
- * 페이즈 (HP 비율):
- *   P1 (100~60%): 원거리 조준 사격(aim→화살) + 올가미 덫 설치, 선호 거리 220px 카이팅
- *   P2 (60~30%) : 근접 단검 콤보(돌진 베기) 위주 + 진입 시 사냥개 2마리 소환(1회)
- *   P3 (<30%)   : 분노(속도 ×1.2) + 광역 화살(3발 부채꼴) 빈발 + 올가미
+ * 단검 사냥꾼 + 활 사냥꾼의 특징을 모두 담은 마스터 — 거리·페이즈 가중치로 행동을 즉석 선택해
+ * 사격 ↔ 기습 대시 연타 ↔ 구르기 이탈을 자유롭게 섞는다(고정 타이머가 아니라 _chooseAction 결정).
  *
- * 상태: idle | kite | aim | windup | lunge | stun
- * 화살: addEnemyProjectile(직선). 올가미: 거미줄 잔존 hazard 패턴(Player.applyRoot).
- *        덫 범위 안에서 근거리 공격(attack-fired) SNARE_BREAK_HITS(5)회 시 끊어져 즉시 해제(덫 제거 + Player.clearRoot).
- * 처치 처리: 방 타입('boss') + isBoss 플래그 → EnemyManager 가 코어/레어 드롭. 구역 4(40층)은 런 종료(GameScene).
+ * 행동 (활/단검 공용 메뉴, 가중치만 페이즈로 변동):
+ *   aim    → 0.6초 조준선 표시 → 화살 1발 (분노 0.42초)
+ *   fan    → 조준 → 부채꼴 5발 (P3 전용)
+ *   snare  → 플레이어 위치로 올가미 덫 투척(포물선 호+회전, _throwSnare) → 착지 시 발동 (Player.applyRoot, 근접 5타로 끊김)
+ *   combo  → dashWind(0.26초 예고) → dash(470px/s 기습) → slash(전진 연타, 수동 판정 14×3, 분노 4)
+ *            → roll(460px/s 구르기 이탈)
+ *
+ * 페이즈 (HP 비율) — 강조점만 이동:
+ *   P1 (100~60%): 원거리 우세(aim·snare), 플레이어가 붙으면 가끔 combo 후 roll 이탈
+ *   P2 (60~30%) : 근접 우세(combo·snare 연계) + 진입 시 사냥개 2마리 소환(1회)
+ *   P3 (<30%)   : 분노(속도 ×1.2) — fan·combo 빈발, 모든 행동 쿨다운 단축
+ *
+ * 상태: idle | neutral | aim | dashWind | dash | slash | roll | stun
+ * 화살: addEnemyProjectile(직선). 올가미: hazard 패턴(Player.applyRoot), 사망 후 잔존(_lingeringHazards).
+ * 처치 처리: 방 타입('boss') + isBoss → EnemyManager 코어/레어 드롭. 구역 4(40층)은 런 종료(GameScene).
  */
 const DETECT_R     = 999;   // 보스방은 항상 교전
-const PREFER_DIST  = 220;
-const CLOSE_DIST   = 120;
-const MOVE_SPEED   = 150;
-const AIM_DUR      = 0.7;
-const ARROW_SPEED  = 380;
+const PREFER_DIST  = 230;   // 원거리 선호 거리
+const MELEE_DIST   = 150;   // P2 근접 선호 거리
+// 활
+const AIM_DUR      = 0.6;
+const AIM_DUR_RAGE = 0.42;
+const ARROW_SPEED  = 560;
 const ARROW_DMG    = 18;
 const ARROW_SIZE   = 18;
-const DAGGER_DMG   = 22;
-const LUNGE_SPEED  = 320;
-const WINDUP_DUR   = 0.3;
-const LUNGE_DUR    = 0.28;
+const FAN_ANGLES   = [-20, -10, 0, 10, 20];
+// 단검
+const MOVE_SPEED   = 155;
+const DASH_RANGE   = 330;   // combo 발동 가능 최대 거리
+const DASH_SPEED   = 470;
+const DASH_DUR     = 0.34;
+const WINDUP_DUR   = 0.26;
+const SLASH_RANGE  = 70;
+const SLASH_REACH  = 86;
+const SLASH_SPEED  = 330;
+const SLASH_DMG    = 14;
+const SLASH_DUR    = 0.13;
+const COMBO_HITS      = 3;
+const COMBO_HITS_RAGE = 4;
+const DAGGER_DMG   = 22;    // 접촉 데미지
+// 구르기
+const ROLL_SPEED   = 460;
+const ROLL_DUR     = 0.26;
+// 올가미
 const SNARE_R      = 42;
 const SNARE_IMG    = 84;
 const SNARE_DUR    = 6.0;
 const SNARE_MAX    = 2;
 const ROOT_DUR     = 1.0;
-const SNARE_BREAK_HITS = 5;   // 덫 범위 안에서 근거리 공격 N회 시 덫 해제
+const SNARE_BREAK_HITS = 5;
 const HB_W         = 40;
 const HB_H         = 60;
 const HB_DW        = 64;
@@ -48,20 +73,20 @@ function calcDir(vx, vy) {
   return 'ne';
 }
 
-// 상태: idle | kite | aim | windup | lunge | stun
+// 상태: idle | neutral | aim | dashWind | dash | slash | roll | stun
 export default class HunterBoss {
   constructor(scene, x, y) {
     this.scene = scene;
 
-    this.hp     = 520;
-    this.maxHp  = 520;
+    this.hp     = 750;
+    this.maxHp  = 750;
     this.speed  = MOVE_SPEED;
     this.damage = DAGGER_DMG;   // 접촉 데미지(단검)
     this.displayName = '수석 사냥꾼';
     this.isBoss = true;
 
     this.state      = 'idle';
-    this._prevState = 'idle';
+    this._prevState = 'neutral';
     this.stunTimer  = 0;
     this.attackCooldown = 0;
 
@@ -70,18 +95,24 @@ export default class HunterBoss {
     this.coreDrops = 22;
     this.speedMult = 1.0;
 
-    this._aimCd     = 1.4;
+    this._actionCd  = 0.8;
     this._aimTimer  = 0;
     this._aimFan    = false;
-    this._snareCd   = 4.0;
-    this._lungeCd   = 1.5;
     this._stateTimer = 0;
-    this._lungeVx = 0;
-    this._lungeVy = 0;
-    this._summoned = false;
-    this._snares   = [];
-    this._aimGfx   = null;
-    this._player   = null;
+    this._summoned  = false;
+    this._snares    = [];
+    this._aimGfx    = null;
+    this._player    = null;
+
+    this._faceX = 0;
+    this._faceY = 1;
+    this._dashVx = 0;
+    this._dashVy = 0;
+    this._rollVx = 0;
+    this._rollVy = 0;
+    this._slashDone  = false;
+    this._slashIndex = 0;
+    this._strafeSign = Math.random() < 0.5 ? 1 : -1;
 
     this._knockbackTimer    = 0;
     this._knockbackDuration = 0;
@@ -121,7 +152,8 @@ export default class HunterBoss {
       this._summoned = true;
       this._summonHounds();
     }
-    const rageSpd = phase === 3 ? 1.2 : 1;
+    const rage    = phase === 3;
+    const rageSpd = rage ? 1.2 : 1;
 
     const dx   = player.x - this.gameObject.x;
     const dy   = player.y - this.gameObject.y;
@@ -129,38 +161,13 @@ export default class HunterBoss {
 
     switch (this.state) {
       case 'idle':
-        this.state = 'kite';
+        this.state = 'neutral';
         break;
 
-      case 'kite': {
-        this._moveKite(dx, dy, dist, phase, rageSpd);
-        // P2: 근접 단검 콤보 우선
-        if (phase === 2) {
-          this._lungeCd -= dt;
-          if (this._lungeCd <= 0 && dist < 160) {
-            const len = dist > 0 ? dist : 1;
-            this._lungeVx = (dx / len) * LUNGE_SPEED;
-            this._lungeVy = (dy / len) * LUNGE_SPEED;
-            this.state = 'windup';
-            this._stateTimer = WINDUP_DUR;
-            this.gameObject.body.setVelocity(0, 0);
-            break;
-          }
-        }
-        // 조준 사격 (P1·P3 위주, P2 도 가끔)
-        this._aimCd -= dt;
-        if (this._aimCd <= 0) {
-          this._aimFan = phase === 3;
-          this.state = 'aim';
-          this._aimTimer = AIM_DUR;
-          this.gameObject.body.setVelocity(0, 0);
-          break;
-        }
-        // 올가미 (P1·P3)
-        if (phase !== 2) {
-          this._snareCd -= dt;
-          if (this._snareCd <= 0) { this._placeSnare(player.x, player.y); this._snareCd = 4.5; }
-        }
+      case 'neutral': {
+        this._neutralMove(dx, dy, dist, phase, rageSpd);
+        this._actionCd -= dt;
+        if (this._actionCd <= 0) this._startAction(dx, dy, dist, phase);
         break;
       }
 
@@ -170,38 +177,81 @@ export default class HunterBoss {
         this._aimTimer -= dt;
         if (this._aimTimer <= 0) {
           this._clearAimLine();
-          if (this._aimFan) this._fireFan(dx, dy, dist);
-          else this._fireArrow(dx, dy, dist, 0);
-          this._aimCd = phase === 3 ? 1.1 : 1.8;
-          this.state = 'kite';
+          if (this._aimFan) FAN_ANGLES.forEach(a => this._fireArrow(dx, dy, a));
+          else this._fireArrow(dx, dy, 0);
+          this._actionCd = this._phaseCd(phase);
+          this.state = 'neutral';
+          this._strafeSign = Math.random() < 0.5 ? 1 : -1;
         }
         break;
 
-      case 'windup':
+      case 'dashWind': {
         this.gameObject.body.setVelocity(0, 0);
-        this._stateTimer -= dt;
-        if (this._stateTimer <= 0) { this.state = 'lunge'; this._stateTimer = LUNGE_DUR; }
-        break;
-
-      case 'lunge':
-        this.gameObject.body.setVelocity(this._lungeVx, this._lungeVy);
+        // 예고 동안 조준을 천천히 추적 → 막판 고정
+        if (dist > 0) {
+          const tx = dx / dist, ty = dy / dist;
+          this._faceX += (tx - this._faceX) * Math.min(1, 4 * dt);
+          this._faceY += (ty - this._faceY) * Math.min(1, 4 * dt);
+        }
         this._stateTimer -= dt;
         if (this._stateTimer <= 0) {
-          this._lungeCd = 1.4;
-          this.state = 'kite';
+          const m = Math.hypot(this._faceX, this._faceY) || 1;
+          const spd = DASH_SPEED * this.speedMult * rageSpd;
+          this._dashVx = (this._faceX / m) * spd;
+          this._dashVy = (this._faceY / m) * spd;
+          this.state = 'dash';
+          this._stateTimer = DASH_DUR;
+        }
+        break;
+      }
+
+      case 'dash':
+        this.gameObject.body.setVelocity(this._dashVx, this._dashVy);
+        this._stateTimer -= dt;
+        if (dist <= SLASH_RANGE || this._stateTimer <= 0) {
+          this.state = 'slash';
+          this._stateTimer = SLASH_DUR;
+          this._slashDone  = false;
+          this._slashIndex = 0;
+          if (dist > 0) { this._faceX = dx / dist; this._faceY = dy / dist; }
+        }
+        break;
+
+      case 'slash':
+        // 전진 비집기 + 슬래시마다 수동 판정 (전역 접촉은 억제해 중복 방지)
+        this.gameObject.body.setVelocity(this._faceX * SLASH_SPEED, this._faceY * SLASH_SPEED);
+        this.attackCooldown = 1;
+        if (!this._slashDone) {
+          this._slashDone = true;
+          this._doSlash(player, dx, dy, dist);
+        }
+        this._stateTimer -= dt;
+        if (this._stateTimer <= 0) {
+          this._slashIndex++;
+          const maxHits = rage ? COMBO_HITS_RAGE : COMBO_HITS;
+          if (this._slashIndex < maxHits && dist <= SLASH_REACH + 26) {
+            if (dist > 0) { this._faceX = dx / dist; this._faceY = dy / dist; }
+            this._stateTimer = SLASH_DUR;
+            this._slashDone = false;
+          } else {
+            this._startRoll(dx, dy, dist);   // 연타 후 굴러서 이탈
+          }
+        }
+        break;
+
+      case 'roll':
+        this.gameObject.body.setVelocity(this._rollVx, this._rollVy);
+        this._stateTimer -= dt;
+        if (this._stateTimer <= 0) {
           this.gameObject.body.setVelocity(0, 0);
+          this._actionCd = this._phaseCd(phase) * 0.6;
+          this.state = 'neutral';
         }
         break;
 
       case 'stun':
         this.stunTimer -= dt;
-        if (this._knockbackTimer > 0) {
-          this._knockbackTimer -= dt;
-          const t = Math.max(0, this._knockbackTimer) / this._knockbackDuration;
-          this.gameObject.body.setVelocity(this._knockbackVx * t, this._knockbackVy * t);
-        } else {
-          this.gameObject.body.setVelocity(0, 0);
-        }
+        this.gameObject.body.setVelocity(0, 0);   // 보스 무게감 — 넉백 없이 정지
         if (this.stunTimer <= 0) {
           this.gameObject.clearTint();
           this.state = this._prevState;
@@ -218,9 +268,9 @@ export default class HunterBoss {
     if (!this.alive || this.state === 'stun') return false;
     this.hp -= amount;
     if (this.hp <= 0) { this._die(); return true; }
-    // 보스는 돌진 중 경직 면역, 그 외엔 짧은 경직(넉백은 약하게 적용 안 함 — 보스 무게감)
-    if (this.state !== 'lunge') {
-      this._prevState = (this.state === 'aim' || this.state === 'windup') ? 'kite' : this.state;
+    // 대시·연타·구르기 중엔 경직 면역(커밋·민첩). 사격/예고/중립은 끊을 수 있음.
+    if (this.state !== 'dash' && this.state !== 'slash' && this.state !== 'roll') {
+      this._prevState = (this.state === 'aim' || this.state === 'dashWind') ? 'neutral' : this.state;
       this._clearAimLine();
       this.state      = 'stun';
       this.stunTimer  = 0.2;
@@ -254,7 +304,7 @@ export default class HunterBoss {
   }
 
   disposeHazards() {
-    this._snares.forEach(s => { if (s.gfx?.active) s.gfx.destroy(); });
+    this._snares.forEach(s => { if (s.gfx?.active) { this.scene.tweens.killTweensOf(s.gfx); s.gfx.destroy(); } });
     this._snares = [];
     this.scene.events.off('attack-fired', this._onPlayerAttack, this);
     this.scene.enemyManager?.unregisterLingeringHazard?.(this);
@@ -265,19 +315,76 @@ export default class HunterBoss {
 
   // ── private ─────────────────────────────────────────
 
-  _moveKite(dx, dy, dist, phase, rageSpd) {
+  _phaseCd(phase) {
+    const base = phase === 3 ? 0.6 : phase === 2 ? 0.85 : 1.1;
+    return base * (0.7 + Math.random() * 0.6);
+  }
+
+  /** 중립 이동 — 선호 거리를 유지하며 측면으로 흔든다(직선 대치 회피). */
+  _neutralMove(dx, dy, dist, phase, rageSpd) {
     const len = dist > 0 ? dist : 1;
     const spd = MOVE_SPEED * this.speedMult * rageSpd;
-    if (phase === 2) {
-      // 추격 (단검 거리 확보)
-      this.gameObject.body.setVelocity((dx / len) * spd, (dy / len) * spd);
-    } else if (dist < CLOSE_DIST) {
-      this.gameObject.body.setVelocity((-dx / len) * spd, (-dy / len) * spd);
-    } else if (dist > PREFER_DIST) {
-      this.gameObject.body.setVelocity((dx / len) * spd, (dy / len) * spd);
-    } else {
-      this.gameObject.body.setVelocity(0, 0);
+    const target = phase === 2 ? MELEE_DIST : PREFER_DIST;
+    let vx, vy;
+    if (dist < target - 40) { vx = -dx / len; vy = -dy / len; }
+    else if (dist > target + 40) { vx = dx / len; vy = dy / len; }
+    else { vx = (-dy / len) * this._strafeSign; vy = (dx / len) * this._strafeSign; }
+    this.gameObject.body.setVelocity(vx * spd, vy * spd);
+  }
+
+  /** 거리·페이즈 가중치로 다음 행동을 선택해 진입 — 활/단검을 즉석에서 섞는다. */
+  _startAction(dx, dy, dist, phase) {
+    const canCombo = dist <= DASH_RANGE;
+    let w;
+    if (phase === 1)      w = { aim: 0.55, snare: 0.20, combo: canCombo ? 0.25 : 0 };
+    else if (phase === 2) w = { combo: canCombo ? 0.50 : 0, snare: 0.20, aim: 0.30 };
+    else                  w = { fan: 0.40, combo: canCombo ? 0.35 : 0, snare: 0.10, aim: 0.15 };
+    const act = this._weightedPick(w);
+
+    switch (act) {
+      case 'aim':
+      case 'fan':
+        this._aimFan = (act === 'fan');
+        this._aimTimer = phase === 3 ? AIM_DUR_RAGE : AIM_DUR;
+        this.gameObject.body.setVelocity(0, 0);
+        this.state = 'aim';
+        break;
+      case 'snare':
+        this._placeSnare(this._player.x, this._player.y);
+        this._actionCd = this._phaseCd(phase) * 0.7;
+        break;
+      case 'combo':
+        if (dist > 0) { this._faceX = dx / dist; this._faceY = dy / dist; }
+        this.gameObject.body.setVelocity(0, 0);
+        this.state = 'dashWind';
+        this._stateTimer = WINDUP_DUR;
+        break;
+      default:
+        this._actionCd = 0.3;   // 폴백 — 잠시 후 재시도
     }
+  }
+
+  _weightedPick(weights) {
+    let total = 0;
+    for (const k in weights) total += weights[k];
+    if (total <= 0) return null;
+    let r = Math.random() * total;
+    for (const k in weights) { r -= weights[k]; if (r <= 0) return k; }
+    return null;
+  }
+
+  _startRoll(dx, dy, dist) {
+    const len = dist > 0 ? dist : 1;
+    // 플레이어 반대 방향 + 약간의 측면 성분으로 굴러 이탈
+    let rx = -dx / len + (-dy / len) * this._strafeSign * 0.5;
+    let ry = -dy / len + (dx / len) * this._strafeSign * 0.5;
+    const m = Math.hypot(rx, ry) || 1;
+    const spd = ROLL_SPEED * this.speedMult;
+    this._rollVx = (rx / m) * spd;
+    this._rollVy = (ry / m) * spd;
+    this.state = 'roll';
+    this._stateTimer = ROLL_DUR;
+    this._strafeSign = Math.random() < 0.5 ? 1 : -1;
   }
 
   _summonHounds() {
@@ -290,7 +397,20 @@ export default class HunterBoss {
     });
   }
 
-  _fireArrow(dx, dy, dist, angleOffsetDeg) {
+  /** 정면 단검 베기 — 반경 SLASH_REACH 내 + 전방 반원(dot > 0)일 때만 명중 */
+  _doSlash(player, dx, dy, dist) {
+    if (dist > SLASH_REACH) return;
+    const len = dist > 0 ? dist : 1;
+    const dot = (dx / len) * this._faceX + (dy / len) * this._faceY;
+    if (dot <= 0) return;
+    player.lastDamageSource = '수석 사냥꾼' + (this.isElite ? ' (정예)' : '');
+    const dead = player.takeDamage(SLASH_DMG, {
+      dx: dx / len, dy: dy / len, force: 90, duration: 0.1,
+    });
+    if (dead) this.scene.events.emit('player-dead');
+  }
+
+  _fireArrow(dx, dy, angleOffsetDeg) {
     const base = Math.atan2(dy, dx) + (angleOffsetDeg * Math.PI / 180);
     const nx = Math.cos(base), ny = Math.sin(base);
     const proj = this.scene.add.image(this.gameObject.x, this.gameObject.y, 'hunter-arrow')
@@ -300,15 +420,20 @@ export default class HunterBoss {
     this.scene.enemyManager.addEnemyProjectile(proj, ARROW_DMG, nx * ARROW_SPEED, ny * ARROW_SPEED, '사냥꾼 화살', this.isElite);
   }
 
-  _fireFan(dx, dy, dist) {
-    [-15, 0, 15].forEach(a => this._fireArrow(dx, dy, dist, a));
-  }
-
   _drawAimLine(player) {
     if (!this._aimGfx) this._aimGfx = this.scene.add.graphics().setDepth(7);
     this._aimGfx.clear();
     this._aimGfx.lineStyle(1, 0xff5544, 0.7);
-    this._aimGfx.lineBetween(this.gameObject.x, this.gameObject.y, player.x, player.y);
+    if (this._aimFan) {
+      const ang = Math.atan2(player.y - this.gameObject.y, player.x - this.gameObject.x);
+      FAN_ANGLES.forEach(a => {
+        const r = ang + a * Math.PI / 180;
+        this._aimGfx.lineBetween(this.gameObject.x, this.gameObject.y,
+          this.gameObject.x + Math.cos(r) * 400, this.gameObject.y + Math.sin(r) * 400);
+      });
+    } else {
+      this._aimGfx.lineBetween(this.gameObject.x, this.gameObject.y, player.x, player.y);
+    }
   }
 
   _clearAimLine() {
@@ -316,19 +441,44 @@ export default class HunterBoss {
   }
 
   _placeSnare(x, y) {
-    const gfx = this.scene.add.image(x, y, 'snare').setDisplaySize(SNARE_IMG, SNARE_IMG).setDepth(7);
-    this._snares.push({ gfx, timer: SNARE_DUR, x, y, struggle: 0 });
+    // 사냥꾼 위치에서 목표 지점으로 던지는 모션 — 비행 중(flying)에는 함정 미발동
+    const sx = this.gameObject.x, sy = this.gameObject.y;
+    const gfx = this.scene.add.image(sx, sy, 'snare').setDisplaySize(SNARE_IMG, SNARE_IMG).setDepth(8);
+    const snare = { gfx, timer: SNARE_DUR, x, y, struggle: 0, flying: true };
+    this._snares.push(snare);
     while (this._snares.length > SNARE_MAX) {
       const old = this._snares.shift();
-      if (old.gfx?.active) old.gfx.destroy();
+      if (old.gfx?.active) { this.scene.tweens.killTweensOf(old.gfx); old.gfx.destroy(); }
     }
+    this._throwSnare(snare, sx, sy, x, y);
+  }
+
+  /** 덫 던지기 — 포물선 호(떠올랐다 착지) + 회전으로 날아가 착지 시 함정 발동 */
+  _throwSnare(snare, sx, sy, tx, ty) {
+    const gfx  = snare.gfx;
+    const dist = Math.hypot(tx - sx, ty - sy);
+    const dur  = Math.min(520, 200 + dist * 0.7);
+    const hop  = Math.min(40, 16 + dist * 0.06);
+    this.scene.tweens.add({
+      targets: gfx,
+      x: tx, y: ty,
+      angle: 540,
+      duration: dur,
+      ease: 'Sine.Out',
+      onUpdate: (tw) => { gfx.y -= Math.sin(tw.progress * Math.PI) * hop; },  // 떠오르는 호
+      onComplete: () => {
+        if (!gfx.active) return;
+        snare.flying = false;
+        gfx.setAngle(0).setPosition(tx, ty).setDepth(7);
+      },
+    });
   }
 
   _tickSnares(dt, player) {
     this._snares = this._snares.filter(s => {
+      if (s.flying) return true;   // 비행 중 — 착지 전이라 속박·페이드·만료 미적용
       s.timer -= dt;
       if (s.timer <= 0) { if (s.gfx?.active) s.gfx.destroy(); return false; }
-      // 만료 페이드와 struggle(끊기 진행도)을 함께 반영 — 더 옅은 쪽을 적용
       if (s.gfx?.active) {
         const timerA    = s.timer < 0.8 ? s.timer / 0.8 : 1;
         const struggleA = 1 - 0.55 * (s.struggle / SNARE_BREAK_HITS);
@@ -344,20 +494,26 @@ export default class HunterBoss {
   /** 근거리 공격(attack-fired): 덫 범위 안에서 맞으면 끊기 진행 — 5회째에 덫 제거 + 속박 즉시 해제. */
   _onPlayerAttack({ playerX, playerY }) {
     this._snares = this._snares.filter(s => {
+      if (s.flying) return true;   // 비행 중 덫은 끊을 수 없음
       const dx = playerX - s.x;
       const dy = playerY - s.y;
-      if (dx * dx + dy * dy >= SNARE_R * SNARE_R) return true;   // 덫 밖 공격 — 무관
+      if (dx * dx + dy * dy >= SNARE_R * SNARE_R) return true;
       if (++s.struggle < SNARE_BREAK_HITS) return true;
       if (s.gfx?.active) s.gfx.destroy();
-      this._player?.clearRoot?.();   // 끊어낸 즉시 이동 가능
+      this._player?.clearRoot?.();
       return false;
     });
   }
 
   _updateSprite() {
     if (this.state === 'stun') return;
-    // 액션 상태도 전용 스프라이트 없이 이동 방향 스프라이트를 그대로 사용한다.
-    const dir = calcDir(this.gameObject.body.velocity.x, this.gameObject.body.velocity.y);
+    // 방향이 고정된 상태(대시·연타)는 face 벡터로, 그 외엔 이동 방향으로 스프라이트를 잡는다.
+    let dir;
+    if (this.state === 'dashWind' || this.state === 'dash' || this.state === 'slash') {
+      dir = calcDir(this._faceX, this._faceY);
+    } else {
+      dir = calcDir(this.gameObject.body.velocity.x, this.gameObject.body.velocity.y);
+    }
     if (dir) this._lastDir = dir;
     const key = `hunterboss-${this._lastDir}`;
     if (this._curKey !== key) {

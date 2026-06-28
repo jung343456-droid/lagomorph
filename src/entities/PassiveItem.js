@@ -1,5 +1,5 @@
 /**
- * 패시브 아이템 픽업 — 총 26종 (코어 결정체 포함)
+ * 패시브 아이템 픽업 — 총 31종 (코어 결정체 포함)
  * 수집 시 플레이어 스탯에 영구 적용 (런 내 유지), 획득 이력 localStorage 저장
  * 스택형(core_crystal): stackable=true. 드롭/상점/시작방에 일반 아이템처럼 등장하되 보유 여부와 무관하게
  *   항상 후보(중복 획득) + 일반 패시브 전부 보유 시 확정 폴백 드롭. 인벤토리 ×N 누적
@@ -9,12 +9,14 @@
  * 치명타: cruel_claws(치명타율), precision_strike(둘 다), savage_strike(위력),
  *         blood_feast(치명 회복), satiety(코어 비례 치명 피해)
  * 이동/생존: swift_feet(이동속도), tough_hide(최대HP), hunter_instinct(킬회복),
- *           bulletproof_vest(방어력)
+ *           bulletproof_vest(방어력), thick_fur(받는 피해 -12%), afterimage(잔상 — 회피 15%)
+ * 조건부 공격: feral(야성 — HP 낮을수록 피해 증가, 최대 +50%, rollAttackDamage 동적 적용)
  * 트랩 위장(스플래시+상태이상): fire_disguise(화상), ice_disguise(빙결), poison_disguise(중독)
- * 트랩 강화: frugal_instinct(코어소모↓), big_trap(크기)
+ * 트랩 강화: frugal_instinct(코어소모↓), big_trap(크기), constipation(변비 — 트랩 내구 +1, 적 2마리 관통)
  * 탐색/편의: map_sense(전체 지도 공개), secret_sense(비밀 벽 가시화), core_affinity(방 클리어 시 코어 자동 수집)
  * 조건부 강화: hungry_spirit(코어 500 미만 시 부족분 비례 근접 피해 증가, 하한 3% 상한 없음 — _fireMelee 동적 적용)
  * 트랩 다중 설치: rabbit_poop(트랩 3개 동시 설치·최대 ×3·피해 ×0.5)
+ * 트랩 자동화: enteritis(장염 — 7초마다 발밑 무료 트랩 1개, AttackManager.update 타이머)
  *
  * 스폰 규칙:
  *   시작 방 — 해금된 아이템 중 랜덤 1개 (첫 런은 미스폰)
@@ -199,6 +201,40 @@ export const ITEM_DEFS = {
     desc:  '트랩 3개 동시 설치, 최대 설치 수 ×3 (피해 ×0.5)',
     color: 0xaa7722,
     apply: (player) => { player.hasRabbitPoop = true; },
+  },
+  constipation: {
+    name:  '변비',
+    desc:  '설치한 똥이 부서지지 않고 적 2마리를 맞춤',
+    dynDesc: (p) => `설치한 똥이 부서지지 않고 적 ${(p.trapHits ?? 1) + 1}마리를 맞춤`,
+    color: 0x6b4423,
+    apply: (player) => { player.trapHits += 1; },
+  },
+  enteritis: {
+    name:  '장염',
+    desc:  '7초마다 발밑에 똥을 자동 설치 (코어 무소모)',
+    color: 0xc2a83e,
+    apply: (player) => { player.hasAutoTrap = true; },
+  },
+  thick_fur: {
+    name:  '두꺼운 모피',
+    desc:  '받는 피해 -12%',
+    color: 0xb5a07a,
+    apply: (player) => { player.damageReduction += 0.12; },
+  },
+  afterimage: {
+    name:  '잔상',
+    desc:  '받는 공격을 15% 확률로 완전 회피',
+    color: 0xcfe7ff,
+    apply: (player) => { player.dodgeRate += 0.15; },
+  },
+  feral: {
+    name:  '야성',
+    desc:  'HP가 낮을수록 피해 증가 (최대 +50%)',
+    dynDesc: (p) => p.hasBerserk
+      ? `HP가 낮을수록 피해 증가 (최대 +50%, 현재 +${Math.round(p.berserkDamageBonus() * 100)}%)`
+      : 'HP가 낮을수록 피해 증가 (최대 +50%)',
+    color: 0xe24a1a,
+    apply: (player) => { player.hasBerserk = true; },
   },
 };
 

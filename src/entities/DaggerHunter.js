@@ -1,31 +1,47 @@
 /**
  * 단검 사냥꾼 (DaggerHunter) — 근접 연타 추격형 (구역 3, 인간)
- * HP 160 / 속도 185 / 데미지 24(베기 접촉) / 코어 7
+ * HP 160 / 속도 185 / 데미지 24(접촉)·12×n(연타 콤보) / 코어 7
  *
- * 패턴:
- *   idle   → chase(340px 이내 탐지)
- *   chase  → 플레이어 추격. 60px 이내 진입 시 베기 방향 고정 → windup
- *   windup → 0.35초 예고(정지)
- *   slash  → 370px/s 전진 베기 0.25초(방향 고정, 접촉 데미지)
- *   recover→ 0.45초 경직(약점 노출) → chase 복귀
- *   stun   → 피격 시 0.3초 경직 + 넉백 (i-frame)
+ * 패턴 (기습 대시 + 다단 연타 + 위빙):
+ *   idle    → chase(340px 이내 탐지)
+ *   chase   → 플레이어 추격
+ *              · 64px 이내 → 연타 콤보(windup)
+ *              · 64~240px + 대시 쿨다운 0 → 기습 대시(dash)
+ *   dash    → 440px/s 직선 대시 0.3초(거리 좁히면 즉시 콤보). 접촉 데미지
+ *   windup  → 0.22초 예고(방향 고정)
+ *   slash   → 단검 연타 콤보. 슬래시마다 전진 비집기 + 수동 판정(12 데미지),
+ *             플레이어가 사거리에 남아있으면 방향 재조준해 최대 3연타(분노 4연타)
+ *   recover → 0.4초 경직(약점 노출) → strafe 또는 chase
+ *   strafe  → 50% 확률로 0.35초 측면 위빙(플레이어 주위를 돈다) → chase
+ *   stun    → 피격 시 0.3초 경직 + 넉백 (i-frame)
  *
- * 분노(HP 30% 이하): recover 0.25초, 추격 속도 ×1.15
- * speedMult: Wolf 오라·구역 강화·까마귀 표식 등 공용 속도 배수 경유 (추격에 적용, 베기 속도는 고정)
+ * 분노(HP 30% 이하): 연타 4회, recover 0.22초, 추격·대시 속도 ×1.2
+ * slash 중엔 넉백·경직 면역(콤보 커밋). 콤보 동안 전역 접촉 억제 → 슬래시 수동 판정만 적용(중복 방지).
+ * speedMult: Wolf 오라·구역 강화·까마귀 표식 등 공용 속도 배수 경유 (추격·대시에 적용, 슬래시 전진은 고정)
  */
-const DETECT_R     = 340;
-const CHASE_SPEED  = 185;
-const SLASH_RANGE  = 60;
-const SLASH_SPEED  = 370;
-const WINDUP_DUR   = 0.35;
-const SLASH_DUR    = 0.25;
-const RECOVER_DUR  = 0.45;
-const RECOVER_RAGE = 0.25;
-const RAGE_SPD     = 1.15;
-const DH_W         = 24;
-const DH_H         = 40;
-const DH_DW        = 60;
-const DH_DH        = 60;
+const DETECT_R      = 340;
+const CHASE_SPEED   = 185;
+const SLASH_RANGE   = 64;
+const SLASH_REACH   = 78;    // 슬래시 명중 반경
+const SLASH_SPEED   = 320;   // 슬래시 중 전진 속도
+const SLASH_DMG     = 12;    // 슬래시 1타 데미지
+const WINDUP_DUR    = 0.22;
+const SLASH_DUR     = 0.13;  // 한 슬래시 지속
+const COMBO_HITS      = 3;
+const COMBO_HITS_RAGE = 4;
+const RECOVER_DUR   = 0.4;
+const RECOVER_RAGE  = 0.22;
+const DASH_RANGE    = 240;   // 대시 발동 최대 거리
+const DASH_SPEED    = 440;
+const DASH_DUR      = 0.3;
+const DASH_CD       = 2.0;
+const STRAFE_DUR    = 0.35;
+const STRAFE_CHANCE = 0.5;
+const RAGE_SPD      = 1.2;
+const DH_W          = 24;
+const DH_H          = 40;
+const DH_DW         = 60;
+const DH_DH         = 60;
 
 function calcDir(vx, vy) {
   if (Math.abs(vx) < 1 && Math.abs(vy) < 1) return null;
@@ -40,7 +56,7 @@ function calcDir(vx, vy) {
   return 'ne';
 }
 
-// 상태: idle | chase | windup | slash | recover | stun
+// 상태: idle | chase | dash | windup | slash | recover | strafe | stun
 export default class DaggerHunter {
   constructor(scene, x, y) {
     this.scene = scene;
@@ -62,8 +78,14 @@ export default class DaggerHunter {
     this.speedMult = 1.0;
 
     this._stateTimer = 0;
-    this._slashVx = 0;
-    this._slashVy = 0;
+    this._faceX = 0;
+    this._faceY = 1;
+    this._dashVx = 0;
+    this._dashVy = 0;
+    this._dashCd = DASH_CD * (0.3 + Math.random() * 0.6);
+    this._slashDone  = false;
+    this._slashIndex = 0;
+    this._strafeSign = 1;
 
     this._knockbackTimer    = 0;
     this._knockbackDuration = 0;
@@ -102,13 +124,19 @@ export default class DaggerHunter {
 
       case 'chase': {
         if (dist >= DETECT_R) { this.state = 'idle'; break; }
+        this._dashCd -= dt;
         if (dist <= SLASH_RANGE) {
+          this._enterCombo(dx, dy, dist);
+          break;
+        }
+        if (this._dashCd <= 0 && dist <= DASH_RANGE) {
           const len = dist > 0 ? dist : 1;
-          this._slashVx = (dx / len) * SLASH_SPEED;
-          this._slashVy = (dy / len) * SLASH_SPEED;
-          this.state = 'windup';
-          this._stateTimer = WINDUP_DUR;
-          this.gameObject.body.setVelocity(0, 0);
+          const spd = DASH_SPEED * this.speedMult * (rage ? RAGE_SPD : 1);
+          this._faceX = dx / len; this._faceY = dy / len;
+          this._dashVx = this._faceX * spd;
+          this._dashVy = this._faceY * spd;
+          this.state = 'dash';
+          this._stateTimer = DASH_DUR;
           break;
         }
         const spd = CHASE_SPEED * this.speedMult * (rage ? RAGE_SPD : 1);
@@ -116,30 +144,87 @@ export default class DaggerHunter {
         break;
       }
 
+      case 'dash':
+        this.gameObject.body.setVelocity(this._dashVx, this._dashVy);
+        this._stateTimer -= dt;
+        if (dist <= SLASH_RANGE) {
+          this._dashCd = DASH_CD;
+          this._enterCombo(dx, dy, dist);
+        } else if (this._stateTimer <= 0) {
+          this._dashCd = DASH_CD;
+          this.state = dist < DETECT_R ? 'chase' : 'idle';
+          this.gameObject.body.setVelocity(0, 0);
+        }
+        break;
+
       case 'windup':
         this.gameObject.body.setVelocity(0, 0);
+        this.attackCooldown = 1;             // 콤보 동안 전역 접촉 억제
         this._stateTimer -= dt;
         if (this._stateTimer <= 0) {
           this.state = 'slash';
           this._stateTimer = SLASH_DUR;
+          this._slashDone = false;
+          this._slashIndex = 0;
         }
         break;
 
       case 'slash':
-        this.gameObject.body.setVelocity(this._slashVx, this._slashVy);
+        // 슬래시 중 전진 비집기 — 약한 넉백을 상쇄하며 따라붙는다
+        this.gameObject.body.setVelocity(this._faceX * SLASH_SPEED, this._faceY * SLASH_SPEED);
+        this.attackCooldown = 1;             // 전역 접촉 억제 (수동 판정만)
+        if (!this._slashDone) {
+          this._slashDone = true;
+          this._doSlash(player, dx, dy, dist);
+        }
         this._stateTimer -= dt;
         if (this._stateTimer <= 0) {
-          this.state = 'recover';
-          this._stateTimer = rage ? RECOVER_RAGE : RECOVER_DUR;
-          this.gameObject.body.setVelocity(0, 0);
+          this._slashIndex++;
+          const maxHits = rage ? COMBO_HITS_RAGE : COMBO_HITS;
+          if (this._slashIndex < maxHits && dist <= SLASH_REACH + 24) {
+            // 플레이어가 사거리에 남아있으면 재조준 후 추가타
+            const len = dist > 0 ? dist : 1;
+            this._faceX = dx / len; this._faceY = dy / len;
+            this._stateTimer = SLASH_DUR;
+            this._slashDone = false;
+          } else {
+            this.state = 'recover';
+            this._stateTimer = rage ? RECOVER_RAGE : RECOVER_DUR;
+            this.gameObject.body.setVelocity(0, 0);
+          }
         }
         break;
 
       case 'recover':
         this.gameObject.body.setVelocity(0, 0);
         this._stateTimer -= dt;
+        if (this._stateTimer <= 0) {
+          if (dist < DETECT_R && Math.random() < STRAFE_CHANCE) {
+            this.state = 'strafe';
+            this._stateTimer = STRAFE_DUR;
+            this._strafeSign = Math.random() < 0.5 ? 1 : -1;
+          } else {
+            this.state = dist < DETECT_R ? 'chase' : 'idle';
+          }
+        }
+        break;
+
+      case 'strafe': {
+        // 플레이어 주위를 도는 측면 위빙 (직선 재접근 대신 흔들며 파고든다)
+        const len = dist > 0 ? dist : 1;
+        const perpX = (-dy / len) * this._strafeSign;
+        const perpY = (dx  / len) * this._strafeSign;
+        const inward = dist > SLASH_RANGE + 30 ? 0.4 : -0.2; // 너무 멀면 파고들고, 붙으면 살짝 벌린다
+        let vx = perpX + (dx / len) * inward;
+        let vy = perpY + (dy / len) * inward;
+        const m = Math.hypot(vx, vy) || 1;
+        const spd = CHASE_SPEED * this.speedMult;
+        this.gameObject.body.setVelocity((vx / m) * spd, (vy / m) * spd);
+        this._stateTimer -= dt;
+        if (dist <= SLASH_RANGE) { this._enterCombo(dx, dy, dist); break; }
         if (this._stateTimer <= 0) this.state = dist < DETECT_R ? 'chase' : 'idle';
         break;
+      }
 
       case 'stun':
         this.stunTimer -= dt;
@@ -165,7 +250,7 @@ export default class DaggerHunter {
     if (!this.alive || this.state === 'stun') return false;
     this.hp -= amount;
     if (this.hp <= 0) { this._die(); return true; }
-    // 베기 돌진 중엔 넉백·경직 면역
+    // 슬래시 콤보 중엔 넉백·경직 면역 (커밋된 연타)
     if (this.state !== 'slash') {
       if (knockback) {
         const { dx, dy, force, duration } = knockback;
@@ -174,7 +259,8 @@ export default class DaggerHunter {
         this._knockbackVx = dx * force;
         this._knockbackVy = dy * force;
       }
-      this._prevState = (this.state === 'windup') ? 'chase' : this.state;
+      this._prevState = (this.state === 'windup' || this.state === 'dash' ||
+                         this.state === 'strafe') ? 'chase' : this.state;
       this.state      = 'stun';
       this.stunTimer  = 0.3;
     }
@@ -204,6 +290,29 @@ export default class DaggerHunter {
 
   // ── private ─────────────────────────────────────────
 
+  _enterCombo(dx, dy, dist) {
+    const len = dist > 0 ? dist : 1;
+    this._faceX = dx / len;
+    this._faceY = dy / len;
+    this.state = 'windup';
+    this._stateTimer = WINDUP_DUR;
+    this.gameObject.body.setVelocity(0, 0);
+  }
+
+  /** 정면 단검 베기 — 반경 SLASH_REACH 내 + 전방 반원(dot > 0)일 때만 명중 */
+  _doSlash(player, dx, dy, dist) {
+    if (dist > SLASH_REACH) return;
+    const len = dist > 0 ? dist : 1;
+    const dot = (dx / len) * this._faceX + (dy / len) * this._faceY;
+    if (dot <= 0) return; // 등 뒤 안전
+    player.lastDamageSource = '단검 사냥꾼' + (this.isElite ? ' (정예)' : '');
+    // 약한 넉백 — 콤보가 자멸하지 않도록 (전진 비집기로 따라붙음)
+    const dead = player.takeDamage(SLASH_DMG, {
+      dx: dx / len, dy: dy / len, force: 90, duration: 0.1,
+    });
+    if (dead) this.scene.events.emit('player-dead');
+  }
+
   _moveTo(dx, dy, dist, speed) {
     if (dist < 1) { this.gameObject.body.setVelocity(0, 0); return; }
     this.gameObject.body.setVelocity((dx / dist) * speed, (dy / dist) * speed);
@@ -212,7 +321,13 @@ export default class DaggerHunter {
   _updateSprite() {
     if (this.state === 'stun') return;
     // 액션 상태도 전용 스프라이트 없이 이동 방향 스프라이트를 그대로 사용한다.
-    const dir = calcDir(this.gameObject.body.velocity.x, this.gameObject.body.velocity.y);
+    // 방향이 고정된 상태(대시·콤보)는 face 벡터로 방향을 잡는다.
+    let dir;
+    if (this.state === 'dash' || this.state === 'windup' || this.state === 'slash') {
+      dir = calcDir(this._faceX, this._faceY);
+    } else {
+      dir = calcDir(this.gameObject.body.velocity.x, this.gameObject.body.velocity.y);
+    }
     if (dir) this._lastDir = dir;
     const key = `daggerhunter-${this._lastDir}`;
     if (this._curKey !== key) {
@@ -237,8 +352,8 @@ export default class DaggerHunter {
 
   _syncHpBar() {
     const { x, y } = this.gameObject;
-    this._hpBg.setPosition(x, y - 32);
-    this._hpFill.setPosition(x - DH_DW / 2, y - 32);
+    this._hpBg.setPosition(x, y - 35);
+    this._hpFill.setPosition(x - DH_DW / 2, y - 35);
     this._hpFill.width = DH_DW * Math.max(0, this.hp / this.maxHp);
     const vis = this.hp < this.maxHp;
     this._hpBg.setVisible(vis);
