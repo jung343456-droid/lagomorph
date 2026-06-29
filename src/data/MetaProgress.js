@@ -99,7 +99,7 @@ export function computeUnlockStats() {
     trapMaxBonus: 0, startingCores: 0,
     hpPerRoomClear: 0, damageReduction: 0,
     extraLives: 0, invulnDurationMult: 1.0, extraStartItems: 0,
-    trapSizeMult: 1.0,
+    trapSizeMult: 1.0, baseAttack: 10, corePickupRange: 55,
   };
   for (const id of getUnlockedNodes()) {
     const node = UNLOCK_NODES[id];

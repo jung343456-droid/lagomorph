@@ -110,6 +110,9 @@ export default class HubScene extends Phaser.Scene {
       this._shopkeeper = new Shopkeeper(
         this, NPC_X_FROM_LEFT, ROOM_H * NPC_Y_FACTOR, null, 'unlock-menu-requested',
       );
+      // 근접 없이도 탭으로 바로 오픈
+      this._shopkeeper.gameObject.setInteractive({ cursor: 'pointer' });
+      this._shopkeeper.gameObject.on('pointerdown', () => this.events.emit('unlock-menu-requested'));
     }
 
     // 해금 메뉴 — Shopkeeper 근접 시: 첫 접근은 대화 → 메뉴, 이후엔 메뉴 바로 오픈
@@ -249,6 +252,7 @@ export default class HubScene extends Phaser.Scene {
     // (닫은 뒤엔 한 번 멀어졌다 다시 와야 재오픈 — far→near 엣지.)
     this._tape = new MemoryTape(this, ROOM_W - TAPE_X_FROM_RIGHT, ROOM_H * TAPE_Y_FACTOR, {
       onApproach: () => this._openMemoryMenu(),
+      onTap: () => this._openMemoryMenu(),
     });
   }
 

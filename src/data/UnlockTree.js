@@ -1,5 +1,5 @@
 /**
- * 영구 해금 트리 — 공격 10(파동 확장 3 포함) / 생존 11(강인한 몸 5 포함) / 특수 14(잔해 회수 4·코어 흡수 3 포함) = 35노드.
+ * 영구 해금 트리 — 공격 14(파동 확장 3·근원 강화 5 포함) / 생존 12(강인한 몸 5·강화 외피 2 포함) / 특수 14(잔해 회수 4·코어 흡수 3 포함) = 40노드.
  * 각 단계 N 노드는 단계 N-1 노드의 prereq 를 갖는다 (tier = 선행 깊이 = 표시 순서, 선행 해금 필수).
  * 특수 계열은 비용 오름차순 단일 사슬이며, 잔해 회수도 같은 사슬에 편입되어 있다.
  *
@@ -66,7 +66,31 @@ export const UNLOCK_NODES = {
   },
   core_amplify: {
     branch: 'attack', tier: 10, prereq: 'starting_ember', cost: 1000,
-    name: '근원 강화', desc: '기본 공격력 +1 (근거리·설치 동시 상승)',
+    name: '근원 강화 I', desc: '기본 공격력 +1 (근거리·설치 동시 상승)',
+    dynDesc: (p) => `기본 공격력 +1 (${p.baseAttack ?? 10} → ${(p.baseAttack ?? 10) + 1})`,
+    apply: (p) => { p.baseAttack = (p.baseAttack ?? 10) + 1; },
+  },
+  core_amplify_2: {
+    branch: 'attack', tier: 11, prereq: 'core_amplify', cost: 1200,
+    name: '근원 강화 II', desc: '기본 공격력 +1 (근거리·설치 동시 상승)',
+    dynDesc: (p) => `기본 공격력 +1 (${p.baseAttack ?? 10} → ${(p.baseAttack ?? 10) + 1})`,
+    apply: (p) => { p.baseAttack = (p.baseAttack ?? 10) + 1; },
+  },
+  core_amplify_3: {
+    branch: 'attack', tier: 12, prereq: 'core_amplify_2', cost: 1500,
+    name: '근원 강화 III', desc: '기본 공격력 +1 (근거리·설치 동시 상승)',
+    dynDesc: (p) => `기본 공격력 +1 (${p.baseAttack ?? 10} → ${(p.baseAttack ?? 10) + 1})`,
+    apply: (p) => { p.baseAttack = (p.baseAttack ?? 10) + 1; },
+  },
+  core_amplify_4: {
+    branch: 'attack', tier: 13, prereq: 'core_amplify_3', cost: 2000,
+    name: '근원 강화 IV', desc: '기본 공격력 +1 (근거리·설치 동시 상승)',
+    dynDesc: (p) => `기본 공격력 +1 (${p.baseAttack ?? 10} → ${(p.baseAttack ?? 10) + 1})`,
+    apply: (p) => { p.baseAttack = (p.baseAttack ?? 10) + 1; },
+  },
+  core_amplify_5: {
+    branch: 'attack', tier: 14, prereq: 'core_amplify_4', cost: 2500,
+    name: '근원 강화 V', desc: '기본 공격력 +1 (근거리·설치 동시 상승)',
     dynDesc: (p) => `기본 공격력 +1 (${p.baseAttack ?? 10} → ${(p.baseAttack ?? 10) + 1})`,
     apply: (p) => { p.baseAttack = (p.baseAttack ?? 10) + 1; },
   },
@@ -102,33 +126,40 @@ export const UNLOCK_NODES = {
   },
   reinforced_hide: {
     branch: 'survival', tier: 6, prereq: 'tough_body_3', cost: 500,
-    name: '강화 외피', desc: '시작 방어력 +1 (방탄조끼와 누적)',
+    name: '강화 외피 I', desc: '시작 방어력 +1 (방탄조끼와 누적)',
+    dynDesc: (p) => `시작 방어력 +1 (${p.armor ?? 0} → ${(p.armor ?? 0) + 1})`,
+    apply: (p) => { p.armor = (p.armor ?? 0) + 1; },
+  },
+  reinforced_hide_2: {
+    branch: 'survival', tier: 7, prereq: 'reinforced_hide', cost: 600,
+    name: '강화 외피 II', desc: '시작 방어력 +1 (→ +2)',
+    dynDesc: (p) => `시작 방어력 +1 (${p.armor ?? 0} → ${(p.armor ?? 0) + 1})`,
     apply: (p) => { p.armor = (p.armor ?? 0) + 1; },
   },
   tough_body_4: {
-    branch: 'survival', tier: 7, prereq: 'reinforced_hide', cost: 600,
+    branch: 'survival', tier: 8, prereq: 'reinforced_hide_2', cost: 650,
     name: '강인한 몸 IV', desc: '시작 HP +10 (→ 140)',
     dynDesc: (p) => `시작 HP +10 (${p.maxHp} → ${p.maxHp + 10})`,
     apply: (p) => { p.maxHp += 10; p.hp += 10; },
   },
   second_wind: {
-    branch: 'survival', tier: 8, prereq: 'tough_body_4', cost: 700,
+    branch: 'survival', tier: 9, prereq: 'tough_body_4', cost: 700,
     name: '거듭난 숨결', desc: '방 클리어 시 HP +2 추가 (총 +4)',
     apply: (p) => { p.hpPerRoomClear = (p.hpPerRoomClear ?? 0) + 2; },
   },
   tough_body_5: {
-    branch: 'survival', tier: 9, prereq: 'second_wind', cost: 800,
+    branch: 'survival', tier: 10, prereq: 'second_wind', cost: 800,
     name: '강인한 몸 V', desc: '시작 HP +10 (→ 150)',
     dynDesc: (p) => `시작 HP +10 (${p.maxHp} → ${p.maxHp + 10})`,
     apply: (p) => { p.maxHp += 10; p.hp += 10; },
   },
   phantom_guard: {
-    branch: 'survival', tier: 10, prereq: 'tough_body_5', cost: 900,
+    branch: 'survival', tier: 11, prereq: 'tough_body_5', cost: 900,
     name: '잔영의 가호', desc: '피격 후 무적 시간 +25%',
     apply: (p) => { p.invulnDurationMult = (p.invulnDurationMult ?? 1) * 1.25; },
   },
   last_struggle: {
-    branch: 'survival', tier: 11, prereq: 'phantom_guard', cost: 1000,
+    branch: 'survival', tier: 12, prereq: 'phantom_guard', cost: 1000,
     name: '최후의 발버둥', desc: '1회 사망 무효 (HP 30% 복원, 런당)',
     apply: (p) => { p.extraLives = (p.extraLives ?? 0) + 1; },
   },
