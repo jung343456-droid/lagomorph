@@ -79,7 +79,7 @@ const PHASE3_TINT       = 0xff6666;
 const HIT_STUN_DUR      = 0.3;
 
 const SUMMON_TYPE       = 'bat';
-const SUMMON_COUNT_P3   = 4;
+const SUMMON_COUNT_P3   = 18;
 
 function calcDir(vx, vy) {
   if (Math.abs(vx) < 1 && Math.abs(vy) < 1) return null;

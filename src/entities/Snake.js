@@ -1,16 +1,21 @@
 /**
- * 뱀 (Snake) — 잠복 기습 + 독 (구역 3, 동물)
- * HP 80 / 속도 140 / 데미지 18(물기) + 독 6dps×3.5s / 코어 5
+ * 뱀 (Snake) — 잠복 기습 + 물고 매달리기 (구역 3, 동물)
+ * HP 80 / 속도 140 / 데미지: 물기 명중 시 매달려 지속 6dps×5s / 코어 5
  *
  * 패턴:
  *   lurk   → 저속 배회(풀숲 잠복). 140px 이내 진입 시 windup 전환
  *   windup → 0.3초 예고(정지, 대시 방향 고정)
- *   strike → 360px/s 직선 런지 0.35초. 물기 명중 시 플레이어 독 부여(applyPoison)
+ *   strike → 360px/s 직선 런지 0.35초. 물기 명중 시 cling 전환(매달림)
+ *   cling  → 플레이어에 부착 추종. 이속 ×0.8(player.applyBiteSlow) + 지속 데미지(6dps×0.5틱).
+ *            최대 5초. 매달린 동안 피격당 1 데미지만 받고 넉백·경직 면역, 3회 피격 시 탈락.
+ *            5초 경과 시 피격 횟수와 무관하게 탈락(→ retreat). 부착 중 접촉 데미지는 억제.
  *   retreat→ 0.4초 후퇴 후 lurk 복귀
  *   stun   → 피격 시 0.3초 경직 + 넉백 (이 시간 동안 추가 피격 무시 = i-frame)
  *
- * 독: 플레이어 측 DoT (Player.applyPoison) — 두꺼비 독 웅덩이와 별개 경로. 방어력 관통.
+ * 지속 데미지: 매달린 동안 player.takeDamage(bypassArmor) 직접 틱 — 방어력 관통.
  * speedMult: Wolf 오라 등 공용 속도 배수 경유 (배회·후퇴에 적용, 런지 속도는 고정)
+ * 렌더: 8방향 스프라이트 대신 남향 이미지(snake-s) 하나만 쓰고 진행 방향으로 회전(rotFor).
+ *       매달림 중엔 부착 시 고정한 회전값(_clingRot, 머리가 플레이어를 향함)을 유지한다.
  */
 const DETECT_R    = 140;
 const LURK_SPEED  = 140;
@@ -18,29 +23,28 @@ const STRIKE_SPEED = 360;
 const WINDUP_DUR  = 0.3;
 const STRIKE_DUR  = 0.35;
 const RETREAT_DUR = 0.4;
-const BITE_R      = 28;   // 물기 명중 판정 반경 (독 부여)
-const POISON_DPS  = 6;
-const POISON_DUR  = 3.5;
+const BITE_R      = 28;   // 물기 명중 판정 반경 (매달림 부착)
+const CLING_DUR   = 5;    // 매달림 최대 지속 (s) — 경과 시 피격 횟수 무관 탈락
+const CLING_HITS  = 3;    // 매달림 중 탈락까지 필요한 피격 횟수
+const CLING_BITE_DMG = 1; // 매달림 중 피격당 뱀이 받는 데미지
+const CLING_DPS   = 6;    // 매달림 중 플레이어 지속 데미지(초당)
+const CLING_TICK  = 0.5;  // 지속 데미지 틱 간격 (s)
+const CLING_OFFSET = 16;  // 부착 시 플레이어로부터의 표시 오프셋 (px)
+const BITE_SLOW_REFRESH = 0.2; // 매 프레임 갱신하는 이속 슬로우 잔여 시간 (s)
 const LURK_FLIP   = 1.6;  // 배회 방향 전환 주기 (s)
 const SNAKE_W     = 22;
 const SNAKE_H     = 16;
 const SNAKE_DW    = 60;
 const SNAKE_DH    = 60;
 
-function calcDir(vx, vy) {
-  if (Math.abs(vx) < 1 && Math.abs(vy) < 1) return null;
-  const a = Math.atan2(vy, vx) * 180 / Math.PI;
-  if (a >  -22.5 && a <=   22.5) return 'e';
-  if (a >   22.5 && a <=   67.5) return 'se';
-  if (a >   67.5 && a <=  112.5) return 's';
-  if (a >  112.5 && a <=  157.5) return 'sw';
-  if (a >  157.5 || a <= -157.5) return 'w';
-  if (a > -157.5 && a <= -112.5) return 'nw';
-  if (a > -112.5 && a <=  -67.5) return 'n';
-  return 'ne';
+// 뱀은 아래(남쪽) 방향 스프라이트 하나(snake-s)만 사용하고, 진행 방향으로 회전시킨다.
+//   기본 이미지가 남향(아래) → 이동 각도(atan2(vy,vx))에서 남향 각도(π/2)를 빼면 회전값.
+const SOUTH_ANGLE = Math.PI / 2;
+function rotFor(vx, vy) {
+  return Math.atan2(vy, vx) - SOUTH_ANGLE;
 }
 
-// 상태: lurk | windup | strike | retreat | stun
+// 상태: lurk | windup | strike | cling | retreat | stun
 export default class Snake {
   constructor(scene, x, y) {
     this.scene = scene;
@@ -68,13 +72,19 @@ export default class Snake {
     this._strikeVy    = 0;
     this._bitThisStrike = false;
 
+    this._clingTimer  = 0;
+    this._clingTick   = 0;
+    this._clingHits   = 0;
+    this._clingOffX   = 0;
+    this._clingOffY   = 0;
+
     this._knockbackTimer    = 0;
     this._knockbackDuration = 0;
     this._knockbackVx = 0;
     this._knockbackVy = 0;
 
-    this._lastDir = 's';
-    this._curKey  = 'snake-s';
+    this._lastRot = 0;   // 마지막 진행 방향 회전값 (정지 시 유지)
+    this._clingRot = 0;  // 매달림 중 고정 회전값 (머리가 플레이어를 향함)
 
     this.gameObject = scene.add.image(x, y, 'snake-s').setDisplaySize(SNAKE_DW, SNAKE_DH);
     scene.physics.add.existing(this.gameObject);
@@ -121,10 +131,11 @@ export default class Snake {
 
       case 'strike':
         this.gameObject.body.setVelocity(this._strikeVx, this._strikeVy);
-        // 물기 — 근접 명중 시 1회 독 부여
+        // 물기 — 근접 명중 시 매달림(cling) 전환
         if (!this._bitThisStrike && dist < BITE_R) {
           this._bitThisStrike = true;
-          player.applyPoison?.(POISON_DPS, POISON_DUR);
+          this._attach(player);
+          break;
         }
         this._stateTimer -= dt;
         if (this._stateTimer <= 0) {
@@ -132,6 +143,25 @@ export default class Snake {
           this._stateTimer = RETREAT_DUR;
         }
         break;
+
+      case 'cling': {
+        // 플레이어에 부착 추종 — 위치 고정, 이속 슬로우·지속 데미지·접촉 데미지 억제
+        this.gameObject.body.setVelocity(0, 0);
+        this.gameObject.setPosition(player.x + this._clingOffX, player.y + this._clingOffY);
+        player.applyBiteSlow?.(BITE_SLOW_REFRESH);
+        this.attackCooldown = 0.5; // 접촉 데미지 억제 (자체 DoT 사용)
+        this._clingTick -= dt;
+        if (this._clingTick <= 0) {
+          this._clingTick += CLING_TICK;
+          const dmg = Math.max(1, Math.round(CLING_DPS * CLING_TICK));
+          player.lastDamageSource = '뱀';
+          const dead = player.takeDamage(dmg, null, { bypassArmor: true });
+          if (dead) this.scene.events.emit('player-dead');
+        }
+        this._clingTimer -= dt;
+        if (this._clingTimer <= 0) this._detach(); // 5초 경과 — 피격 횟수 무관 탈락
+        break;
+      }
 
       case 'retreat': {
         const len = dist > 0 ? dist : 1;
@@ -165,7 +195,17 @@ export default class Snake {
   }
 
   takeDamage(amount, knockback = null) {
-    if (!this.alive || this.state === 'stun') return false;
+    if (!this.alive) return false;
+    // 매달림 중 — 피격당 1 데미지만, 넉백·경직 면역. 3회 누적 시 탈락.
+    if (this.state === 'cling') {
+      this.hp -= CLING_BITE_DMG;
+      this._blinkHit();
+      if (this.hp <= 0) { this._die(); return true; }
+      this._clingHits++;
+      if (this._clingHits >= CLING_HITS) this._detach();
+      return false;
+    }
+    if (this.state === 'stun') return false;
     this.hp -= amount;
     if (this.hp <= 0) { this._die(); return true; }
     // 런지 중 피격은 넉백·경직 면역(돌진 유지) — 그 외엔 경직
@@ -207,6 +247,28 @@ export default class Snake {
 
   // ── private ─────────────────────────────────────────
 
+  _attach(player) {
+    // 부착 방향(플레이어→뱀)으로 표시 오프셋, 머리는 플레이어 쪽을 향하도록 스프라이트 정렬
+    const dx  = this.gameObject.x - player.x;
+    const dy  = this.gameObject.y - player.y;
+    const len = Math.hypot(dx, dy) || 1;
+    this._clingOffX = (dx / len) * CLING_OFFSET;
+    this._clingOffY = (dy / len) * CLING_OFFSET;
+    // 머리가 플레이어 쪽(부착 오프셋의 반대)을 향하도록 회전 고정
+    this._clingRot  = rotFor(-this._clingOffX, -this._clingOffY);
+
+    this.state       = 'cling';
+    this._clingTimer = CLING_DUR;
+    this._clingTick  = CLING_TICK;
+    this._clingHits  = 0;
+  }
+
+  _detach() {
+    this._clingHits  = 0;
+    this.state       = 'retreat';
+    this._stateTimer = RETREAT_DUR;
+  }
+
   _updateLurk(dt) {
     this._lurkFlip -= dt;
     if (this._lurkFlip <= 0) {
@@ -221,15 +283,15 @@ export default class Snake {
 
   _updateSprite() {
     if (this.state === 'stun') return;
-    // 액션 상태도 전용 스프라이트 없이 이동 방향 스프라이트를 그대로 사용한다.
-    const dir = calcDir(this.gameObject.body.velocity.x, this.gameObject.body.velocity.y);
-    if (dir) this._lastDir = dir;
-    const key = `snake-${this._lastDir}`;
-    if (this._curKey !== key) {
-      this._curKey = key;
-      this.gameObject.setTexture(key).setDisplaySize(SNAKE_DW, SNAKE_DH);
-      this._applyBodySize();
+    // 단일 스프라이트(snake-s)를 진행 방향으로 회전. 매달림 중엔 부착 시 고정한 회전값 유지.
+    if (this.state === 'cling') {
+      this.gameObject.setRotation(this._clingRot);
+      return;
     }
+    const vx = this.gameObject.body.velocity.x;
+    const vy = this.gameObject.body.velocity.y;
+    if (Math.abs(vx) >= 1 || Math.abs(vy) >= 1) this._lastRot = rotFor(vx, vy);
+    this.gameObject.setRotation(this._lastRot);
   }
 
   _applyBodySize() {

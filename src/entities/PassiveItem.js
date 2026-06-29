@@ -16,7 +16,7 @@
  * 탐색/편의: map_sense(전체 지도 공개), secret_sense(비밀 벽 가시화), core_affinity(방 클리어 시 코어 자동 수집)
  * 조건부 강화: hungry_spirit(코어 500 미만 시 부족분 비례 근접 피해 증가, 하한 3% 상한 없음 — _fireMelee 동적 적용)
  * 트랩 다중 설치: rabbit_poop(트랩 3개 동시 설치·최대 ×3·피해 ×0.5)
- * 트랩 자동화: enteritis(장염 — 7초마다 발밑 무료 트랩 1개, AttackManager.update 타이머)
+ * 트랩 자동화: enteritis(장염 — 7초마다 발밑 무료 트랩 자동; 토끼똥 동시 소유 시 3개, AttackManager._tryAutoTrap)
  *
  * 스폰 규칙:
  *   시작 방 — 해금된 아이템 중 랜덤 1개 (첫 런은 미스폰)
@@ -198,7 +198,7 @@ export const ITEM_DEFS = {
   },
   rabbit_poop: {
     name:  '토끼똥',
-    desc:  '트랩 3개 동시 설치, 최대 설치 수 ×3 (피해 ×0.5)',
+    desc:  '트랩 3개 동시 설치, 최대 설치 수 ×3 (피해 ×0.6)',
     color: 0xaa7722,
     apply: (player) => { player.hasRabbitPoop = true; },
   },

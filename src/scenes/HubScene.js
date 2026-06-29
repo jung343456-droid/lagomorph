@@ -305,7 +305,15 @@ export default class HubScene extends Phaser.Scene {
         }).setOrigin(1, 0.5).setScrollFactor(0).setDepth(203);
         row.on('pointerover', () => row.setFillStyle(0x32204a));
         row.on('pointerout',  () => row.setFillStyle(0x231634));
-        row.on('pointerdown', () => { close(); this._startRunAtFloor(v.floor); });
+        row.on('pointerdown', () => {
+          close();
+          this._buildConfirmModal({
+            text: `기억 보관실 ${idxLabel}\n${v.title}\n\n${v.floor}층에서 새 런을 시작합니다.`,
+            okLabel: '재생',
+            okColor: '#bb88ff',
+            onOk: () => this._startRunAtFloor(v.floor),
+          });
+        });
         els.push(row, label, floorTxt);
       });
     }
@@ -518,7 +526,9 @@ export default class HubScene extends Phaser.Scene {
     this._starting = true;
     this.cameras.main.fadeOut(450, 0, 0, 0);
     this.cameras.main.once('camerafadeoutcomplete', () => {
-      this.scene.start('GameScene');
+      // startFloor: 1 을 명시 — 생략하면 Phaser 가 이전 런의 scene data(예: startFloor: 5)를 재사용해
+      // 누군가의 기억 직후 허브 시작 시 잘못된 층으로 진입하는 버그가 생긴다.
+      this.scene.start('GameScene', { startFloor: 1 });
     });
   }
 

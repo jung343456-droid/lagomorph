@@ -45,7 +45,7 @@ src/
 │   ├── Fang.js             최종 보스 3층 (idle/chase/dash/combo/stun)
 │   ├── DaggerHunter.js      구역3 근접 연타 (idle/chase/windup/slash/recover/stun), 인간 사냥꾼
 │   ├── BowHunter.js         구역3 원거리 조준 + 올가미 덫(범위 안 근거리 공격 5회로 끊기) (idle/kite/aim/stun)
-│   ├── Snake.js             구역3 잠복 기습 + 독 (lurk/windup/strike/retreat/stun), Player.applyPoison
+│   ├── Snake.js             구역3 잠복 기습 + 물고 매달리기 (lurk/windup/strike/cling/retreat/stun), 매달림 중 이속×0.8(Player.applyBiteSlow)+지속데미지6dps, 피격3회·5초 시 탈락
 │   ├── Crow.js              구역3 공중 표식 지원 (circle/mark/dive/stun), 사냥꾼 speedMult ×1.15 (Wolf 오라 응용)
 │   ├── Badger.js            구역3 잠행 돌격 탱커 (chase/windup/claw/burrow/emerge/stun), burrow 무적
 │   ├── Hound.js             구역3 표시5층 보스 "사냥개 무리" 구성원 2마리(+정예 활사냥꾼 2) (chase/windup/lunge/cooldown/stun)

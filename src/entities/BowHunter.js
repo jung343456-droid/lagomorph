@@ -1,6 +1,6 @@
 /**
  * 활 사냥꾼 (BowHunter) — 원거리 조준 사격형 + 올가미 덫 (구역 3, 인간)
- * HP 105 / 속도 145 / 데미지 26(화살) / 코어 6
+ * HP 105 / 속도 145 / 데미지 23(화살) / 코어 6
  *
  * 패턴:
  *   idle → kite(DETECT_R=1000px 이내 탐지 — 사실상 맵 전체)
@@ -31,8 +31,8 @@ const AIM_DUR_RAGE = 0.45;
 const ARROW_SPEED  = 580;
 const ARROW_SIZE   = 16;
 const SNARE_CD     = 3.5;
-const SNARE_R      = 40;    // 속박 판정 반경
-const SNARE_IMG    = 80;    // snare 텍스처 표시 크기 (1:1)
+const SNARE_R      = 32;    // 속박 판정 반경
+const SNARE_IMG    = 64;    // snare 텍스처 표시 크기 (1:1)
 const SNARE_DUR    = 6.0;
 const SNARE_MAX    = 1;
 const ROOT_DUR     = 1.0;
@@ -63,7 +63,7 @@ export default class BowHunter {
     this.hp     = 105;
     this.maxHp  = 105;
     this.speed  = KITE_SPEED;
-    this.damage = 26;
+    this.damage = 23;
     this.displayName = '활 사냥꾼';
 
     this.state      = 'idle';

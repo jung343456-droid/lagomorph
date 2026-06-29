@@ -27,7 +27,7 @@ const SPLASH_RADIUS = 40;  // 위장 트랩 스플래시 반경 (px)
 const SPLASH_DMG    = 15;  // 위장 트랩 스플래시 데미지
 const DISGUISE_PROC = 0.5; // 위장 트랩 상태이상 발동 확률 (명중 enemy 1마리당, 위장 종류별 독립)
 
-const AUTO_TRAP_INTERVAL = 7; // 장염(hasAutoTrap) 자동 트랩 설치 간격 (초)
+const AUTO_TRAP_INTERVAL = 5; // 장염(hasAutoTrap) 자동 트랩 설치 간격 (초)
 
 // 슬롯 탭 판정: 위치는 Settings.getSlotPos, 반지름은 getSlotRadius 가 제공
 // (개별 자유 배치·크기 조절 가능). 시각이 원형이라 판정도 원형 거리로 맞춘다.
@@ -344,10 +344,11 @@ export default class AttackManager {
     return this.player.hasRabbitPoop ? base * 3 : base;
   }
 
-  /** 장염: 발밑에 무료 트랩 1개 자동 설치 (코어·쿨다운 무관, 최대치 도달 시 무시). */
+  /** 장염: 발밑에 무료 트랩 자동 설치 (코어·쿨다운 무관, 최대치 도달 시 무시). 토끼똥 소유 시 3개 동시 설치. */
   _tryAutoTrap() {
-    if (this._poops.length >= this._maxTraps()) return;
-    this._placePoop(0);
+    const count = this.player.hasRabbitPoop ? 3 : 1;
+    const slots = this._maxTraps() - this._poops.length;
+    for (let i = 0; i < Math.min(count, slots); i++) this._placePoop(i);
   }
 
   _placePoop(slot = 0) {
@@ -359,7 +360,7 @@ export default class AttackManager {
     const y = py + Math.sin(angle) * spread;
     const sizeMult = this.player.trapSizeMult * (this.player.hasRabbitPoop ? 0.3 : 1);
     const size = POOP_SIZE * sizeMult;
-    const dmg  = this.player.baseAttack * TRAP_DMG_MULT * (this.player.hasRabbitPoop ? 0.5 : 1);
+    const dmg  = this.player.baseAttack * TRAP_DMG_MULT * (this.player.hasRabbitPoop ? 0.6 : 1);
     // 원형 표시: 흰 원 텍스처(poop_circle 80px)에 tint·displaySize 적용 (Arc 금지 규칙 준수)
     const go = this.scene.add.image(x, y, 'poop_circle').setTint(POOP_COLOR);
     go.setDisplaySize(size, size);

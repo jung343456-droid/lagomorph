@@ -44,9 +44,9 @@
  *   corePickupRange  55     코어 자동 흡수 시작 반경(px) — 해금 '코어 흡수 I~III' +15 씩 (→ 70/85/100)
  *   hasHungrySpirit  false  헝그리 정신 — 코어 < 500 일 때 부족분 ×0.1% 근접(A) 피해 증가(하한 3%, 상한 없음, 코어 500↑ 이어도 하한 3%). AttackManager._fireMelee 에 반영
  *   hasSatiety       false  포만감 — 코어 ×0.1% 치명타 피해 증가(최대 +100%, 코어 1000 에서 도달). rollAttackDamage 에서 critMult 에 합산
- *   hasRabbitPoop    false  토끼똥 — B 트랩 3개 동시 설치, 최대 설치 수 ×3, 트랩 피해 ×0.5. AttackManager._startPlace/_placePoop 에 반영
+ *   hasRabbitPoop    false  토끼똥 — B 트랩 3개 동시 설치, 최대 설치 수 ×3, 트랩 피해 ×0.6. AttackManager._startPlace/_placePoop 에 반영
  *   trapHits         1      트랩 1개가 버티는 피격 횟수 (변비 +1) — AttackManager._onPoopHitEnemy 가 소진 시에만 파괴+스플래시
- *   hasAutoTrap      false  장염 — 7초마다 발밑에 무료 트랩 1개 자동 설치(코어 무소모). AttackManager.update 타이머
+ *   hasAutoTrap      false  장염 — 7초마다 발밑에 무료 트랩 자동 설치(코어 무소모); 토끼똥 소유 시 3개 동시. AttackManager._tryAutoTrap
  *   dodgeRate        0      잔상 — 받는 공격을 확률로 완전 회피(피해·넉백 무효). takeDamage 진입부 굴림(DoT bypassArmor 는 제외)
  *   hasBerserk       false  야성 — HP 가 낮을수록 피해 증가(최대 +50% @0HP, 만피 +0%). rollAttackDamage 가 base 에 곱 → 근거리·트랩·스플래시 전부
  *
@@ -97,6 +97,7 @@ export default class Player {
     this._invincible     = false;
     this._knockbackTimer = 0;
     this._slowTimer      = 0;     // 구역 2 거미줄 — applySlow(dur) 로 갱신, > 0 동안 이동속도 ×0.4
+    this._biteSlowTimer  = 0;     // 구역 3 뱀 매달림 — applyBiteSlow(dur) 로 매 프레임 갱신, > 0 동안 이동속도 ×0.8
     this._rootTimer      = 0;     // 구역 3 올가미 덫 — applyRoot(dur) 로 갱신, > 0 동안 이동 0 (속박)
     this._strugglePhase  = 0;     // 속박 중 이동 시도 시 좌우 발버둥(angle) 위상
     this._poisonTimer    = 0;     // 구역 3 뱀 독 — applyPoison(dps,dur) 로 갱신, POISON_TICK 마다 DoT
@@ -175,6 +176,7 @@ export default class Player {
   update({ x, y }, delta) {
     const dt = delta / 1000;
     if (this._slowTimer > 0) this._slowTimer = Math.max(0, this._slowTimer - dt);
+    if (this._biteSlowTimer > 0) this._biteSlowTimer = Math.max(0, this._biteSlowTimer - dt);
     if (this._rootTimer > 0) this._rootTimer = Math.max(0, this._rootTimer - dt);
     this._tickPoison(dt);
 
@@ -199,7 +201,9 @@ export default class Player {
       return;
     }
     if (this.gameObject.angle !== 0) this.gameObject.setAngle(0);  // 속박 해제 시 기울기 복원
-    const slowMult = this._slowTimer > 0 ? 0.3 : 1;
+    let slowMult = 1;
+    if (this._slowTimer > 0)     slowMult *= 0.3;  // 거미줄
+    if (this._biteSlowTimer > 0) slowMult *= 0.8;  // 뱀 매달림
     this.gameObject.body.setVelocity(x * this.speed * slowMult, y * this.speed * slowMult);
 
     if (x !== 0 || y !== 0) {
@@ -230,6 +234,11 @@ export default class Player {
   /** 거미줄 등 슬로우 효과 — 매 프레임 갱신되며 만료되면 자동 해제 */
   applySlow(duration) {
     if (duration > this._slowTimer) this._slowTimer = duration;
+  }
+
+  /** 뱀 매달림 슬로우 — 매달려 있는 동안 매 프레임 갱신, > 0 동안 이동속도 ×0.8 (구역 3). 더 긴 지속만 갱신. */
+  applyBiteSlow(duration) {
+    if (duration > this._biteSlowTimer) this._biteSlowTimer = duration;
   }
 
   /** 올가미 덫 속박 — duration 동안 이동 0 (구역 3). 더 긴 지속만 갱신. */
@@ -500,6 +509,7 @@ export default class Player {
     this._invincible     = false;
     this._knockbackTimer = 0;
     this._slowTimer      = 0;
+    this._biteSlowTimer  = 0;
     this._rootTimer      = 0;
     this._poisonTimer    = 0;
     this._poisonDps      = 0;
