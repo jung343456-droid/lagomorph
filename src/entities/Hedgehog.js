@@ -144,8 +144,7 @@ export default class Hedgehog {
     this._syncHpBar();
   }
 
-  // source 파라미터는 하위 호환성 유지용 (spike 중 모든 공격 차단)
-  takeDamage(amount, knockback = null, source = 'melee') {
+  takeDamage(amount, knockback = null, opts = {}) {
     if (!this.alive || this.state === 'stun') return false;
 
     if (this.state === 'spike') {
@@ -165,16 +164,18 @@ export default class Hedgehog {
 
     this.hp -= amount;
     if (this.hp <= 0) { this._die(); return true; }
-    if (knockback) {
-      const { dx, dy, force, duration } = knockback;
-      this._knockbackTimer    = duration;
-      this._knockbackDuration = duration;
-      this._knockbackVx = dx * force;
-      this._knockbackVy = dy * force;
+    if (!opts.noStagger) {
+      if (knockback) {
+        const { dx, dy, force, duration } = knockback;
+        this._knockbackTimer    = duration;
+        this._knockbackDuration = duration;
+        this._knockbackVx = dx * force;
+        this._knockbackVy = dy * force;
+      }
+      this._prevState = this.state;
+      this.state      = 'stun';
+      this.stunTimer  = 0.3;
     }
-    this._prevState = this.state;
-    this.state      = 'stun';
-    this.stunTimer  = 0.3;
     this._blinkHit();
     return false;
   }

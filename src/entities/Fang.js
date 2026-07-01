@@ -252,7 +252,7 @@ export default class Fang {
     this._syncHpBar();
   }
 
-  takeDamage(amount, knockback = null) {
+  takeDamage(amount, knockback = null, opts = {}) {
     if (!this.alive || this.state === 'stun' || this.state === 'wallstun') return false;
 
     this.hp = Math.max(0, this.hp - amount);
@@ -260,7 +260,7 @@ export default class Fang {
 
     const isDashing = this.state === 'dash' || this.state === 'combo_dash' || this.state === 'combo_aim'
                    || this.state === 'stomp_windup' || this.state === 'roar' || this.state === 'roar_windup';
-    if (!isDashing) {
+    if (!isDashing && !opts.noStagger) {
       if (knockback) {
         const { dx, dy, force, duration } = knockback;
         this._knockbackTimer    = duration * 0.35;

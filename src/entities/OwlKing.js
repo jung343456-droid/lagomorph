@@ -304,7 +304,7 @@ export default class OwlKing {
     this._syncHpBar();
   }
 
-  takeDamage(amount, knockback = null) {
+  takeDamage(amount, knockback = null, opts = {}) {
     if (!this.alive || this.state === 'stun') return false;
     // 강하 중 무적
     if (this.state === 'dive') return false;
@@ -312,7 +312,7 @@ export default class OwlKing {
     this.hp = Math.max(0, this.hp - amount);
     if (this.hp <= 0) { this._die(); return true; }
 
-    if (this.state === 'idle') {
+    if (this.state === 'idle' && !opts.noStagger) {
       if (knockback) {
         const { dx, dy, force, duration } = knockback;
         this._knockbackTimer    = duration * 0.3;

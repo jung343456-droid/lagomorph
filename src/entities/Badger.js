@@ -12,11 +12,12 @@
  *   chargeRec→ 박치기 후 경직(약점 노출). 벽 슬램 0.95초 / 일반 0.35초 → chase
  *   windup   → 0.3초 할퀴기 예고(정지)
  *   claw     → 정면 부채꼴(반경 105px) 판정 + 전진 비집기. 최대 2연타(플레이어가 사거리에 남아있으면 추가타)
- *   burrow   → 1.2초 땅속 이동(무적·untargetable, 플레이어 근처로) → emerge
+ *   burrow   → 1.2초 땅속 이동(무적·untargetable, 플레이어 근처로) → emerge. 이동속도 180(반투명)
  *   emerge   → 0.3초 출현 예고 → 기습 할퀴기
  *   stun     → 피격 시 0.3초 경직 + 넉백 (i-frame)
  *
- * charge·burrow 중에는 넉백·경직 면역(탱커 무게감). burrow 중에는 피격 무효 + 접촉 무해.
+ * charge·burrow 중에는 넉백·경직 면역(탱커 무게감). burrow 중에는 피격 무효 + 접촉 무해 + 트랩 무시(밟지 않음).
+ * 공격 예고/발동 시 공격 범위 표시(_drawAttackTelegraph): 할퀴기=정면 반원 부채꼴, 돌진=경로 레인.
  * speedMult: 공용 속도 배수 경유 (추격·잠행 이동에 적용, 돌진 속도는 고정)
  */
 const DETECT_R      = 360;
@@ -37,8 +38,11 @@ const SLAM_RECOVER  = 0.95;  // 벽 슬램 시 경직(약점 노출)
 const TRACK_RATE    = 3.5;   // 예고 중 조준 추적 속도
 const BURROW_CD     = 6.0;
 const BURROW_DUR    = 1.2;
-const BURROW_SPEED  = 200;
+const BURROW_SPEED  = 180;   // 잠행 이동속도 (기존 200의 90% — 회피 기회 완화)
 const EMERGE_DUR    = 0.3;
+const CLAW_COLOR    = 0xff5522;  // 할퀴기 범위 표시
+const CHARGE_COLOR  = 0xffaa33;  // 돌진 경로 표시
+const CHARGE_HALF_W = 24;        // 돌진 판정 폭(표시용, 접촉 판정과 대략 일치)
 const BG_W          = 32;
 const BG_H          = 26;
 const BG_DW         = 60;
@@ -101,6 +105,8 @@ export default class Badger {
     this._applyBodySize();
     this.gameObject.body.setCollideWorldBounds(true);
     this.gameObject.setDepth(9);
+
+    this._atkGfx = scene.add.graphics().setDepth(8);  // 공격 범위 표시(바닥 위)
 
     this._buildHpBar();
   }
@@ -267,16 +273,17 @@ export default class Badger {
     }
 
     this._updateSprite();
+    this._drawAttackTelegraph();
     this._syncHpBar();
   }
 
-  takeDamage(amount, knockback = null) {
+  takeDamage(amount, knockback = null, opts = {}) {
     // 잠행(burrow) 중 무적
     if (!this.alive || this.state === 'stun' || this.state === 'burrow') return false;
     this.hp -= amount;
     if (this.hp <= 0) { this._die(); return true; }
     // 돌진 중엔 넉백·경직 면역 (탱커가 박치기를 멈추지 않는다)
-    if (this.state !== 'charge') {
+    if (this.state !== 'charge' && !opts.noStagger) {
       if (knockback) {
         const { dx, dy, force, duration } = knockback;
         this._knockbackTimer    = duration;
@@ -303,6 +310,7 @@ export default class Badger {
   dispose() {
     if (this.destroyed) return;
     if (this._blinkEvent) { this._blinkEvent.remove(); this._blinkEvent = null; }
+    if (this._atkGfx?.active) this._atkGfx.destroy();
     if (this._hpBg?.active)   this._hpBg.destroy();
     if (this._hpFill?.active) this._hpFill.destroy();
     this.alive = false;
@@ -334,6 +342,45 @@ export default class Badger {
       dx: dx / len, dy: dy / len, force: 240, duration: 0.18,
     });
     if (dead) this.scene.events.emit('player-dead');
+  }
+
+  /**
+   * 공격 범위 표시 — 매 프레임 갱신.
+   *   할퀴기(windup/claw): 정면 반원(반경 CLAW_R, dot>0 판정과 일치) 부채꼴. windup=예고(옅게), claw=발동(진하게)
+   *   돌진(chargeWind/charge): 조준 방향 경로 레인. chargeWind=예고(옅게), charge=발동(진하게)
+   *   그 외 상태에서는 지운다.
+   */
+  _drawAttackTelegraph() {
+    const gfx = this._atkGfx;
+    if (!gfx) return;
+    gfx.clear();
+    const s = this.state;
+    const { x, y } = this.gameObject;
+    const angle = Math.atan2(this._faceY, this._faceX);
+
+    if (s === 'windup' || s === 'claw') {
+      const active = s === 'claw';
+      const a0 = angle - Math.PI / 2, a1 = angle + Math.PI / 2;
+      gfx.fillStyle(CLAW_COLOR, active ? 0.28 : 0.15);
+      gfx.slice(x, y, CLAW_R, a0, a1, false);
+      gfx.fillPath();
+      gfx.lineStyle(2, CLAW_COLOR, active ? 0.9 : 0.5);
+      gfx.beginPath();
+      gfx.arc(x, y, CLAW_R, a0, a1);
+      gfx.strokePath();
+    } else if (s === 'chargeWind' || s === 'charge') {
+      const active = s === 'charge';
+      const reach = CHARGE_SPEED * CHARGE_DUR;
+      const ex = x + Math.cos(angle) * reach, ey = y + Math.sin(angle) * reach;
+      const px = -Math.sin(angle) * CHARGE_HALF_W, py = Math.cos(angle) * CHARGE_HALF_W;
+      gfx.fillStyle(CHARGE_COLOR, active ? 0.26 : 0.13);
+      gfx.fillPoints([
+        { x: x - px,  y: y - py },
+        { x: x + px,  y: y + py },
+        { x: ex + px, y: ey + py },
+        { x: ex - px, y: ey - py },
+      ], true);
+    }
   }
 
   _moveTo(dx, dy, dist, speed) {
@@ -403,6 +450,7 @@ export default class Badger {
     this.alive = false;
     this.gameObject.body.setEnable(false);
     if (this._blinkEvent) { this._blinkEvent.remove(); this._blinkEvent = null; }
+    if (this._atkGfx?.active) this._atkGfx.destroy();
     this._hpBg.destroy();
     this._hpFill.destroy();
     const sx = this.gameObject.scaleX * 1.8;

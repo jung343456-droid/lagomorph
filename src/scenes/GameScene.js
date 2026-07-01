@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { GAME_W, GAME_H, HUD_H, zoneOf, displayFloor, MAX_FLOOR, MAX_ZONE } from '../constants';
+import { GAME_W, GAME_H, HUD_H, zoneOf, displayFloor, MAX_FLOOR, MAX_ZONE, zonePriceMult } from '../constants';
 import Player from '../entities/Player';
 import InputManager from '../utils/InputManager';
 import AttackManager from '../systems/AttackManager';
@@ -15,10 +15,6 @@ import { getMetaCores, beginMetaRun, commitMetaRun, addRunPickup, getGrimIntroSh
 import { saveRunState, loadRunSave, clearRunSave } from '../data/SaveManager';
 import { randomGrimTip } from '../data/GrimDialogue';
 
-// 상점 가격 층 스케일링 — 구역 2(11~20층)는 코어 드롭이 ×1.5 인플레되므로 상점가도 ×1.5 로 대칭.
-// 구역 1 ×1.0 / 구역 2 ×1.5. 영구 해금 할인(player.shopPriceMult)과 곱연산 합성.
-const floorPriceMult = (floor) => 1 + 0.5 * (zoneOf(floor) - 1);
-
 // 상자(stump) 파괴 시 코어 드롭 수량 가중표 — 1~5는 흔하게, 10·20은 아주 낮은 확률.
 const BOX_CORE_TABLE = [
   { count: 1, weight: 30 }, { count: 2, weight: 25 }, { count: 3, weight: 20 },
@@ -27,12 +23,13 @@ const BOX_CORE_TABLE = [
 
 const GRIM_FIRST_LINES = [
   '잠깐. 거기 서봐.',
-  '...자네, 토끼인가. 내가 이 입구 근처까지 내려온 게 얼마만인지. 아직 끝나지 않은 건가..',
-  '이대로 있을 수는 없겠어. 거래를 하지. 코어를 가져오게. 자네가 살아남는 데 도움은 될 거야.',
+  '...자네, 토끼인가.',
+  ' 내가 이 입구 근처까지 내려온 게 얼마만인지. 아직 끝나지 않은 건가..',
+  '이대로 있을 수는 없겠어. 거래를 하지. 코어를 가져오게. 자네가 살아남는 데 도움이 될 거야.',
   '필요한건 코어뿐이야. 이 지하에선 그게 전부지 — 돈이고, 목숨이고. 기억이기도 해. 그냥 그렇다고.',
 ];
 
-// 신규 런으로 1층 진입 시 도입 대사 — VOSS-7 이 사냥꾼에게 가족을 잃던 밤의 꿈을 회상한다.
+// 신규 런으로 1층 진입 시 도입 대사 — LAGO-7 이 사냥꾼에게 가족을 잃던 밤의 꿈을 회상한다.
 // (이 기억이 거짓일 수 있다는 단서는 기억 보관실에서 단계적으로 드러난다 — 지금은 진실로 믿는다.)
 const FLOOR1_INTRO_LINES = [
   '... 또 그 꿈이다.',
@@ -40,15 +37,7 @@ const FLOOR1_INTRO_LINES = [
   '나는 숨어서 보았다. 가족이 하나씩\n그 두 발 달린 것의 손에 끌려가는 것을.\n아무도 돌아오지 않았다.',
   '인간. 그 냄새도, 그 눈도 잊지 못한다.\n잊을 수가 없다.',
   '약했기 때문이다. 그래서 빼앗겼다.\n다시는 그렇게 두지 않는다.',
-  '강해져야 한다. 놈들을 전부 찢어놓을 만큼.\n― 눈을 뜬다. 사냥을 시작한다.',
-];
-
-// 구역 4 보스 처치 후 대화창 — 사냥꾼의 정체 자각, 스파크·침묵·고철로 은유적 표현
-const ZONE4_BOSS_CLEAR_LINES = [
-  '사냥꾼이 쓰러진다.\n굉음이 울렸다. 몸에서 전기 스파크가 튀었다.',
-  '내가 뭘 보고 있는 거지?\n대답해.\n대답하라고!!!!',
-  '.......',
-  '신호가 사라졌다.\n남은 건 차갑게 식은 고철 덩어리뿐.\n누구도 대답하지 않았다.',
+  '강해져야 한다. 놈을 완전히 찢어놓을 만큼.',
 ];
 
 // 구역 3 보스 처치 후 대화창 — 마침내 복수를 이루었으나 허무함이 간접적으로 드러나는 독백
@@ -59,6 +48,15 @@ const ZONE3_BOSS_CLEAR_LINES = [
   '...........................................................',
   '........................',
 ];
+
+// 구역 4 보스 처치 후 대화창 — 사냥꾼의 정체 자각, 스파크·침묵·고철로 은유적 표현
+const ZONE4_BOSS_CLEAR_LINES = [
+  '사냥꾼이 쓰러진다.\n굉음이 울렸다. 몸에서 전기 스파크가 튀었다.',
+  '내가 뭘 보고 있는 거지?',
+  '.......',
+  '신호가 사라졌다.\n남은 건 차갑게 식은 금속 피부에서 흐르는 침묵뿐.',
+];
+
 
 export default class GameScene extends Phaser.Scene {
   constructor() {
@@ -110,7 +108,7 @@ export default class GameScene extends Phaser.Scene {
       this.roomManager.init(generateDungeon(
         this.currentFloor, undefined, this._ownedItemIds(),
         this.player.shopSlotBonus ?? 0,
-        (this.player.shopPriceMult ?? 1) * floorPriceMult(this.currentFloor),
+        (this.player.shopPriceMult ?? 1) * zonePriceMult(this.currentFloor),
       ));
     }
 
@@ -614,16 +612,18 @@ export default class GameScene extends Phaser.Scene {
         '풀밭이었다. 바람에 풀이 눕고, 나는 그 사이를 달렸다.\n햇볕이 등에 닿는 감촉, 발밑에서 흙냄새가 올라오던 것까지.',
         '누군가 내 이름을 불렀다. 그 목소리를 나는 안다.\n너는 너무 빨리 달린다고, 좀 천천히 가도 된다고.',
         '따뜻했다. 그게 전부였고, 그걸로 충분했다.',
-        '「기록일: 봄.  장소: 양지.  상태: 안정.」\n「기록일: 봄.  장소: 양지.  상태: 안정.」\n\n세 줄 모두 같은 날짜다.',
+        '「기록일: 봄.  장소: 양지.  상태: 안정.」\n 「기록일: 봄.  장소: 양지.  상태: 안정.」\n「기록일: 봄.  장소: 양지.  상태: 안정.」\n\n세 줄 모두 같은 날짜다.',
       ],
       // Vault 02 — 열람
       [
         '[ 기억 보관실 02 — 「열람(閱覽)」 ]',
         '벽이 무너지자 빛 대신 차가운 모니터 광이 번진다.',
-        '[ ARCANA 내부 기록 / 분류: 기밀 ]\n피험체 VOSS-7.  기억 주입 3차 완료.',
+        '[ ARCANA 내부 기록 / 분류: 기밀 ]\n피험체 LAGO-7.  기억 주입 3차 완료.',
         '주입 패킷: 양지_봄_안정.eng\n— 안정성 확보를 위해 동일 단편 반복 적재.',
-        '익숙한 단어다.\n양지. 봄. 안정.\n01 보관실에서 본 그 기억이, 여기서는 파일 이름이다.',
-        '「주의: 피험체가 메타데이터 불일치를 인지할 경우,\n  위화감으로 발현될 수 있음.」\n\n나는 그 풀밭을 기억한다. 분명히 안다고 생각했다.',
+        '익숙한 단어다.\n양지. 봄. 안정.\n이전에 보관실에서 본 그 기억이, 여기서는 파일 이름이다.',
+        '「주의: 피험체가 메타데이터 불일치를 인지할 경우,\n  위화감으로 발현될 수 있음.',
+        '나는 그 풀밭을 기억한다.',
+        '분명히 안다고 생각했다.',
       ],
       // Vault 03 — 원본
       [
@@ -631,8 +631,8 @@ export default class GameScene extends Phaser.Scene {
         '마지막 벽이 무너진다. 영상도 보고서도 아닌,\n하나의 보관 캡슐. 그 안에서 코어가 박동하고 있다.',
         '[ 코어 기록 / 분류: 원본 — 강제 열람됨 ]\n이 코어는 누군가의 것이었다.',
         '양지의 봄을, 자신을 부르던 그 목소리를\n진짜로 가졌던 — 원래의 존재.',
-        'VOSS-7의 기억은 복제였다.\n원본은 코어에서 추출되어 나에게 이식됐다.\n나는 그 기억을 담을 일곱 번째 그릇이었다.',
-        '「원본 상태: 소실.  잔여 기억: VOSS-7에 귀속.」\n\n그 목소리는 내 것이 아니었다.\n하지만 나는 여전히 그것이 따뜻했다고 기억한다.',
+        'LAGO-7의 기억은 복제였다.\n원본은 코어에서 추출되어 나에게 이식됐다.\n나는 그 기억을 담을 일곱 번째 그릇이었다.',
+        '「원본 상태: 소실.  잔여 기억: LAGO-7에 귀속.」\n\n그 목소리는 내 것이 아니었다.\n하지만 나는 여전히 그것이 따뜻했다고 기억한다.',
       ],
       // Vault 04 — 잔향
       [
@@ -641,7 +641,7 @@ export default class GameScene extends Phaser.Scene {
         '[ 정비 로그 / 분류: 구조체 ARC-H ]\n외피 아래로 합금 골격과 식은 회로가 드러난다.',
         '내가 쫓던 것은 살아있지 않았다.\n분노를 쏟을 피도, 멈출 심장도 없는 — 기계.',
         '그렇다면 나는 무엇에 복수하고 있었나.\n양지도, 봄도, 그 목소리도.\n누가 나에게 그것을 쥐여주고, 쫓게 만들었나.',
-        '「구조체 가동 로그: VOSS-7 추적 지속.  목표: 구역 4.」\n\n받침대 끝에 손으로 적은 메모가 있다.\n―미안해. 이번엔, 네가 끝까지 가길.',
+        '「구조체 가동 로그: LAGO-7 추적 지속.  목표: 구역 4.」',
       ],
     ];
 
@@ -765,7 +765,7 @@ export default class GameScene extends Phaser.Scene {
       this.roomManager.init(generateDungeon(
         this.currentFloor, undefined, this._ownedItemIds(),
         this.player.shopSlotBonus ?? 0,
-        (this.player.shopPriceMult ?? 1) * floorPriceMult(this.currentFloor),
+        (this.player.shopPriceMult ?? 1) * zonePriceMult(this.currentFloor),
       ));
       this.events.emit('floor-changed', this.currentFloor);
       cam.fadeIn(500, 0, 0, 0);

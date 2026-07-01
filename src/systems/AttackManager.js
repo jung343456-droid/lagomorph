@@ -20,9 +20,6 @@ const POOP_SIZE     = 22;   // 설치형 오브젝트 크기 (px)
 const MAX_POOPS     = 5;    // 동시에 배치 가능한 최대 설치물 수
 const POOP_COLOR    = 0x7B3F20; // 설치물 색상 (갈색)
 
-const FOX_KNOCKBACK_PER_DMG = 12;   // 설치형 공격 넉백 강도 = 데미지 × 이 값
-const FOX_KNOCKBACK_DUR     = 0.22; // 설치형 공격 넉백 지속 시간 (초)
-
 const SPLASH_RADIUS = 40;  // 위장 트랩 스플래시 반경 (px)
 const SPLASH_DMG    = 15;  // 위장 트랩 스플래시 데미지
 const DISGUISE_PROC = 0.5; // 위장 트랩 상태이상 발동 확률 (명중 enemy 1마리당, 위장 종류별 독립)
@@ -385,6 +382,9 @@ export default class AttackManager {
     const enemy  = em.enemies.find(e => e.gameObject === enemyGO);
     if (!enemy || !enemy.alive) return;
 
+    // 오소리 잠행(땅속) 중엔 트랩을 밟지 않는다 (untargetable — 내구 소모·발동 없음)
+    if (enemy.state === 'burrow') return;
+
     // 변비(trapHits>1): 같은 적이 트랩 위에서 매 프레임 반복 발동하는 것을 막는다.
     // 트랩당 적별 1회만 데미지/내구 소모 — 서로 다른 적이 밟아야 추가로 닳는다.
     if (poop.hitEnemies.has(enemy)) return;
@@ -393,18 +393,9 @@ export default class AttackManager {
     // 고슴도치 가시 상태: 무적 — 데미지 숫자 표시 안 함 (takeDamage 가 내부에서 넉백 반사 처리)
     const isSpike = enemy.state === 'spike';
 
-    const ddx = enemyGO.x - poopGO.x;
-    const ddy = enemyGO.y - poopGO.y;
-    const len = Math.sqrt(ddx * ddx + ddy * ddy);
-    const nx  = len > 0 ? ddx / len : 1;
-    const ny  = len > 0 ? ddy / len : 0;
-    // 트랩 직격 데미지에 치명타 적용 — 넉백은 원본 기준
+    // 트랩 직격 데미지에 치명타 적용 — 넉백·경직 없이 데미지만 적용
     const { damage: trapDmg, isCrit: trapCrit } = this.player.rollAttackDamage(poop.damage);
-    const dead = enemy.takeDamage(trapDmg, {
-      dx: nx, dy: ny,
-      force:    poop.damage * FOX_KNOCKBACK_PER_DMG,
-      duration: FOX_KNOCKBACK_DUR,
-    }, 'poop');
+    const dead = enemy.takeDamage(trapDmg, null, { noStagger: true });
     if (!isSpike) showDamageNumber(this.scene, enemy.x, enemy.y - enemyGO.height / 2, trapDmg, '#ffffff', trapCrit);
     // 피의 향연 — 트랩 직격 치명 시 회복
     if (trapCrit && !isSpike && this.player.critHealAmount > 0) {
@@ -436,14 +427,8 @@ export default class AttackManager {
       em.enemies.forEach(other => {
         if (!other.alive || other === enemy || other.state === 'stun') return;
         if (Phaser.Math.Distance.Between(splashX, splashY, other.x, other.y) > SPLASH_RADIUS) return;
-        const odx = other.x - splashX, ody = other.y - splashY;
-        const ol  = Math.sqrt(odx * odx + ody * ody) || 1;
         const { damage: splashDmg, isCrit: splashCrit } = this.player.rollAttackDamage(SPLASH_DMG);
-        const splashDead = other.takeDamage(splashDmg, {
-          dx: odx / ol, dy: ody / ol,
-          force:    SPLASH_DMG * FOX_KNOCKBACK_PER_DMG,
-          duration: FOX_KNOCKBACK_DUR,
-        }, 'poop');
+        const splashDead = other.takeDamage(splashDmg, null, { noStagger: true });
         showDamageNumber(this.scene, other.x, other.y - other.gameObject.height / 2, splashDmg, '#ffffff', splashCrit);
         if (splashCrit && other.state !== 'spike' && this.player.critHealAmount > 0) {
           this.player.heal(this.player.critHealAmount);

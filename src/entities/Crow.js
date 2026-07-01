@@ -163,11 +163,11 @@ export default class Crow {
     this._syncHpBar();
   }
 
-  takeDamage(amount, knockback = null) {
+  takeDamage(amount, knockback = null, opts = {}) {
     if (!this.alive || this.state === 'stun') return false;
     this.hp -= amount;
     if (this.hp <= 0) { this._die(); return true; }
-    if (this.state !== 'dive') {
+    if (this.state !== 'dive' && !opts.noStagger) {
       if (knockback) {
         const { dx, dy, force, duration } = knockback;
         this._knockbackTimer    = duration;

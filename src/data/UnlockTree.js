@@ -1,5 +1,5 @@
 /**
- * 영구 해금 트리 — 공격 14(파동 확장 3·근원 강화 5 포함) / 생존 12(강인한 몸 5·강화 외피 2 포함) / 특수 14(잔해 회수 4·코어 흡수 3 포함) = 40노드.
+ * 영구 해금 트리 — 공격 14(파동 확장 3·근원 강화 5 포함) / 생존 14(강인한 몸 7·강화 외피 2 포함) / 특수 15(잔해 회수 4·코어 흡수 3·흥정 3 포함) = 43노드.
  * 각 단계 N 노드는 단계 N-1 노드의 prereq 를 갖는다 (tier = 선행 깊이 = 표시 순서, 선행 해금 필수).
  * 특수 계열은 비용 오름차순 단일 사슬이며, 잔해 회수도 같은 사슬에 편입되어 있다.
  *
@@ -153,13 +153,25 @@ export const UNLOCK_NODES = {
     dynDesc: (p) => `시작 HP +10 (${p.maxHp} → ${p.maxHp + 10})`,
     apply: (p) => { p.maxHp += 10; p.hp += 10; },
   },
-  phantom_guard: {
+  tough_body_6: {
     branch: 'survival', tier: 11, prereq: 'tough_body_5', cost: 900,
+    name: '강인한 몸 VI', desc: '시작 HP +10 (→ 160)',
+    dynDesc: (p) => `시작 HP +10 (${p.maxHp} → ${p.maxHp + 10})`,
+    apply: (p) => { p.maxHp += 10; p.hp += 10; },
+  },
+  tough_body_7: {
+    branch: 'survival', tier: 12, prereq: 'tough_body_6', cost: 1000,
+    name: '강인한 몸 VII', desc: '시작 HP +10 (→ 170)',
+    dynDesc: (p) => `시작 HP +10 (${p.maxHp} → ${p.maxHp + 10})`,
+    apply: (p) => { p.maxHp += 10; p.hp += 10; },
+  },
+  phantom_guard: {
+    branch: 'survival', tier: 13, prereq: 'tough_body_7', cost: 1100,
     name: '잔영의 가호', desc: '피격 후 무적 시간 +25%',
     apply: (p) => { p.invulnDurationMult = (p.invulnDurationMult ?? 1) * 1.25; },
   },
   last_struggle: {
-    branch: 'survival', tier: 12, prereq: 'phantom_guard', cost: 1000,
+    branch: 'survival', tier: 14, prereq: 'phantom_guard', cost: 1200,
     name: '최후의 발버둥', desc: '1회 사망 무효 (HP 30% 복원, 런당)',
     apply: (p) => { p.extraLives = (p.extraLives ?? 0) + 1; },
   },
@@ -225,6 +237,11 @@ export const UNLOCK_NODES = {
     branch: 'special', tier: 14, prereq: 'bargain_2', cost: 900,
     name: '황금손', desc: '드롭 코어량 추가 ×1.10 (core_collector 누적)',
     apply: (p) => { p.coreDropMult = (p.coreDropMult ?? 1) * 1.10; },
+  },
+  bargain_3: {
+    branch: 'special', tier: 15, prereq: 'golden_touch', cost: 1100,
+    name: '흥정 III', desc: '상점 가격 추가 -10% (×0.855 → ×0.7695)',
+    apply: (p) => { p.shopPriceMult = (p.shopPriceMult ?? 1) * 0.9; },
   },
   core_reach_1: {
     branch: 'special', tier: 4, prereq: 'core_collector', cost: 120,

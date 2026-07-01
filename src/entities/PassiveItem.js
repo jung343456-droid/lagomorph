@@ -204,7 +204,7 @@ export const ITEM_DEFS = {
   },
   constipation: {
     name:  '변비',
-    desc:  '설치한 똥이 부서지지 않고 적 2마리를 맞춤',
+    desc:  '설치한 트랩이 부서지지 않고 적 2마리를 맞춤',
     dynDesc: (p) => `설치한 똥이 부서지지 않고 적 ${(p.trapHits ?? 1) + 1}마리를 맞춤`,
     color: 0x6b4423,
     apply: (player) => { player.trapHits += 1; },

@@ -13,6 +13,7 @@ const DIRS = [
 
 // ── 상점 슬롯 풀 ──────────────────────────────────────
 // 정액 회복 (1코어 ≈ 1.6 HP 비례), 50% 회복, 전체 회복, 패시브 아이템
+const ITEM_BASE_COST = 75; // 패시브 아이템 기본 가격 (상점 슬롯 + stump 드롭 가중치 공용)
 const HEAL_TIERS = [
   { id: 'heal_1', name: '토끼풀 한 줌',    cost: 5,  amount: 8  },
   { id: 'heal_2', name: '민들레잎',        cost: 10, amount: 16 },
@@ -48,14 +49,14 @@ function _entryToSlot(entry, excludeItemIds, priceMult = 1) {
 
   if (entry.kind === 'item') {
     // 생성 시점에 패시브 1개 미리 선정 → 카드에 실제 이름/설명 표시.
-    // 스택형(코어 결정체)은 보유 중이어도 항상 후보 — 가격은 일반 패시브와 동일(60).
+    // 스택형(코어 결정체)은 보유 중이어도 항상 후보 — 가격은 일반 패시브와 동일(ITEM_BASE_COST).
     const ids = Object.keys(ITEM_DEFS).filter(id => !excludeItemIds.has(id) || ITEM_DEFS[id].stackable);
     if (ids.length === 0) return null; // 가용 패시브 없음 — 호출부에서 다른 엔트리 재추첨
     const id  = ids[Math.floor(Math.random() * ids.length)];
     const def = ITEM_DEFS[id];
     return {
       kind: 'item', id, name: def.name, desc: def.desc, color: def.color,
-      cost: price(60), sold: false,
+      cost: price(ITEM_BASE_COST), sold: false,
     };
   }
   if (entry.kind === 'heal') {
@@ -106,7 +107,7 @@ export function pickPriceWeightedDrop(ownedItemIds = []) {
   const entries = [];
   for (const id of Object.keys(ITEM_DEFS)) {
     if (owned.has(id) && !ITEM_DEFS[id].stackable) continue;
-    entries.push({ kind: 'item', id, cost: 60 });
+    entries.push({ kind: 'item', id, cost: ITEM_BASE_COST });
   }
   for (const t of HEAL_TIERS) entries.push({ kind: 'heal', amount: t.amount, cost: t.cost });
   entries.push({ kind: 'heal_pct', ratio: 0.5, cost: 50 });
@@ -276,9 +277,11 @@ export function generateDungeon(
   bfsDist.forEach((d, id) => { if (d > maxD) { maxD = d; bossId = id; } });
   rooms[bossId].type = 'boss';
 
-  // 상점방 1개 — 구역 1: 2·4·7·9층 / 구역 2: 12·14·17·19층
+  // 상점방 1개 — 구역 1: 2·4·7·9층 / 구역 2: 12·14·17·19층 / 구역 3: 22·24·27·29층 / 구역 4: 32·34·37·39층
   if (floorNum === 2 || floorNum === 4 || floorNum === 7 || floorNum === 9
-      || floorNum === 12 || floorNum === 14 || floorNum === 17 || floorNum === 19) {
+      || floorNum === 12 || floorNum === 14 || floorNum === 17 || floorNum === 19
+      || floorNum === 22 || floorNum === 24 || floorNum === 27 || floorNum === 29
+      || floorNum === 32 || floorNum === 34 || floorNum === 37 || floorNum === 39) {
     const cand = rooms
       .filter(r => r.type === 'combat')
       .map(r => ({ r, d: bfsDist.get(r.id) ?? Infinity }))

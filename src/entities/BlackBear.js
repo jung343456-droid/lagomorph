@@ -225,13 +225,13 @@ export default class BlackBear {
     this._syncHpBar();
   }
 
-  takeDamage(amount, knockback = null) {
+  takeDamage(amount, knockback = null, opts = {}) {
     if (!this.alive || this.state === 'stun') return false;
     this.hp -= amount;
     if (this.hp <= 0) { this._die(); return true; }
     const isAttacking = this.state === 'slam_windup' || this.state === 'roar'
                      || this.state === 'charge_windup' || this.state === 'charge';
-    if (!isAttacking) {
+    if (!isAttacking && !opts.noStagger) {
       if (knockback) {
         const { dx, dy, force, duration } = knockback;
         // 무거운 보스: 넉백 40% 감산

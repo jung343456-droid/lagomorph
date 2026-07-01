@@ -194,21 +194,23 @@ export default class Toad {
     this._syncHpBar();
   }
 
-  takeDamage(amount, knockback = null) {
+  takeDamage(amount, knockback = null, opts = {}) {
     if (!this.alive || this.state === 'stun') return false;
     this.hp -= amount;
     if (this.hp <= 0) { this._die(); return true; }
-    if (knockback) {
-      const { dx, dy, force, duration } = knockback;
-      this._knockbackTimer    = duration;
-      this._knockbackDuration = duration;
-      this._knockbackVx = dx * force;
-      this._knockbackVy = dy * force;
+    if (!opts.noStagger) {
+      if (knockback) {
+        const { dx, dy, force, duration } = knockback;
+        this._knockbackTimer    = duration;
+        this._knockbackDuration = duration;
+        this._knockbackVx = dx * force;
+        this._knockbackVy = dy * force;
+      }
+      this._prevState = (this.state === 'spit' || this.state === 'spit_windup') ? 'kite' : this.state;
+      if (this._spitProjGfx?.active) { this._spitProjGfx.destroy(); this._spitProjGfx = null; }
+      this.state      = 'stun';
+      this.stunTimer  = 0.3;
     }
-    this._prevState = (this.state === 'spit' || this.state === 'spit_windup') ? 'kite' : this.state;
-    if (this._spitProjGfx?.active) { this._spitProjGfx.destroy(); this._spitProjGfx = null; }
-    this.state      = 'stun';
-    this.stunTimer  = 0.3;
     this._blinkHit();
     return false;
   }

@@ -3,7 +3,7 @@
 ## 프로젝트 개요
 
 Phaser 3.60 탑다운 로그라이크. 모바일(390×844 portrait) 우선, Capacitor 패키징.
-플레이어는 강화 토끼 VOSS-7(코드명 soma). 설계 문서: `design/LAGOMORPH_FULL_GDD.md`
+플레이어는 강화 토끼 LAGO-7(코드명 soma). 설계 문서: `design/LAGOMORPH_FULL_GDD.md`
 
 개발 서버: `npm run dev` → `http://localhost:5173`
 모바일 패키징(Capacitor): `MOBILE.md` 참조 — 웹은 `base=/lagomorph/`, 모바일은 `--mode mobile`(`base=./`)로 빌드 분기. `android/`는 git 추적 대상(네이티브 커스터마이징 보존 — 전체화면 `MainActivity` 등). 빌드 산출물은 `android/.gitignore`가 제외한다.

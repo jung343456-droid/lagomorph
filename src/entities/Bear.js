@@ -1,6 +1,6 @@
 /**
  * 곰 (Bear) — 중량 탱커 (구역 2)
- * HP 176 / 속도 121 / 데미지 22(휘두르기) / 코어 6
+ * HP 150 / 속도 121 / 데미지 22(휘두르기) / 코어 6
  *
  * 패턴:
  *   idle          → chase(282px 이내 탐지)
@@ -62,8 +62,8 @@ export default class Bear {
   constructor(scene, x, y) {
     this.scene = scene;
 
-    this.hp     = 176;
-    this.maxHp  = 176;
+    this.hp     = 150;
+    this.maxHp  = 150;
     this.speed  = CHASE_SPEED;
     this.damage = SWIPE_DMG;
     this.displayName = '곰';
@@ -222,13 +222,13 @@ export default class Bear {
     this._syncHpBar();
   }
 
-  takeDamage(amount, knockback = null) {
+  takeDamage(amount, knockback = null, opts = {}) {
     if (!this.alive || this.state === 'stun') return false;
     this.hp -= amount;
     if (this.hp <= 0) { this._die(); return true; }
     // 공격 동작(swipe_windup·swipe) 중에는 피격당해도 캔슬되지 않고 진행 — 돌진(Boar charge)과 동일.
     // 데미지·점멸은 입되 넉백·스턴 없이 콤보를 이어간다.
-    if (this.state !== 'swipe_windup' && this.state !== 'swipe') {
+    if (this.state !== 'swipe_windup' && this.state !== 'swipe' && !opts.noStagger) {
       if (knockback) {
         const { dx, dy, force, duration } = knockback;
         // 무거운 적: 넉백 50% 감산

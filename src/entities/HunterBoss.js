@@ -1,3 +1,5 @@
+import Hound from './Hound.js';
+
 /**
  * 사냥꾼 보스 ("수석 사냥꾼", HunterBoss) — 구역 3 표시 10층 / 구역 4 표시 10층 보스 (인간, 다페이즈)
  * HP 750 / 속도 155 / 데미지: 화살 18 · 단검 접촉 22 · 연타 14×n / 코어 22
@@ -8,7 +10,9 @@
  * 행동 (활/단검 공용 메뉴, 가중치만 페이즈로 변동):
  *   aim    → 0.6초 조준선 표시 → 화살 1발 (분노 0.42초)
  *   fan    → 조준 → 부채꼴 5발 (P3 전용)
- *   snare  → 플레이어 위치로 올가미 덫 투척(포물선 호+회전, _throwSnare) → 착지 시 발동 (Player.applyRoot, 근접 5타로 끊김)
+ *   snare  → 플레이어 위치로 올가미 덫 투척(포물선 호+회전, _throwSnare) → 착지 시 발동
+ *            (Player.applyRoot, 속박 여부 무관 근접 공격 반경 내 5타로 끊김 — 잔여 타격 수 세그먼트 바는
+ *            최초 1회 피격 전까지 숨겨져 있다가 첫 타격 시 생성)
  *   combo  → dashWind(0.26초 예고) → dash(470px/s 기습) → slash(전진 연타, 수동 판정 14×3, 분노 4)
  *            → roll(460px/s 구르기 이탈)
  *
@@ -55,6 +59,9 @@ const SNARE_DUR    = 6.0;
 const SNARE_MAX    = 2;
 const ROOT_DUR     = 1.0;
 const SNARE_BREAK_HITS = 5;
+const SNARE_BAR_SEG_W  = 10;   // 덫 잔여 타격 표시 세그먼트 폭
+const SNARE_BAR_SEG_H  = 5;
+const SNARE_BAR_GAP    = 2;
 const HB_W         = 40;
 const HB_H         = 60;
 const HB_DW        = 64;
@@ -264,12 +271,12 @@ export default class HunterBoss {
     this._syncHpBar();
   }
 
-  takeDamage(amount, knockback = null) {
+  takeDamage(amount, knockback = null, opts = {}) {
     if (!this.alive || this.state === 'stun') return false;
     this.hp -= amount;
     if (this.hp <= 0) { this._die(); return true; }
     // 대시·연타·구르기 중엔 경직 면역(커밋·민첩). 사격/예고/중립은 끊을 수 있음.
-    if (this.state !== 'dash' && this.state !== 'slash' && this.state !== 'roll') {
+    if (this.state !== 'dash' && this.state !== 'slash' && this.state !== 'roll' && !opts.noStagger) {
       this._prevState = (this.state === 'aim' || this.state === 'dashWind') ? 'neutral' : this.state;
       this._clearAimLine();
       this.state      = 'stun';
@@ -304,7 +311,10 @@ export default class HunterBoss {
   }
 
   disposeHazards() {
-    this._snares.forEach(s => { if (s.gfx?.active) { this.scene.tweens.killTweensOf(s.gfx); s.gfx.destroy(); } });
+    this._snares.forEach(s => {
+      if (s.gfx?.active) { this.scene.tweens.killTweensOf(s.gfx); s.gfx.destroy(); }
+      this._destroySnareBar(s);
+    });
     this._snares = [];
     this.scene.events.off('attack-fired', this._onPlayerAttack, this);
     this.scene.enemyManager?.unregisterLingeringHazard?.(this);
@@ -387,13 +397,14 @@ export default class HunterBoss {
     this._strafeSign = Math.random() < 0.5 ? 1 : -1;
   }
 
+  /** 'hound' 는 일반 스폰 테이블(ENEMY_CLASSES)에 없어 spawnEnemy('hound', …) 로 넘기면 Fox 로
+   *  폴백되던 버그가 있었다 — 직접 Hound 를 생성해 addSummonedUnit 으로 등록한다. */
   _summonHounds() {
     const em = this.scene.enemyManager;
-    if (!em?.spawnEnemy) return;
+    if (!em?.addSummonedUnit) return;
     const bx = this.gameObject.x, by = this.gameObject.y;
     [-60, 60].forEach(off => {
-      const h = em.spawnEnemy('hound', bx + off, by + 40);
-      if (h) h.gameObject.body.setMaxVelocity(420, 420);
+      em.addSummonedUnit(new Hound(this.scene, bx + off, by + 40), 420);
     });
   }
 
@@ -449,8 +460,42 @@ export default class HunterBoss {
     while (this._snares.length > SNARE_MAX) {
       const old = this._snares.shift();
       if (old.gfx?.active) { this.scene.tweens.killTweensOf(old.gfx); old.gfx.destroy(); }
+      this._destroySnareBar(old);
     }
     this._throwSnare(snare, sx, sy, x, y);
+  }
+
+  /** 잔여 타격 횟수 세그먼트 바 생성 — 착지(비행 종료) 시점에 호출 */
+  _buildSnareBar(s) {
+    s.barBg = [];
+    s.barFill = [];
+    for (let i = 0; i < SNARE_BREAK_HITS; i++) {
+      s.barBg.push(this.scene.add.rectangle(0, 0, SNARE_BAR_SEG_W, SNARE_BAR_SEG_H, 0x000000, 0.4).setDepth(9));
+      s.barFill.push(this.scene.add.rectangle(0, 0, SNARE_BAR_SEG_W, SNARE_BAR_SEG_H, 0xffcc33).setDepth(10));
+    }
+    this._syncSnareBar(s);
+  }
+
+  /** 세그먼트 위치/표시 갱신 — 남은 타격 수만큼 채워진 세그먼트 표시 */
+  _syncSnareBar(s) {
+    if (!s.barBg) return;
+    const remaining = SNARE_BREAK_HITS - s.struggle;
+    const totalW = SNARE_BREAK_HITS * SNARE_BAR_SEG_W + (SNARE_BREAK_HITS - 1) * SNARE_BAR_GAP;
+    const startX = s.x - totalW / 2 + SNARE_BAR_SEG_W / 2;
+    const barY   = s.y - SNARE_IMG / 2 - 12;
+    for (let i = 0; i < SNARE_BREAK_HITS; i++) {
+      const segX = startX + i * (SNARE_BAR_SEG_W + SNARE_BAR_GAP);
+      s.barBg[i].setPosition(segX, barY);
+      s.barFill[i].setPosition(segX, barY);
+      s.barFill[i].setVisible(i < remaining);
+    }
+  }
+
+  _destroySnareBar(s) {
+    s.barBg?.forEach(r => r.active && r.destroy());
+    s.barFill?.forEach(r => r.active && r.destroy());
+    s.barBg = null;
+    s.barFill = null;
   }
 
   /** 덫 던지기 — 포물선 호(떠올랐다 착지) + 회전으로 날아가 착지 시 함정 발동 */
@@ -478,12 +523,13 @@ export default class HunterBoss {
     this._snares = this._snares.filter(s => {
       if (s.flying) return true;   // 비행 중 — 착지 전이라 속박·페이드·만료 미적용
       s.timer -= dt;
-      if (s.timer <= 0) { if (s.gfx?.active) s.gfx.destroy(); return false; }
-      if (s.gfx?.active) {
-        const timerA    = s.timer < 0.8 ? s.timer / 0.8 : 1;
-        const struggleA = 1 - 0.55 * (s.struggle / SNARE_BREAK_HITS);
-        s.gfx.setAlpha(Math.min(timerA, struggleA));
+      if (s.timer <= 0) {
+        if (s.gfx?.active) s.gfx.destroy();
+        this._destroySnareBar(s);
+        return false;
       }
+      if (s.gfx?.active) s.gfx.setAlpha(s.timer < 0.8 ? s.timer / 0.8 : 1);
+      this._syncSnareBar(s);
       const dx = player.x - s.x;
       const dy = player.y - s.y;
       if (dx * dx + dy * dy < SNARE_R * SNARE_R) player.applyRoot?.(ROOT_DUR);
@@ -491,15 +537,20 @@ export default class HunterBoss {
     });
   }
 
-  /** 근거리 공격(attack-fired): 덫 범위 안에서 맞으면 끊기 진행 — 5회째에 덫 제거 + 속박 즉시 해제. */
-  _onPlayerAttack({ playerX, playerY }) {
+  /** 근거리 공격(attack-fired): 덫이 공격 반경 안에 있으면(속박 여부 무관) 끊기 진행 — 5회째에 덫 제거 + 속박 즉시 해제. */
+  _onPlayerAttack({ playerX, playerY, tierData }) {
+    const radius = tierData?.radius ?? SNARE_R;
     this._snares = this._snares.filter(s => {
       if (s.flying) return true;   // 비행 중 덫은 끊을 수 없음
       const dx = playerX - s.x;
       const dy = playerY - s.y;
-      if (dx * dx + dy * dy >= SNARE_R * SNARE_R) return true;
-      if (++s.struggle < SNARE_BREAK_HITS) return true;
+      if (dx * dx + dy * dy >= radius * radius) return true;
+      if (++s.struggle < SNARE_BREAK_HITS) {
+        if (!s.barBg) this._buildSnareBar(s); else this._syncSnareBar(s);
+        return true;
+      }
       if (s.gfx?.active) s.gfx.destroy();
+      this._destroySnareBar(s);
       this._player?.clearRoot?.();
       return false;
     });

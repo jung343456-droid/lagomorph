@@ -194,7 +194,7 @@ export default class Snake {
     this._syncHpBar();
   }
 
-  takeDamage(amount, knockback = null) {
+  takeDamage(amount, knockback = null, opts = {}) {
     if (!this.alive) return false;
     // 매달림 중 — 피격당 1 데미지만, 넉백·경직 면역. 3회 누적 시 탈락.
     if (this.state === 'cling') {
@@ -209,7 +209,7 @@ export default class Snake {
     this.hp -= amount;
     if (this.hp <= 0) { this._die(); return true; }
     // 런지 중 피격은 넉백·경직 면역(돌진 유지) — 그 외엔 경직
-    if (this.state !== 'strike') {
+    if (this.state !== 'strike' && !opts.noStagger) {
       if (knockback) {
         const { dx, dy, force, duration } = knockback;
         this._knockbackTimer    = duration;

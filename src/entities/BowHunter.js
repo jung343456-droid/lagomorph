@@ -15,8 +15,10 @@
  * 올가미 덫: 사냥꾼 위치에서 목표 지점으로 던지는 모션(포물선 호+회전, _throwSnare) 후 착지 시 발동.
  *            비행 중(flying)에는 속박·끊기·만료 미적용. 바닥 hazard(거미줄 패턴 재사용) — 플레이어 진입 시
  *            Player.applyRoot(1s) 속박.
- *            덫 범위 안에서 근거리 공격(attack-fired)을 SNARE_BREAK_HITS(5)회 하면 끊어져 즉시 해제
- *            (덫 제거 + Player.clearRoot). 진행도는 덫 알파로 표시.
+ *            덫이 근거리 공격(attack-fired)의 실제 타격 반경(tierData.radius) 안에 들어오면
+ *            속박 여부와 무관하게 SNARE_BREAK_HITS(5)회 만에 끊어져 즉시 해제(덫 제거 + Player.clearRoot).
+ *            잔여 타격 횟수 세그먼트 바(_buildSnareBar/_syncSnareBar)는 최초 1회 피격 전까지 숨겨져 있다가
+ *            첫 타격 시 생성되어 이후 남은 횟수만큼 표시된다.
  *            사망 후에도 지속(매니저 _lingeringHazards) — 만료·dispose·방 전환 시 정리.
  * speedMult: 공용 속도 배수 경유 (접근·후퇴에 적용)
  */
@@ -37,6 +39,9 @@ const SNARE_DUR    = 6.0;
 const SNARE_MAX    = 1;
 const ROOT_DUR     = 1.0;
 const SNARE_BREAK_HITS = 5;   // 덫 범위 안에서 근거리 공격 N회 시 덫 해제
+const SNARE_BAR_SEG_W  = 10;   // 덫 잔여 타격 표시 세그먼트 폭
+const SNARE_BAR_SEG_H  = 5;
+const SNARE_BAR_GAP    = 2;
 const BH_W         = 24;
 const BH_H         = 40;
 const BH_DW        = 60;
@@ -179,21 +184,23 @@ export default class BowHunter {
     this._syncHpBar();
   }
 
-  takeDamage(amount, knockback = null) {
+  takeDamage(amount, knockback = null, opts = {}) {
     if (!this.alive || this.state === 'stun') return false;
     this.hp -= amount;
     if (this.hp <= 0) { this._die(); return true; }
-    if (knockback) {
-      const { dx, dy, force, duration } = knockback;
-      this._knockbackTimer    = duration;
-      this._knockbackDuration = duration;
-      this._knockbackVx = dx * force;
-      this._knockbackVy = dy * force;
+    if (!opts.noStagger) {
+      if (knockback) {
+        const { dx, dy, force, duration } = knockback;
+        this._knockbackTimer    = duration;
+        this._knockbackDuration = duration;
+        this._knockbackVx = dx * force;
+        this._knockbackVy = dy * force;
+      }
+      this._prevState = (this.state === 'aim') ? 'kite' : this.state;
+      this._clearAimLine();
+      this.state      = 'stun';
+      this.stunTimer  = 0.3;
     }
-    this._prevState = (this.state === 'aim') ? 'kite' : this.state;
-    this._clearAimLine();
-    this.state      = 'stun';
-    this.stunTimer  = 0.3;
     this._blinkHit();
     return false;
   }
@@ -225,7 +232,10 @@ export default class BowHunter {
 
   /** 올가미 정리 — dispose() 및 EnemyManager.clearLingeringHazards() 공용 호출 */
   disposeHazards() {
-    this._snares.forEach(s => { if (s.gfx?.active) { this.scene.tweens.killTweensOf(s.gfx); s.gfx.destroy(); } });
+    this._snares.forEach(s => {
+      if (s.gfx?.active) { this.scene.tweens.killTweensOf(s.gfx); s.gfx.destroy(); }
+      this._destroySnareBar(s);
+    });
     this._snares = [];
     this.scene.events.off('attack-fired', this._onPlayerAttack, this);
     this.scene.enemyManager?.unregisterLingeringHazard?.(this);
@@ -269,8 +279,42 @@ export default class BowHunter {
     while (this._snares.length > SNARE_MAX) {
       const old = this._snares.shift();
       if (old.gfx?.active) { this.scene.tweens.killTweensOf(old.gfx); old.gfx.destroy(); }
+      this._destroySnareBar(old);
     }
     this._throwSnare(snare, sx, sy, x, y);
+  }
+
+  /** 잔여 타격 횟수 세그먼트 바 생성 — 착지(비행 종료) 시점에 호출 */
+  _buildSnareBar(s) {
+    s.barBg = [];
+    s.barFill = [];
+    for (let i = 0; i < SNARE_BREAK_HITS; i++) {
+      s.barBg.push(this.scene.add.rectangle(0, 0, SNARE_BAR_SEG_W, SNARE_BAR_SEG_H, 0x000000, 0.4).setDepth(9));
+      s.barFill.push(this.scene.add.rectangle(0, 0, SNARE_BAR_SEG_W, SNARE_BAR_SEG_H, 0xffcc33).setDepth(10));
+    }
+    this._syncSnareBar(s);
+  }
+
+  /** 세그먼트 위치/표시 갱신 — 남은 타격 수만큼 채워진 세그먼트 표시 */
+  _syncSnareBar(s) {
+    if (!s.barBg) return;
+    const remaining = SNARE_BREAK_HITS - s.struggle;
+    const totalW = SNARE_BREAK_HITS * SNARE_BAR_SEG_W + (SNARE_BREAK_HITS - 1) * SNARE_BAR_GAP;
+    const startX = s.x - totalW / 2 + SNARE_BAR_SEG_W / 2;
+    const barY   = s.y - SNARE_IMG / 2 - 12;
+    for (let i = 0; i < SNARE_BREAK_HITS; i++) {
+      const segX = startX + i * (SNARE_BAR_SEG_W + SNARE_BAR_GAP);
+      s.barBg[i].setPosition(segX, barY);
+      s.barFill[i].setPosition(segX, barY);
+      s.barFill[i].setVisible(i < remaining);
+    }
+  }
+
+  _destroySnareBar(s) {
+    s.barBg?.forEach(r => r.active && r.destroy());
+    s.barFill?.forEach(r => r.active && r.destroy());
+    s.barBg = null;
+    s.barFill = null;
   }
 
   /** 덫 던지기 — 포물선 호(떠올랐다 착지) + 회전으로 날아가 착지 시 함정 발동 */
@@ -298,13 +342,13 @@ export default class BowHunter {
     this._snares = this._snares.filter(s => {
       if (s.flying) return true;   // 비행 중 — 착지 전이라 속박·페이드·만료 미적용
       s.timer -= dt;
-      if (s.timer <= 0) { if (s.gfx?.active) s.gfx.destroy(); return false; }
-      // 만료 페이드와 struggle(끊기 진행도)을 함께 반영 — 더 옅은 쪽을 적용
-      if (s.gfx?.active) {
-        const timerA    = s.timer < 0.8 ? s.timer / 0.8 : 1;
-        const struggleA = 1 - 0.55 * (s.struggle / SNARE_BREAK_HITS);
-        s.gfx.setAlpha(Math.min(timerA, struggleA));
+      if (s.timer <= 0) {
+        if (s.gfx?.active) s.gfx.destroy();
+        this._destroySnareBar(s);
+        return false;
       }
+      if (s.gfx?.active) s.gfx.setAlpha(s.timer < 0.8 ? s.timer / 0.8 : 1);
+      this._syncSnareBar(s);
       const dx = player.x - s.x;
       const dy = player.y - s.y;
       if (dx * dx + dy * dy < SNARE_R * SNARE_R) {
@@ -314,15 +358,20 @@ export default class BowHunter {
     });
   }
 
-  /** 근거리 공격(attack-fired): 덫 범위 안에서 맞으면 끊기 진행 — 5회째에 덫 제거 + 속박 즉시 해제. */
-  _onPlayerAttack({ playerX, playerY }) {
+  /** 근거리 공격(attack-fired): 덫이 공격 반경 안에 있으면(속박 여부 무관) 끊기 진행 — 5회째에 덫 제거 + 속박 즉시 해제. */
+  _onPlayerAttack({ playerX, playerY, tierData }) {
+    const radius = tierData?.radius ?? SNARE_R;
     this._snares = this._snares.filter(s => {
       if (s.flying) return true;   // 비행 중 덫은 끊을 수 없음
       const dx = playerX - s.x;
       const dy = playerY - s.y;
-      if (dx * dx + dy * dy >= SNARE_R * SNARE_R) return true;   // 덫 밖 공격 — 무관
-      if (++s.struggle < SNARE_BREAK_HITS) return true;
+      if (dx * dx + dy * dy >= radius * radius) return true;   // 덫 밖 공격 — 무관
+      if (++s.struggle < SNARE_BREAK_HITS) {
+        if (!s.barBg) this._buildSnareBar(s); else this._syncSnareBar(s);
+        return true;
+      }
       if (s.gfx?.active) s.gfx.destroy();
+      this._destroySnareBar(s);
       this._player?.clearRoot?.();   // 끊어낸 즉시 이동 가능
       return false;
     });
