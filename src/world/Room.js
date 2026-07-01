@@ -20,6 +20,11 @@ const DOOR_OPEN_HINT = 0x1e1e3a; // 열린 문 어두운 배경 색상
 export const DOOR_HX = (ROOM_W - DOOR_W) / 2;   // 수평 문(상·하) 좌측 x 좌표 (= 165)
 export const DOOR_VY = (ROOM_H - DOOR_W) / 2;   // 수직 문(좌·우) 상단 y 좌표 (= 392)
 
+// 상자방(공동묘지) GRIM 고정 좌표 — 단일 출처. GameScene 의 GRIM NPC 스폰 위치와 반드시 일치해야
+// _generateChestGridLayout() 이 이 위치를 정확히 피해 배치할 수 있다.
+export const CHEST_GRIM_X = ROOM_W / 2;
+export const CHEST_GRIM_Y = ROOM_H * 0.32;
+
 export default class Room {
   constructor(scene, data, floorNum = 1) {
     this.scene = scene;
@@ -226,9 +231,12 @@ export default class Room {
   }
 
   _buildObstacles() {
-    // 상점방·시작방·비밀방: 장애물 없음
-    if (this.data.type === 'shop' || this.data.type === 'start'
-        || this.data.type === 'secret_cache' || this.data.type === 'secret_vault') {
+    // 상자방(공동묘지)은 secret_cache 이지만 예외 — stump 그리드를 채운다.
+    const isChestRoom = this.data.type === 'secret_cache' && this.data.cacheSubtype === 'chest';
+
+    // 상점방·시작방·비밀방(상자방 제외): 장애물 없음
+    if (!isChestRoom && (this.data.type === 'shop' || this.data.type === 'start'
+        || this.data.type === 'secret_cache' || this.data.type === 'secret_vault')) {
       this.data.obstacleLayout = [];
       return;
     }
@@ -269,8 +277,10 @@ export default class Room {
       const margin = 40;
       const count  = 2 + Math.floor(Math.random() * 3);  // 2~4
       const MAX_TRY = 30;
-      // 구역 3·4: 50% 확률로 울타리형 / 나머지 50%는 일반 무작위 배치 (zone-3 타입 사용)
-      if (this._zone3 && Math.random() < 0.5) {
+      // 상자방(공동묘지): stump 격자 배치. 그 외 구역 3·4: 50% 확률로 울타리형 / 나머지 50%는 무작위 배치
+      if (isChestRoom) {
+        this.data.obstacleLayout = this._generateChestGridLayout(keepouts, TYPES.stump);
+      } else if (this._zone3 && Math.random() < 0.5) {
         this.data.obstacleLayout = this._generateZone3FenceLayout(keepouts);
       } else {
         this.data.obstacleLayout = [];
@@ -399,6 +409,34 @@ export default class Room {
       }
     }
 
+    return layout;
+  }
+
+  /**
+   * 상자방(공동묘지) 전용: stump(상자)를 3열×4행 격자로 균일 간격 배치.
+   * 문 keepout, GRIM NPC 고정 위치(CHEST_GRIM_X/Y)와 겹치는 칸은 스킵.
+   * 필드 상자와 동일한 스케일 범위(minS~maxS)를 재사용 — 드롭/파괴 로직은 stump 타입 공유로 자동 재사용.
+   */
+  _generateChestGridLayout(keepouts, stumpDef) {
+    const cols = 3, rows = 4;
+    const marginX = 60, marginY = 90;
+    const gapX = (ROOM_W - 2 * marginX) / (cols - 1);
+    const gapY = (ROOM_H - 2 * marginY) / (rows - 1);
+    const GRIM_CLEAR = 50; // GRIM NPC 주변 배치 제외 반경
+
+    const layout = [];
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const x = marginX + c * gapX;
+        const y = marginY + r * gapY;
+        if (Phaser.Math.Distance.Between(x, y, CHEST_GRIM_X, CHEST_GRIM_Y) < GRIM_CLEAR) continue;
+        const scale = stumpDef.minS + Math.random() * (stumpDef.maxS - stumpDef.minS);
+        const dw = stumpDef.w * scale, dh = stumpDef.h * scale;
+        const ox1 = x - dw / 2, oy1 = y - dh / 2, ox2 = x + dw / 2, oy2 = y + dh / 2;
+        if (keepouts.some(k => ox1 < k.x + k.w && ox2 > k.x && oy1 < k.y + k.h && oy2 > k.y)) continue;
+        layout.push({ x, y, type: 'stump', scale });
+      }
+    }
     return layout;
   }
 

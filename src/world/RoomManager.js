@@ -230,6 +230,11 @@ export default class RoomManager {
         // 제단 방: 전투 없음, 즉시 클리어. 제단 엔티티는 GameScene 가 room-entered 에서 스폰/정리
         roomData.cleared = true;
         this._room.unlockDoors();
+      } else if (roomData.cacheSubtype === 'chest') {
+        // 상자 방(공동묘지): 전투 없음, 즉시 클리어. 상자 파괴는 Room 의 공용 stump 파이프라인이 처리.
+        // GRIM NPC 스폰/정리는 GameScene 의 room-entered 핸들러(Altar와 동일 패턴)가 담당.
+        roomData.cleared = true;
+        this._room.unlockDoors();
       } else {
         // 엘리트 방: 출구 열린 상태 유지(도망 가능), 미클리어 상태면 엘리트 스폰.
         // 첫 진입에서 정한 타입을 roomData.eliteType 에 저장해 재진입 시 동일 캐릭터로 풀 HP 재스폰.

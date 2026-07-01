@@ -1,5 +1,5 @@
 /**
- * 패시브 아이템 픽업 — 총 31종 (코어 결정체 포함)
+ * 패시브 아이템 픽업 — 총 33종 (코어 결정체 포함)
  * 수집 시 플레이어 스탯에 영구 적용 (런 내 유지), 획득 이력 localStorage 저장
  * 스택형(core_crystal): stackable=true. 드롭/상점/시작방에 일반 아이템처럼 등장하되 보유 여부와 무관하게
  *   항상 후보(중복 획득) + 일반 패시브 전부 보유 시 확정 폴백 드롭. 인벤토리 ×N 누적
@@ -17,6 +17,7 @@
  * 조건부 강화: hungry_spirit(코어 500 미만 시 부족분 비례 근접 피해 증가, 하한 3% 상한 없음 — _fireMelee 동적 적용)
  * 트랩 다중 설치: rabbit_poop(트랩 3개 동시 설치·최대 ×3·피해 ×0.5)
  * 트랩 자동화: enteritis(장염 — 7초마다 발밑 무료 트랩 자동; 토끼똥 동시 소유 시 3개, AttackManager._tryAutoTrap)
+ * 체형: vegetarian(채식주의 — 몸 크기 ×0.8, 시각+히트박스 동기 축소, Player.applyBodyScale; 회피율 +5%)
  *
  * 스폰 규칙:
  *   시작 방 — 해금된 아이템 중 랜덤 1개 (첫 런은 미스폰)
@@ -198,7 +199,7 @@ export const ITEM_DEFS = {
   },
   rabbit_poop: {
     name:  '토끼똥',
-    desc:  '트랩 3개 동시 설치, 최대 설치 수 ×3 (피해 ×0.6)',
+    desc:  '트랩 3개 동시 설치, 최대 설치 수 ×3 (피해 ×0.5)',
     color: 0xaa7722,
     apply: (player) => { player.hasRabbitPoop = true; },
   },
@@ -235,6 +236,12 @@ export const ITEM_DEFS = {
       : 'HP가 낮을수록 피해 증가 (최대 +50%)',
     color: 0xe24a1a,
     apply: (player) => { player.hasBerserk = true; },
+  },
+  vegetarian: {
+    name:  '채식주의',
+    desc:  '몸 크기 ×0.8, 회피율 +5%',
+    color: 0x66cc66,
+    apply: (player) => { player.bodyScaleMult *= 0.8; player.applyBodyScale(); player.dodgeRate += 0.05; },
   },
 };
 

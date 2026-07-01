@@ -357,7 +357,7 @@ export default class AttackManager {
     const y = py + Math.sin(angle) * spread;
     const sizeMult = this.player.trapSizeMult * (this.player.hasRabbitPoop ? 0.3 : 1);
     const size = POOP_SIZE * sizeMult;
-    const dmg  = this.player.baseAttack * TRAP_DMG_MULT * (this.player.hasRabbitPoop ? 0.6 : 1);
+    const dmg  = this.player.baseAttack * TRAP_DMG_MULT * (this.player.hasRabbitPoop ? 0.5 : 1);
     // 원형 표시: 흰 원 텍스처(poop_circle 80px)에 tint·displaySize 적용 (Arc 금지 규칙 준수)
     const go = this.scene.add.image(x, y, 'poop_circle').setTint(POOP_COLOR);
     go.setDisplaySize(size, size);

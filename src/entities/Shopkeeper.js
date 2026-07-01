@@ -29,8 +29,9 @@ export default class Shopkeeper {
    * @param {number} y
    * @param {Array|null} shopSlots  상점 슬롯 (Hub 의 해금 NPC 는 null 전달)
    * @param {string} [interactEvent='shop-open-requested']  근접 시 발행할 씬 이벤트
+   * @param {boolean} [showTable=true]  상인 앞 탁자 표시 여부 — 상자방(공동묘지) GRIM 은 false
    */
-  constructor(scene, x, y, shopSlots, interactEvent = 'shop-open-requested') {
+  constructor(scene, x, y, shopSlots, interactEvent = 'shop-open-requested', showTable = true) {
     this.scene         = scene;
     this.shopSlots     = shopSlots;
     this.interactEvent = interactEvent;
@@ -52,13 +53,15 @@ export default class Shopkeeper {
     });
 
     // 탁자 — 상인 바로 앞(아래) 정적 obstacle
-    const tableY = y + DISPLAY_H / 2 + TABLE_GAP + TABLE_H / 2;
-    this._table = scene.add.rectangle(x, tableY, TABLE_W, TABLE_H, TABLE_COLOR)
-      .setStrokeStyle(2, TABLE_STROKE)
-      .setDepth(8);
-    scene.physics.add.existing(this._table, true);
-    if (scene.player?.gameObject) {
-      this._tableCollider = scene.physics.add.collider(scene.player.gameObject, this._table);
+    if (showTable) {
+      const tableY = y + DISPLAY_H / 2 + TABLE_GAP + TABLE_H / 2;
+      this._table = scene.add.rectangle(x, tableY, TABLE_W, TABLE_H, TABLE_COLOR)
+        .setStrokeStyle(2, TABLE_STROKE)
+        .setDepth(8);
+      scene.physics.add.existing(this._table, true);
+      if (scene.player?.gameObject) {
+        this._tableCollider = scene.physics.add.collider(scene.player.gameObject, this._table);
+      }
     }
   }
 

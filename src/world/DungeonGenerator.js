@@ -170,9 +170,9 @@ function _addSecretRooms(rooms, floorNum, ownedItemIds) {
       .filter(({ dir }) => dir !== null);
     if (pool.length > 0) {
       const { r: parent, dir } = pool[Math.floor(Math.random() * pool.length)];
-      // 보물방(loot) / 제단방(altar) / 엘리트방(elite) = 각 1/3
+      // 보물방(loot) / 제단방(altar) / 엘리트방(elite) / 상자방(chest, 공동묘지) = 각 1/4
       const roll = Math.random();
-      const subtype = roll < 1 / 3 ? 'loot' : roll < 2 / 3 ? 'altar' : 'elite';
+      const subtype = roll < 1 / 4 ? 'loot' : roll < 2 / 4 ? 'altar' : roll < 3 / 4 ? 'elite' : 'chest';
       const reward  = subtype === 'loot' ? _pickCacheReward(ownedItemIds) : null;
       makeSecretRoom(parent, dir, 'secret_cache', { cacheSubtype: subtype, cacheReward: reward });
     }

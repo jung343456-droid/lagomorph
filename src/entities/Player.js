@@ -44,11 +44,12 @@
  *   corePickupRange  55     코어 자동 흡수 시작 반경(px) — 해금 '코어 흡수 I~III' +15 씩 (→ 70/85/100)
  *   hasHungrySpirit  false  헝그리 정신 — 코어 < 500 일 때 부족분 ×0.1% 근접(A) 피해 증가(하한 3%, 상한 없음, 코어 500↑ 이어도 하한 3%). AttackManager._fireMelee 에 반영
  *   hasSatiety       false  포만감 — 코어 ×0.1% 치명타 피해 증가(최대 +100%, 코어 1000 에서 도달). rollAttackDamage 에서 critMult 에 합산
- *   hasRabbitPoop    false  토끼똥 — B 트랩 3개 동시 설치, 최대 설치 수 ×3, 트랩 피해 ×0.6. AttackManager._startPlace/_placePoop 에 반영
+ *   hasRabbitPoop    false  토끼똥 — B 트랩 3개 동시 설치, 최대 설치 수 ×3, 트랩 피해 ×0.5. AttackManager._startPlace/_placePoop 에 반영
  *   trapHits         1      트랩 1개가 버티는 피격 횟수 (변비 +1) — AttackManager._onPoopHitEnemy 가 소진 시에만 파괴+스플래시
  *   hasAutoTrap      false  장염 — 7초마다 발밑에 무료 트랩 자동 설치(코어 무소모); 토끼똥 소유 시 3개 동시. AttackManager._tryAutoTrap
  *   dodgeRate        0      잔상 — 받는 공격을 확률로 완전 회피(피해·넉백 무효). takeDamage 진입부 굴림(DoT bypassArmor 는 제외)
  *   hasBerserk       false  야성 — HP 가 낮을수록 피해 증가(최대 +50% @0HP, 만피 +0%). rollAttackDamage 가 base 에 곱 → 근거리·트랩·스플래시 전부
+ *   bodyScaleMult    1      채식주의 — 몸 크기 배율(×0.8). applyBodyScale() 이 시각(setScale)·히트박스(_applyBodySize)에 동기 반영
  *
  * 임시 저장: serialize() 로 좌표·스탯·플래그·인벤토리를 평문 객체로 추출, applySave(data) 로 복원한다.
  *   복원 시 저장된 스탯으로 전부 덮어쓴다 — 런 중 패시브 아이템이 변경한 값까지 반영하기 위함
@@ -83,7 +84,7 @@ const SAVE_STAT_KEYS = [
   'trapMaxBonus', 'startingCores', 'invulnDurationMult', 'hasMapReveal', 'hasSecretSense', 'extraLives',
   'extraStartItems', 'shopPriceMult', 'metaRetainRate', 'autoCollectCores', 'corePickupRange',
   'baseAttack', 'hasHungrySpirit', 'hasSatiety', 'hasRabbitPoop', 'trapHits', 'hasAutoTrap',
-  'dodgeRate', 'hasBerserk',
+  'dodgeRate', 'hasBerserk', 'bodyScaleMult',
 ];
 
 export default class Player {
@@ -147,6 +148,7 @@ export default class Player {
     this.hasAutoTrap      = false; // 장염 — 7초마다 발밑에 무료 트랩 자동 설치. AttackManager.update 타이머
     this.dodgeRate        = 0;     // 잔상 — 받는 공격 회피 확률(0~1). takeDamage 진입부 굴림, 성공 시 피해·넉백 무효
     this.hasBerserk       = false; // 야성 — HP 낮을수록 피해 증가(최대 +50% @0HP). rollAttackDamage 에서 base 에 곱
+    this.bodyScaleMult    = 1;    // 채식주의 — 몸 크기 배율(×0.8). applyBodyScale() 이 시각·히트박스에 동기 반영
     this.inventory        = [];
     this._dir            = 'bottom';
     this._row            = DIR_ROW.bottom; // 현재 방향 행
@@ -157,7 +159,7 @@ export default class Player {
     applyUnlocksToPlayer(this);
 
     this.gameObject = scene.add.image(x, y, 'soma-walk', 0);
-    this.gameObject.setScale(PLAYER_SCALE);
+    this.gameObject.setScale(PLAYER_SCALE * this.bodyScaleMult);
     scene.physics.add.existing(this.gameObject);
     this._applyBodySize();
     this.gameObject.body.setCollideWorldBounds(true);
@@ -171,6 +173,12 @@ export default class Player {
     const sx = this.gameObject.scaleX || 1;
     const sy = this.gameObject.scaleY || 1;
     this.gameObject.body.setSize(BODY_W / sx, BODY_H / sy, true);
+  }
+
+  /** bodyScaleMult 변경을 시각(setScale)·히트박스(_applyBodySize)에 동기 반영 — 채식주의 픽업/세이브 복원 시 호출. */
+  applyBodyScale() {
+    this.gameObject.setScale(PLAYER_SCALE * this.bodyScaleMult);
+    this._applyBodySize();
   }
 
   update({ x, y }, delta) {
@@ -521,6 +529,7 @@ export default class Player {
     this.gameObject.body.reset(data.x, data.y);
     this.gameObject.setAlpha(1);
     this.gameObject.setFrame(this._row * 4, false, false);
+    this.applyBodyScale();
   }
 
   // ── private ─────────────────────────────────────────

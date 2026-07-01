@@ -6,7 +6,7 @@ import AttackManager from '../systems/AttackManager';
 import EnemyManager from '../systems/EnemyManager';
 import { generateDungeon, pickPriceWeightedDrop } from '../world/DungeonGenerator';
 import RoomManager from '../world/RoomManager';
-import { ROOM_W, ROOM_H } from '../world/Room';
+import { ROOM_W, ROOM_H, CHEST_GRIM_X, CHEST_GRIM_Y } from '../world/Room';
 import PassiveItem, { ITEM_DEFS } from '../entities/PassiveItem';
 import Shopkeeper from '../entities/Shopkeeper';
 import Altar from '../entities/Altar';
@@ -67,7 +67,8 @@ export default class GameScene extends Phaser.Scene {
     // scene.restart() 시 Phaser 3.60 은 이 씬의 이벤트 리스너를 자동 정리하지 않는다.
     // 이 씬에서 등록한 사용자 이벤트들을 명시적으로 비워야 listener 중복 등록을 막을 수 있다.
     ['boss-cleared', 'floor-exit-ready', 'room-entered', 'shop-open-requested', 'floor-changed',
-     'all-enemies-dead', 'elite-killed', 'vault-entered', 'secret-cache-entered', 'altar-open-requested']
+     'all-enemies-dead', 'elite-killed', 'vault-entered', 'secret-cache-entered', 'altar-open-requested',
+     'grave-grim-near']
       .forEach(e => this.events.off(e));
     if (this.roomManager) this.roomManager.destroy();
 
@@ -125,6 +126,7 @@ export default class GameScene extends Phaser.Scene {
     this._altar            = null;   // 코어 제단 — 제단 비밀방(secret_cache/altar) 진입 시 스폰, 떠나면 정리 (room-entered 핸들러)
     this._altarSlots       = null;   // 이번 층 제단 슬롯 — 층 진입 첫 방문 시 추첨, 층 전환 시 초기화
     this._memoryTape       = null;   // '누군가의 기억' 테이프 — 기억 보관실(secret_vault) 중앙에 스폰, 떠나면 정리 (room-entered 핸들러)
+    this._graveGrim        = null;   // 상자방(공동묘지) GRIM — 탁자·상점 없음, 근접 시 "....." 만 표시 (room-entered 핸들러)
     this._stairsRoomId     = null;
     this._stairsPos        = null;
     this._stairsTriggered  = false;
@@ -235,7 +237,7 @@ export default class GameScene extends Phaser.Scene {
         }
       }
 
-      // 코어 제단 방(비밀방 1/3 분기) — 제단방에 있으면 스폰, 떠나면 정리
+      // 코어 제단 방(비밀방 1/4 분기) — 제단방에 있으면 스폰, 떠나면 정리
       const isAltarRoom = roomData.type === 'secret_cache' && roomData.cacheSubtype === 'altar';
       if (isAltarRoom && !this._altar) {
         this._altar = new Altar(this, ROOM_W / 2, ROOM_H / 2);
@@ -269,6 +271,14 @@ export default class GameScene extends Phaser.Scene {
         );
       }
 
+      // 상자방(공동묘지) GRIM — 탁자·상점 없음, 근접 시 "....." 만 표시
+      if (this._graveGrim) { this._graveGrim.dispose(); this._graveGrim = null; }
+      if (roomData.type === 'secret_cache' && roomData.cacheSubtype === 'chest') {
+        this._graveGrim = new Shopkeeper(
+          this, CHEST_GRIM_X, CHEST_GRIM_Y, null, 'grave-grim-near', false,
+        );
+      }
+
       // 패시브 아이템 — 현재 방 소속만 표시 (다른 방 아이템이 같은 좌표에 보이거나 픽업되는 것 방지)
       const rid = roomData.id;
       for (const item of this._passiveItems) {
@@ -296,6 +306,12 @@ export default class GameScene extends Phaser.Scene {
       } else {
         ui.openDialogue?.(randomGrimTip(), () => ui.openShop?.(slots));
       }
+    });
+
+    // 상자방(공동묘지) GRIM 근접 — 판매 없음, "....." 한 줄만 표시. 정체는 게임 내에서 설명하지 않는다.
+    this.events.on('grave-grim-near', () => {
+      this.player.halt();
+      this.scene.get('UIScene').openDialogue?.(['.....']);
     });
 
     // 코어 제단 열기 요청 (Altar 근접 시 발행) — 상점 오버레이 재사용, 런 한정 강화 구매
@@ -892,6 +908,7 @@ export default class GameScene extends Phaser.Scene {
     if (this._shopkeeper) this._shopkeeper.update(this.player);
     if (this._altar) this._altar.update(this.player);
     if (this._memoryTape) this._memoryTape.update(this.player);
+    if (this._graveGrim) this._graveGrim.update(this.player);
 
     const _curRoomId = this.roomManager.currentRoomData?.id;
     for (const item of this._passiveItems) {

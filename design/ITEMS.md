@@ -50,6 +50,7 @@
 | `thick_fur` | 두꺼운 모피 | 카키 `0xb5a07a` | 받는 피해 **-12%** (`damageReduction += 0.12`, 독·화상 DoT 는 관통) | `player.damageReduction += 0.12` |
 | `afterimage` | 잔상 | 청백 `0xcfe7ff` | 받는 공격을 **15% 확률로 완전 회피**(피해·넉백 무효). 독·화상 DoT 는 회피 불가. `takeDamage` 진입부 굴림 | `player.dodgeRate += 0.15` |
 | `feral` | 야성 | 진주황 `0xe24a1a` | **HP가 낮을수록 피해 증가** — 만피 +0%, 0HP +50% 선형(`0.5×(1−hp/maxHp)`). `rollAttackDamage` 가 base 에 곱해 근거리·트랩 직격·스플래시 전부 적용, 실시간 재계산 | `player.hasBerserk = true` |
+| `vegetarian` | 채식주의 | 초록 `0x66cc66` | 몸 크기 **×0.8** — 시각(스프라이트 스케일)·물리 히트박스 동기 축소, **회피율 +5%** | `player.bodyScaleMult *= 0.8; player.applyBodyScale(); player.dodgeRate += 0.05` |
 
 ---
 
@@ -99,6 +100,7 @@
 | `hasAutoTrap` | `false` | 장염 — 7초마다 발밑에 무료 트랩 1개 자동 설치(코어·쿨다운 무관). `AttackManager.update` 의 `_autoTrapTimer` → `_tryAutoTrap` (최대치 도달 시 무시) |
 | `dodgeRate` | `0` | 잔상 — 받는 공격 회피 확률(0~1). `takeDamage` 진입부에서 굴림, 성공 시 피해·넉백 무효(DoT `bypassArmor` 는 제외). 두꺼운 모피와 별개 |
 | `hasBerserk` | `false` | 야성 — HP 낮을수록 피해 증가(최대 +50% @0HP). `berserkDamageBonus()` = `0.5×(1−hp/maxHp)`, `rollAttackDamage` 가 base 에 곱(근거리·트랩·스플래시 공통, 실시간) |
+| `bodyScaleMult` | `1` | 채식주의 — 몸 크기 배율(×0.8). `Player.applyBodyScale()` 이 `setScale`(시각)·`_applyBodySize()`(히트박스)에 동기 반영. 픽업 시 즉시 적용, 세이브 복원 시에도 재호출 |
 
 ---
 
