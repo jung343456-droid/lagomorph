@@ -22,6 +22,8 @@ export const DOOR_VY = (ROOM_H - DOOR_W) / 2;   // 수직 문(좌·우) 상단 y
 
 // 상자방(공동묘지) GRIM 고정 좌표 — 단일 출처. GameScene 의 GRIM NPC 스폰 위치와 반드시 일치해야
 // _generateChestGridLayout() 이 이 위치를 정확히 피해 배치할 수 있다.
+// GRIM 은 뒷모습으로 서서 바로 위(작은 y) 중앙열 무덤 하나를 바라본다 — 격자 중앙열 상단 셀이 그 무덤이고,
+// GRIM 바로 아래 셀은 GRIM_CLEAR 반경으로 비워져 뒤가 깔끔하게 보인다.
 export const CHEST_GRIM_X = ROOM_W / 2;
 export const CHEST_GRIM_Y = ROOM_H * 0.32;
 
@@ -413,13 +415,13 @@ export default class Room {
   }
 
   /**
-   * 상자방(공동묘지) 전용: stump(상자)를 3열×4행 격자로 균일 간격 배치.
+   * 상자방(공동묘지) 전용: stump(상자)를 5열×7행 격자로 촘촘하게 배치(기존 3×4 대비 약 3배 밀도).
    * 문 keepout, GRIM NPC 고정 위치(CHEST_GRIM_X/Y)와 겹치는 칸은 스킵.
    * 필드 상자와 동일한 스케일 범위(minS~maxS)를 재사용 — 드롭/파괴 로직은 stump 타입 공유로 자동 재사용.
    */
   _generateChestGridLayout(keepouts, stumpDef) {
-    const cols = 3, rows = 4;
-    const marginX = 60, marginY = 90;
+    const cols = 5, rows = 7;
+    const marginX = 45, marginY = 65;
     const gapX = (ROOM_W - 2 * marginX) / (cols - 1);
     const gapY = (ROOM_H - 2 * marginY) / (rows - 1);
     const GRIM_CLEAR = 50; // GRIM NPC 주변 배치 제외 반경

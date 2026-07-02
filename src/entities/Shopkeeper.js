@@ -6,8 +6,11 @@
  *           범위 안에서 이동 중에는 재발행되지 않고, 범위를 벗어났다가 다시 들어올 때마다 재발행.
  *
  * 탁자: 상인 앞(아래쪽) 정적 obstacle 사각형. 플레이어와 충돌. NEAR_R은 탁자 너머에서 트리거되도록 보정됨.
+ *       showTable=false 로 생략 가능(공동묘지방 GRIM).
  *
- * 텍스처: 'grim' (BootScene._generateTextures에서 프로그래밍 생성). 없으면 회색 rectangle 폴백.
+ * 텍스처: 기본 'grim'(정면). 공동묘지방 GRIM 은 뒷모습 'grim_back' — 상호작용해도 텍스처를 바꾸지 않아
+ *         돌아보지 않는다. 텍스처가 없으면 회색 rectangle 폴백. (모두 BootScene 에서 프로그래밍 생성)
+ * 재사용: 상점방(판매) / Hub 해금 NPC / 공동묘지방(뒷모습·침묵) — interactEvent·showTable·textureKey 로 분기.
  * 정리: 방 전환·층 전환·재시작 시 GameScene이 dispose() 호출.
  */
 import Phaser from 'phaser';
@@ -30,16 +33,18 @@ export default class Shopkeeper {
    * @param {Array|null} shopSlots  상점 슬롯 (Hub 의 해금 NPC 는 null 전달)
    * @param {string} [interactEvent='shop-open-requested']  근접 시 발행할 씬 이벤트
    * @param {boolean} [showTable=true]  상인 앞 탁자 표시 여부 — 상자방(공동묘지) GRIM 은 false
+   * @param {string} [textureKey='grim']  스프라이트 텍스처 — 공동묘지 GRIM 은 뒷모습('grim_back').
+   *        상호작용 시 텍스처를 바꾸지 않으므로(돌아보지 않음) 지정한 방향이 그대로 유지된다.
    */
-  constructor(scene, x, y, shopSlots, interactEvent = 'shop-open-requested', showTable = true) {
+  constructor(scene, x, y, shopSlots, interactEvent = 'shop-open-requested', showTable = true, textureKey = 'grim') {
     this.scene         = scene;
     this.shopSlots     = shopSlots;
     this.interactEvent = interactEvent;
     this.isNear        = false;
     this.alive         = true;
 
-    if (scene.textures.exists('grim')) {
-      this.gameObject = scene.add.image(x, y, 'grim').setDepth(8);
+    if (scene.textures.exists(textureKey)) {
+      this.gameObject = scene.add.image(x, y, textureKey).setDepth(8);
       this.gameObject.setDisplaySize(DISPLAY_W, DISPLAY_H);
     } else {
       this.gameObject = scene.add.rectangle(x, y, DISPLAY_W, DISPLAY_H, 0x8a8a86).setDepth(8);

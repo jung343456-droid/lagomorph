@@ -1,12 +1,13 @@
 /**
  * 뱀 (Snake) — 잠복 기습 + 물고 매달리기 (구역 3, 동물)
- * HP 80 / 속도 140 / 데미지: 물기 명중 시 매달려 지속 6dps×5s / 코어 5
+ * HP 80 / 속도 140 / 데미지: 물기 명중 시 매달려 지속 8dps(틱당 4)×5s / 코어 5
  *
  * 패턴:
  *   lurk   → 저속 배회(풀숲 잠복). 140px 이내 진입 시 windup 전환
  *   windup → 0.3초 예고(정지, 대시 방향 고정)
  *   strike → 360px/s 직선 런지 0.35초. 물기 명중 시 cling 전환(매달림)
- *   cling  → 플레이어에 부착 추종. 이속 ×0.8(player.applyBiteSlow) + 지속 데미지(6dps×0.5틱).
+ *   cling  → 플레이어에 부착 추종. 이속 ×0.8(player.applyBiteSlow) + 지속 데미지(8dps=틱당 4, 0.5초 틱).
+ *            틱마다 독액 연출(_biteFX): 뱀 머리 초록 점멸 + 독색 데미지 숫자로 DoT 가시화.
  *            최대 5초. 매달린 동안 피격당 1 데미지만 받고 넉백·경직 면역, 3회 피격 시 탈락.
  *            5초 경과 시 피격 횟수와 무관하게 탈락(→ retreat). 부착 중 접촉 데미지는 억제.
  *   retreat→ 0.4초 후퇴 후 lurk 복귀
@@ -27,7 +28,8 @@ const BITE_R      = 28;   // 물기 명중 판정 반경 (매달림 부착)
 const CLING_DUR   = 5;    // 매달림 최대 지속 (s) — 경과 시 피격 횟수 무관 탈락
 const CLING_HITS  = 3;    // 매달림 중 탈락까지 필요한 피격 횟수
 const CLING_BITE_DMG = 1; // 매달림 중 피격당 뱀이 받는 데미지
-const CLING_DPS   = 6;    // 매달림 중 플레이어 지속 데미지(초당)
+const CLING_DPS   = 8;    // 매달림 중 플레이어 지속 데미지(초당) — 0.5초 틱 기준 틱당 4
+const VENOM_COLOR = '#88ff33'; // DoT 데미지 숫자·머리 점멸에 쓰는 독액 색
 const CLING_TICK  = 0.5;  // 지속 데미지 틱 간격 (s)
 const CLING_OFFSET = 16;  // 부착 시 플레이어로부터의 표시 오프셋 (px)
 const BITE_SLOW_REFRESH = 0.2; // 매 프레임 갱신하는 이속 슬로우 잔여 시간 (s)
@@ -155,8 +157,9 @@ export default class Snake {
           this._clingTick += CLING_TICK;
           const dmg = Math.max(1, Math.round(CLING_DPS * CLING_TICK));
           player.lastDamageSource = '뱀';
-          const dead = player.takeDamage(dmg, null, { bypassArmor: true });
+          const dead = player.takeDamage(dmg, null, { bypassArmor: true, damageColor: VENOM_COLOR });
           if (dead) this.scene.events.emit('player-dead');
+          this._biteFX();
         }
         this._clingTimer -= dt;
         if (this._clingTimer <= 0) this._detach(); // 5초 경과 — 피격 횟수 무관 탈락
@@ -329,6 +332,23 @@ export default class Snake {
         if (flip % 2 === 0) this.gameObject.setTintFill(0xffffff);
         else this.gameObject.clearTint();
       },
+    });
+  }
+
+  _biteFX() {
+    // 매달림 DoT 틱 연출 — 뱀 머리 독색 점멸 + 부착점에서 독액이 번지는 팝(사각 스케일 페이드).
+    // add.circle 금지 규칙에 따라 rectangle 로 링을 대체한다.
+    this.gameObject.setTintFill(0x66ff22);
+    this.scene.time.delayedCall(110, () => {
+      if (!this.destroyed && this.state === 'cling') this.gameObject.clearTint();
+    });
+    const pop = this.scene.add.rectangle(this.gameObject.x, this.gameObject.y, 14, 14, 0x88ff33)
+      .setDepth(10).setAlpha(0.85);
+    this.scene.tweens.add({
+      targets: pop,
+      scaleX: 2.6, scaleY: 2.6, alpha: 0,
+      duration: 300, ease: 'Quad.Out',
+      onComplete: () => { if (pop.active) pop.destroy(); },
     });
   }
 

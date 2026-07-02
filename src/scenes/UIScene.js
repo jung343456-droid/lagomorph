@@ -254,10 +254,14 @@ export default class UIScene extends Phaser.Scene {
     if (r.col !== null) return { col: r.col, row: r.row };
     const se = r.secretEntry;
     const parent = se ? rooms.find(p => p.id === se.parentId) : null;
-    if (!parent || parent.col === null) return null;
+    if (!parent) return null;
+    // 부모가 격자 밖(col=null)인 중첩 비밀방(공동묘지방)도 재귀로 위치 산출 —
+    // 부모 셀(보물방)을 먼저 구한 뒤 진입 방향 오프셋을 더한다. 부모 체인은 id 증가·무순환이라 안전.
+    const base = this._mmCell(parent, rooms);
+    if (!base) return null;
     const off = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }[se.fromDir];
     if (!off) return null;
-    return { col: parent.col + off[0], row: parent.row + off[1] };
+    return { col: base.col + off[0], row: base.row + off[1] };
   }
 
   _refreshMinimap(dungeonData, currentId) {
@@ -1069,7 +1073,11 @@ export default class UIScene extends Phaser.Scene {
 
   _shopDesc(slot, player) {
     if (slot.kind === 'upgrade')   return slot.desc ?? '';
-    if (slot.kind === 'item')      return slot.dynDesc ? slot.dynDesc(player) : (slot.desc ?? '');
+    // 슬롯은 세이브 직렬화(JSON) 대상이라 함수를 담지 않는다 — dynDesc 는 ITEM_DEFS 에서 조회
+    if (slot.kind === 'item') {
+      const dyn = ITEM_DEFS[slot.id]?.dynDesc;
+      return dyn ? dyn(player) : (slot.desc ?? '');
+    }
     if (slot.kind === 'heal')      return `HP +${slot.amount}`;
     if (slot.kind === 'heal_pct')  return `HP +${Math.floor(player.maxHp * slot.ratio)} (50%)`;
     if (slot.kind === 'heal_full') return 'HP 완전 회복';

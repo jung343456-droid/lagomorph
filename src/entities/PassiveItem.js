@@ -12,11 +12,11 @@
  *           bulletproof_vest(방어력), thick_fur(받는 피해 -12%), afterimage(잔상 — 회피 15%)
  * 조건부 공격: feral(야성 — HP 낮을수록 피해 증가, 최대 +50%, rollAttackDamage 동적 적용)
  * 트랩 위장(스플래시+상태이상): fire_disguise(화상), ice_disguise(빙결), poison_disguise(중독)
- * 트랩 강화: frugal_instinct(코어소모↓), big_trap(크기), constipation(변비 — 트랩 내구 +1, 적 2마리 관통)
+ * 트랩 강화: frugal_instinct(코어소모↓), big_trap(크기), constipation(변비 — 트랩 내구 +1, 총 2회 적중)
  * 탐색/편의: map_sense(전체 지도 공개), secret_sense(비밀 벽 가시화), core_affinity(방 클리어 시 코어 자동 수집)
- * 조건부 강화: hungry_spirit(코어 500 미만 시 부족분 비례 근접 피해 증가, 하한 3% 상한 없음 — _fireMelee 동적 적용)
+ * 조건부 강화: hungry_spirit(코어 부족분(500−코어) 비례 근접 피해 증가, 하한 3% 상한 없음 — _fireMelee 동적 적용)
  * 트랩 다중 설치: rabbit_poop(트랩 3개 동시 설치·최대 ×3·피해 ×0.5)
- * 트랩 자동화: enteritis(장염 — 7초마다 발밑 무료 트랩 자동; 토끼똥 동시 소유 시 3개, AttackManager._tryAutoTrap)
+ * 트랩 자동화: enteritis(장염 — 5초마다 발밑 무료 트랩 자동; 토끼똥 동시 소유 시 3개, AttackManager._tryAutoTrap)
  * 체형: vegetarian(채식주의 — 몸 크기 ×0.8, 시각+히트박스 동기 축소, Player.applyBodyScale; 회피율 +5%)
  *
  * 스폰 규칙:
@@ -44,24 +44,24 @@ export const ITEM_DEFS = {
     name:  '코어 결정체',
     desc:  '기본 공격력 +1 (중복 획득 가능)',
     color: 0x00e0ff,
-    stackable: true,   // 중복 소유 가능. 드롭·상점(60코어)·시작방에 일반 아이템처럼 섞여 등장 + 일반 패시브 소진 시 폴백 드롭
+    stackable: true,   // 중복 소유 가능. 드롭·상점(75코어)·시작방에 일반 아이템처럼 섞여 등장 + 일반 패시브 소진 시 폴백 드롭
     apply: (player) => { player.baseAttack += 1; },
   },
   poison_claws: {
     name:  '독성 발톱',
-    desc:  '명중 시 25% 확률로 10초 독',
+    desc:  '근거리 명중 시 25% 확률로 10초 독',
     color: 0xaa44ff,
     apply: (player) => { player.hasPoison = true; },
   },
   fire_claws: {
     name:  '화염 발톱',
-    desc:  '명중 시 25% 확률로 3초 화상',
+    desc:  '근거리 명중 시 25% 확률로 3초 화상',
     color: 0xff2200,
     apply: (player) => { player.hasFire = true; },
   },
   ice_claws: {
     name:  '얼음 발톱',
-    desc:  '명중 시 25% 확률로 3초 빙결',
+    desc:  '근거리 명중 시 25% 확률로 3초 빙결 (보스는 절반)',
     color: 0x88ddff,
     apply: (player) => { player.hasIce = true; },
   },
@@ -73,7 +73,7 @@ export const ITEM_DEFS = {
   },
   tough_hide: {
     name:  '강인한 가죽',
-    desc:  '최대 HP +50',
+    desc:  '최대 HP +50, 즉시 50 회복',
     color: 0xff4455,
     apply: (player) => { player.maxHp += 50; player.heal(50); },
   },
@@ -91,7 +91,7 @@ export const ITEM_DEFS = {
   },
   thunder_claws: {
     name:  '감전 발톱',
-    desc:  '명중 시 25% 확률로 반경 150px 내 적에게 연쇄',
+    desc:  '근거리 명중 시 25% 확률로 150px 내 적에게 연쇄 (피해 50%씩 감쇠)',
     color: 0xddff22,
     apply: (player) => { player.hasThunder = true; },
   },
@@ -103,19 +103,19 @@ export const ITEM_DEFS = {
   },
   fire_disguise: {
     name:  '불꽃 위장',
-    desc:  '트랩 명중 시 반경 40px 스플래시 15 + 50% 확률 화상',
+    desc:  '트랩 명중 시 반경 40px 폭발(트랩 피해 25%, 중첩 가능) + 30% 확률 화상',
     color: 0xff5522,
     apply: (player) => { player.hasFireDisguise = true; },
   },
   ice_disguise: {
     name:  '냉동 위장',
-    desc:  '트랩 명중 시 반경 40px 스플래시 15 + 50% 확률 빙결',
+    desc:  '트랩 명중 시 반경 40px 폭발(트랩 피해 25%, 중첩 가능) + 30% 확률 빙결',
     color: 0x66ccff,
     apply: (player) => { player.hasIceDisguise = true; },
   },
   poison_disguise: {
     name:  '독성 위장',
-    desc:  '트랩 명중 시 반경 40px 스플래시 15 + 50% 확률 중독',
+    desc:  '트랩 명중 시 반경 40px 폭발(트랩 피해 25%, 중첩 가능) + 30% 확률 중독',
     color: 0x88dd44,
     apply: (player) => { player.hasPoisonDisguise = true; },
   },
@@ -127,7 +127,7 @@ export const ITEM_DEFS = {
   },
   big_trap: {
     name:  '대식가',
-    desc:  '트랩 크기 ×2 (22 → 44px), 회복 아이템 효과 +10%',
+    desc:  '트랩 크기 ×2, 회복 아이템 효과 +10%',
     dynDesc: (p) => { const cur = Math.round(22 * (p.trapSizeMult ?? 1)); return `트랩 크기 ×2 (${cur} → ${cur * 2}px), 회복 아이템 효과 +10%`; },
     color: 0x885500,
     apply: (player) => {
@@ -137,7 +137,7 @@ export const ITEM_DEFS = {
   },
   cruel_claws: {
     name:  '잔혹한 발톱',
-    desc:  '치명타율 +15% (15 → 30%)',
+    desc:  '치명타율 +15%',
     dynDesc: (p) => `치명타율 +15% (${Math.round(p.critRate * 100)} → ${Math.round((p.critRate + 0.15) * 100)}%)`,
     color: 0xcc1144,
     apply: (player) => { player.critRate += 0.15; },
@@ -150,7 +150,7 @@ export const ITEM_DEFS = {
   },
   savage_strike: {
     name:  '광폭한 일격',
-    desc:  '치명타 피해 +100% (×1.5 → ×2.5)',
+    desc:  '치명타 피해 +100%',
     dynDesc: (p) => `치명타 피해 +100% (×${p.critMult.toFixed(1)} → ×${(p.critMult + 1.0).toFixed(1)})`,
     color: 0x8b0000,
     apply: (player) => { player.critMult += 1.0; },
@@ -163,7 +163,7 @@ export const ITEM_DEFS = {
   },
   map_sense: {
     name:  '던전의 감각',
-    desc:  '이 층의 모든 방이 지도에 표시됨',
+    desc:  '층 전체 방이 지도에 표시됨 (비밀방 제외)',
     color: 0x33bbdd,
     apply: (player) => { player.hasMapReveal = true; },
   },
@@ -181,10 +181,10 @@ export const ITEM_DEFS = {
   },
   hungry_spirit: {
     name:  '헝그리 정신',
-    desc:  '코어 500 미만일 때 부족분 ×0.1%만큼 근접 피해 증가 (하한 3%)',
+    desc:  '코어 부족분(500−코어) ×0.1% 근거리 피해 증가 (최소 +3%)',
     dynDesc: (p) => p.hasHungrySpirit
-      ? `코어 500 미만 부족분 ×0.1% 근접 피해 증가 (하한 3%, 현재 +${Math.round(p.hungerDamageBonus() * 100)}%)`
-      : '코어 500 미만일 때 부족분 ×0.1%만큼 근접 피해 증가 (하한 3%)',
+      ? `코어 부족분(500−코어) ×0.1% 근거리 피해 증가 (최소 +3%, 현재 +${Math.round(p.hungerDamageBonus() * 100)}%)`
+      : '코어 부족분(500−코어) ×0.1% 근거리 피해 증가 (최소 +3%)',
     color: 0x99ff33,
     apply: (player) => { player.hasHungrySpirit = true; },
   },
@@ -199,20 +199,20 @@ export const ITEM_DEFS = {
   },
   rabbit_poop: {
     name:  '토끼똥',
-    desc:  '트랩 3개 동시 설치, 최대 설치 수 ×3 (피해 ×0.5)',
+    desc:  '트랩 3개 동시 설치, 최대 설치 수 ×3 (개당 피해 ×0.5, 크기 ×0.3)',
     color: 0xaa7722,
     apply: (player) => { player.hasRabbitPoop = true; },
   },
   constipation: {
     name:  '변비',
-    desc:  '설치한 트랩이 부서지지 않고 적 2마리를 맞춤',
-    dynDesc: (p) => `설치한 똥이 부서지지 않고 적 ${(p.trapHits ?? 1) + 1}마리를 맞춤`,
+    desc:  '설치한 트랩이 부서지지 않고 2번 적중함',
+    dynDesc: (p) => `설치한 트랩이 부서지지 않고 ${(p.trapHits ?? 1) + 1}번 적중함`,
     color: 0x6b4423,
     apply: (player) => { player.trapHits += 1; },
   },
   enteritis: {
     name:  '장염',
-    desc:  '7초마다 발밑에 똥을 자동 설치 (코어 무소모)',
+    desc:  '5초마다 발밑에 트랩을 자동 설치 (코어 무소모)',
     color: 0xc2a83e,
     apply: (player) => { player.hasAutoTrap = true; },
   },

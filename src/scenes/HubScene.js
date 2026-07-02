@@ -28,7 +28,7 @@ import UnlockMenu from '../ui/UnlockMenu';
 import { getMetaCores, getShopDiscovered, resetAllProgress, getGrimIntroShown, markGrimIntroShown, getDiscoveredVaults } from '../data/MetaProgress';
 import { vaultMeta } from '../data/Vaults';
 import { hasRunSave } from '../data/SaveManager';
-import { randomGrimTip } from '../data/GrimDialogue';
+import { randomGrimHubTip } from '../data/GrimDialogue';
 import { safeInsetBottom } from '../utils/SafeArea';
 
 const DLG_BOTTOM_PAD = 16;  // 대화 패널 하단 추가 여백 (floor 위에 더하는 숨 쉴 공간)
@@ -124,10 +124,10 @@ export default class HubScene extends Phaser.Scene {
       // 이미 인사했으면 대화 없이 메뉴 바로 오픈
       if (this._grimGreeted) { this._openUnlockMenu(); return; }
       this._grimGreeted = true;
-      // 첫 인사 대사는 게임 전체에서 딱 1회, 이후로는 랜덤 팁
+      // 첫 인사 대사는 게임 전체에서 딱 1회, 이후로는 랜덤 팁 (HUB 전용 과거 회상 포함)
       const introDone = getGrimIntroShown();
       const lines = introDone
-        ? randomGrimTip()
+        ? randomGrimHubTip()
         : GRIM_START_LINES;
       if (!introDone) markGrimIntroShown();
       this._showGrimDialogue(lines, () => this._openUnlockMenu());

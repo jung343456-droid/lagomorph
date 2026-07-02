@@ -22,16 +22,16 @@
 | `sharp_claws` | 예리한 발톱 | 청록 `0x00ccff` | 근거리 공격 데미지 ×1.20 | `player.meleeDamageMult += 0.20` |
 | `poison_claws` | 독성 발톱 | 보라 `0xaa44ff` | 근거리 공격 명중 시 25% 확률로 10초간 독 (maxHp×1%/s, 최소 2/s) | `player.hasPoison = true` |
 | `fire_claws` | 화염 발톱 | 빨강 `0xff2200` | 근거리 공격 명중 시 25% 확률로 3초 화상 (maxHp×2.5%/s, 최소 4/s) | `player.hasFire = true` |
-| `ice_claws` | 얼음 발톱 | 하늘 `0x88ddff` | 근거리 공격 명중 시 25% 확률로 3초 빙결 (이동 불가) | `player.hasIce = true` |
+| `ice_claws` | 얼음 발톱 | 하늘 `0x88ddff` | 근거리 공격 명중 시 25% 확률로 3초 빙결 (이동 불가, 보스는 1.5초 — `BOSS_FREEZE_MULT 0.5`) | `player.hasIce = true` |
 | `swift_feet` | 질주 발 | 초록 `0x00ee66` | 이동속도 +40 | `player.speed += 40; player.baseSpeed += 40` |
 | `tough_hide` | 강인한 가죽 | 빨강 `0xff4455` | 최대 HP +50, 즉시 50 회복 | `player.maxHp += 50; player.heal(50)` |
 | `bulletproof_vest` | 방탄조끼 | 강철 `0x445566` | 방어력 +2 — 받는 피해 -2, 방어력 이하 공격은 통째로 무효 (무적/넉백/숫자 모두 스킵) | `player.armor += 2` |
 | `quick_claws` | 민첩한 발톱 | 노랑 `0xffee00` | 근거리 충전 속도 ×1.5 | `player.chargeSpeedMult *= 1.5` |
-| `thunder_claws` | 감전 발톱 | 황녹 `0xddff22` | 명중 시 25% 확률로 반경 150px 내 다른 적에게 연쇄 (hop마다 직전 데미지의 50%, 데미지 ≥2 유지 시 최대 10hop) | `player.hasThunder = true` |
+| `thunder_claws` | 감전 발톱 | 황녹 `0xddff22` | 근거리 명중 시 25% 확률로 반경 150px 내 다른 적에게 연쇄 (hop마다 직전 데미지의 50%, 피해 ≥1 동안 최대 20hop) | `player.hasThunder = true` |
 | `hunter_instinct` | 사냥꾼의 본능 | 분홍 `0xff6688` | 적 처치 시 HP 3 회복 | `player.healOnKill += 3` |
-| `fire_disguise` | 불꽃 위장 | 주황 `0xff5522` | 설치물 명중 시 반경 40px 스플래시 15 + 50% 확률 화상 | `player.hasFireDisguise = true` |
-| `ice_disguise` | 냉동 위장 | 하늘 `0x66ccff` | 설치물 명중 시 반경 40px 스플래시 15 + 50% 확률 빙결 | `player.hasIceDisguise = true` |
-| `poison_disguise` | 독성 위장 | 연두 `0x88dd44` | 설치물 명중 시 반경 40px 스플래시 15 + 50% 확률 중독 | `player.hasPoisonDisguise = true` |
+| `fire_disguise` | 불꽃 위장 | 주황 `0xff5522` | 설치물 명중 시 반경 40px 스플래시(트랩 직격 데미지 ×25% ×보유 위장 종류 수) + 30% 확률 화상 | `player.hasFireDisguise = true` |
+| `ice_disguise` | 냉동 위장 | 하늘 `0x66ccff` | 설치물 명중 시 반경 40px 스플래시(트랩 직격 데미지 ×25% ×보유 위장 종류 수) + 30% 확률 빙결 | `player.hasIceDisguise = true` |
+| `poison_disguise` | 독성 위장 | 연두 `0x88dd44` | 설치물 명중 시 반경 40px 스플래시(트랩 직격 데미지 ×25% ×보유 위장 종류 수) + 30% 확률 중독 | `player.hasPoisonDisguise = true` |
 | `frugal_instinct` | 절약 본능 | 노랑 `0xffdd00` | 설치물 코어 소모 3→2 | `player.trapCostBonus += 1` |
 | `big_trap` | 대식가 | 갈색 `0x885500` | 설치물 크기 ×2 (22→44px), 회복 아이템 효과 +10% | `player.trapSizeMult *= 2; player.healItemMult += 0.1` |
 | `cruel_claws` | 잔혹한 발톱 | 진홍 `0xcc1144` | 치명타율 +15% (15→30%) | `player.critRate += 0.15` |
@@ -44,9 +44,9 @@
 | `core_crystal` | 코어 결정체 | 청록 `0x00e0ff` | **기본 공격력 +1** (중복 획득 가능). 스택형 — 드롭·상점(75코어)·시작방에 일반 아이템처럼 등장 + 일반 패시브 소진 시 확정 폴백 드롭 | `player.baseAttack += 1` |
 | `hungry_spirit` | 헝그리 정신 | 연두 `0x99ff33` | 부족분(500−코어) ×0.1% 만큼 **근거리(A) 공격 피해 증가**, 하한 3% (코어 ≥ 500 이어도 하한 3% 상시, 상한 없음). 실시간 코어량으로 매 공격 재계산 (트랩·스플래시 미적용) | `player.hasHungrySpirit = true` |
 | `satiety` | 포만감 | 호박 `0xffaa33` | 코어 1개당 **치명타 피해 +0.1%**, 최대 +100% (코어 1000개에서 도달). `critMult` 에 합산되어 모든 치명타(근거리·트랩 직격·스플래시)에 적용. 실시간 코어량으로 매 공격 재계산. 헝그리 정신의 정반대(코어를 쌓을수록 강화) | `player.hasSatiety = true` |
-| `rabbit_poop` | 토끼똥 | 갈색 `0xaa7722` | B 버튼 1회 입력으로 트랩 **3개 동시 설치** (120° 간격 20px 퍼짐). 최대 설치 수 **×3** (기본 5→15). 각 트랩 피해 **×0.5**, 크기 **×0.3** (스플래시·코어 소모는 무관). 코어 소모는 1회 | `player.hasRabbitPoop = true` |
-| `constipation` | 변비 | 진갈색 `0x6b4423` | 설치한 트랩이 1회로 부서지지 않고 **적 2마리**를 맞춤(`trapHits` 1→2). 트랩당 적별 1회만 데미지·내구 소모(같은 적 반복 발동 차단), 마지막 피격에서만 파괴+위장 스플래시 | `player.trapHits += 1` |
-| `enteritis` | 장염 | 누런녹 `0xc2a83e` | **7초마다** 발밑에 트랩 1개 **자동 설치**(코어 무소모, 쿨다운 무관). 최대 설치 수 도달 시 해당 주기 건너뜀. 방 입장 시 타이머 리셋 | `player.hasAutoTrap = true` |
+| `rabbit_poop` | 토끼똥 | 갈색 `0xaa7722` | B 버튼 1회 입력으로 트랩 **3개 동시 설치** (120° 간격 20px 퍼짐). 최대 설치 수 **×3** (기본 5→15). 각 트랩 피해 **×0.5**, 크기 **×0.3** (스플래시는 트랩 직격 데미지 기반이라 ×0.5 반영). 코어 소모는 1회 | `player.hasRabbitPoop = true` |
+| `constipation` | 변비 | 진갈색 `0x6b4423` | 설치한 트랩이 1회로 부서지지 않고 **총 2회 적중**(`trapHits` 1→2). 밟고 있는 동안엔 적별 1회만 소모(반복 발동 차단), 범위를 벗어나면 해제돼 **같은 적(단독 보스 포함)이 다시 밟아도 남은 내구 소모** — 마지막 피격에서만 파괴+위장 스플래시 | `player.trapHits += 1` |
+| `enteritis` | 장염 | 누런녹 `0xc2a83e` | **5초마다** 발밑에 트랩 1개 **자동 설치**(코어 무소모, 쿨다운 무관, `AUTO_TRAP_INTERVAL`). 최대 설치 수 도달 시 해당 주기 건너뜀. 방 입장 시 타이머 리셋. 토끼똥 소유 시 3개 동시 | `player.hasAutoTrap = true` |
 | `thick_fur` | 두꺼운 모피 | 카키 `0xb5a07a` | 받는 피해 **-12%** (`damageReduction += 0.12`, 독·화상 DoT 는 관통) | `player.damageReduction += 0.12` |
 | `afterimage` | 잔상 | 청백 `0xcfe7ff` | 받는 공격을 **15% 확률로 완전 회피**(피해·넉백 무효). 독·화상 DoT 는 회피 불가. `takeDamage` 진입부 굴림 | `player.dodgeRate += 0.15` |
 | `feral` | 야성 | 진주황 `0xe24a1a` | **HP가 낮을수록 피해 증가** — 만피 +0%, 0HP +50% 선형(`0.5×(1−hp/maxHp)`). `rollAttackDamage` 가 base 에 곱해 근거리·트랩 직격·스플래시 전부 적용, 실시간 재계산 | `player.hasBerserk = true` |
@@ -60,7 +60,7 @@
 
 - **근거리(A)**: `round(baseAttack × dmgMult × meleeDamageMult × (1 + hungerDamageBonus()))` — 충전 단계별 `dmgMult` = `1.0 / 1.2 / 1.4` (`AttackManager.MELEE_TIERS`). 기본 10/12/14. 헝그리 정신 보너스는 여기에만 적용.
 - **설치형(B)**: `baseAttack × TRAP_DMG_MULT(3)` (`AttackManager._placePoop`). 기본 30. 구버전 세이브 복원은 저장된 값 우선(`POOP_DMG=30` 폴백).
-- 스플래시(`SPLASH_DMG=15`)는 baseAttack과 무관하게 고정.
+- 위장 트랩 스플래시는 **해당 트랩 직격 데미지 × `SPLASH_DMG_RATIO`(0.25) × 보유 위장 종류 수**(1~3). 트랩 데미지가 baseAttack에서 파생되므로 스플래시도 baseAttack에 비례해 상승한다.
 - `core_crystal`로 +1 될 때마다 근거리·설치가 함께 상승.
 - **헝그리 정신(`hungry_spirit`)**: `AttackManager._fireMelee` 에서 근거리(A) base 데미지에 `hungerDamageBonus()`(부족분 ×0.1%, 하한 3% 상한 없음 — 코어 500↑ 이어도 하한 3%)를 곱한다. 근거리 공격에만 적용되며 트랩·스플래시에는 영향 없음.
 
@@ -73,15 +73,15 @@
 | `baseAttack` | `10` | 기본 공격력 — 근거리(×충전배율×meleeDamageMult)·설치형(×3) 데미지의 단일 출처. 코어 결정체 +1 (스택) |
 | `meleeRadiusMult` | `1.0` | 근거리 공격 반경 배율 |
 | `meleeDamageMult` | `1.0` | 근거리 공격 데미지 배율 |
-| `hasPoison` | `false` | 명중 시 30% 확률로 독 부여 여부 |
-| `hasFire` | `false` | 명중 시 30% 확률로 화상 부여 여부 |
-| `hasIce` | `false` | 명중 시 30% 확률로 빙결 부여 여부 |
-| `hasThunder` | `false` | 명중 시 인접 적 연쇄 피해 여부 |
+| `hasPoison` | `false` | 근거리 명중 시 25% 확률로 독 부여 여부 |
+| `hasFire` | `false` | 근거리 명중 시 25% 확률로 화상 부여 여부 |
+| `hasIce` | `false` | 근거리 명중 시 25% 확률로 빙결 부여 여부 |
+| `hasThunder` | `false` | 근거리 명중 시 25% 확률로 인접 적 연쇄 피해 여부 |
 | `healOnKill` | `0` | 적 처치 시 회복 HP량 |
 | `chargeSpeedMult` | `1.0` | 근거리 충전 속도 배율 (AttackManager의 유효 충전 시간 = `_mChargeTime * chargeSpeedMult`) |
-| `hasFireDisguise`   | `false` | 트랩 스플래시 + 30% 확률 화상 부여 여부 |
-| `hasIceDisguise`    | `false` | 트랩 스플래시 + 30% 확률 빙결 부여 여부 |
-| `hasPoisonDisguise` | `false` | 트랩 스플래시 + 30% 확률 중독 부여 여부 |
+| `hasFireDisguise`   | `false` | 트랩 스플래시 + 30% 확률 화상 부여 여부 (`DISGUISE_PROC`) |
+| `hasIceDisguise`    | `false` | 트랩 스플래시 + 30% 확률 빙결 부여 여부 (`DISGUISE_PROC`) |
+| `hasPoisonDisguise` | `false` | 트랩 스플래시 + 30% 확률 중독 부여 여부 (`DISGUISE_PROC`) |
 | `trapCostBonus` | `0` | 트랩 코어 소모 감소량 (실제 소모 = max(1, 3 - bonus)) |
 | `trapSizeMult` | `1` | 트랩 크기 배율 |
 | `healItemMult` | `1.0` | 회복 아이템(상점 heal/heal_pct + 보스 RareItem) 효과 배율. heal_full(전체 회복)은 미적용 |
@@ -96,8 +96,8 @@
 | `hasHungrySpirit` | `false` | 헝그리 정신 — 부족분(500−코어) ×0.1% 근거리 피해 증가(하한 3%, 상한 없음, 코어 500↑ 이어도 하한 3%). `AttackManager._fireMelee` 가 `hungerDamageBonus()` 로 근거리(A) base 에만 곱함 |
 | `hasSatiety` | `false` | 포만감 — 코어 ×0.1% 치명타 피해 증가(최대 +100%, 코어 1000개에서 도달). `Player.rollAttackDamage` 가 `satietyCritBonus()` 를 `critMult` 에 합산해 모든 치명타에 적용 |
 | `hasRabbitPoop` | `false` | 토끼똥 — B 트랩 3개 동시 설치, 최대 설치 수 ×3, 트랩 직격 피해 ×0.5, 트랩 크기 ×0.3. `AttackManager._startPlace/_placePoop` 에 반영 |
-| `trapHits` | `1` | 변비 — 트랩 1개가 버티는 피격 횟수. `AttackManager._onPoopHitEnemy` 가 적별 1회 소모, 소진(0) 시에만 파괴+스플래시. 트랩의 `hitEnemies` Set 으로 같은 적 중복 발동 차단 |
-| `hasAutoTrap` | `false` | 장염 — 7초마다 발밑에 무료 트랩 1개 자동 설치(코어·쿨다운 무관). `AttackManager.update` 의 `_autoTrapTimer` → `_tryAutoTrap` (최대치 도달 시 무시) |
+| `trapHits` | `1` | 변비 — 트랩 1개가 버티는 피격 횟수. `AttackManager._onPoopHitEnemy` 가 피격당 1 소모, 소진(0) 시에만 파괴+스플래시. 트랩의 `hitEnemies` Set 으로 밟고 있는 동안만 중복 발동 차단 — 범위 이탈·사망 시 `update()` 가 해제해 같은 적(단독 보스)도 재진입하면 남은 내구 소모 |
+| `hasAutoTrap` | `false` | 장염 — 5초마다 발밑에 무료 트랩 1개 자동 설치(코어·쿨다운 무관). `AttackManager.update` 의 `_autoTrapTimer` → `_tryAutoTrap` (최대치 도달 시 무시) |
 | `dodgeRate` | `0` | 잔상 — 받는 공격 회피 확률(0~1). `takeDamage` 진입부에서 굴림, 성공 시 피해·넉백 무효(DoT `bypassArmor` 는 제외). 두꺼운 모피와 별개 |
 | `hasBerserk` | `false` | 야성 — HP 낮을수록 피해 증가(최대 +50% @0HP). `berserkDamageBonus()` = `0.5×(1−hp/maxHp)`, `rollAttackDamage` 가 base 에 곱(근거리·트랩·스플래시 공통, 실시간) |
 | `bodyScaleMult` | `1` | 채식주의 — 몸 크기 배율(×0.8). `Player.applyBodyScale()` 이 `setScale`(시각)·`_applyBodySize()`(히트박스)에 동기 반영. 픽업 시 즉시 적용, 세이브 복원 시에도 재호출 |
@@ -106,21 +106,25 @@
 
 ## 상태이상 시스템 (`src/systems/EnemyManager.js`)
 
+발동 확률은 부여 경로별: **근거리 발톱 25%** (hit당, `_onAttackFired`) / **위장 트랩 30%** (`DISGUISE_PROC`, 직격·스플래시 대상 각각 굴림).
+
+독·화상 DoT 는 공용 `_tickStatus(map, dt, color, dmgFn)` 로 처리한다. **지속시간이 아니라 남은 틱 수(`ticksLeft`)로 종료를 판정**해 마지막 틱이 부동소수점 경쟁으로 유실되지 않는다(과거 지속시간 타이머 방식은 화상 2틱·독 9틱만 발생하던 버그가 있었음).
+
 ### 독 (poison)
-- `_poisoned` Map — `{ timer: 10, accum: 0 }`
-- 중첩 없음: 발동 확률 30% (hit당), 만료 후 재적용 가능
-- 데미지: maxHp×1%/s, 최소 2/s
-- 시각: HP바 보라색(`0xaa44ff`) → 만료 시 초록 복원
+- `_poisoned` Map — `{ ticksLeft: 10, tickTimer: 1 }` (첫 틱은 부여 1초 뒤, 이후 1초 간격 → **총 10틱**)
+- 중첩 없음, 종료 후 재적용 가능
+- 데미지: 틱당 `max(2, floor(maxHp×1%))`, 방어력 관통
+- 시각: HP바 보라색(`0xaa44ff`) → 종료 시 초록 복원
 
 ### 화상 (burn)
-- `_burned` Map — `{ timer: 3, accum: 0 }`
-- 중첩 없음: 발동 확률 30% (hit당), 만료 후 재적용 가능
-- 데미지: maxHp×2.5%/s, 최소 4/s
-- 시각: HP바 주황-빨강(`0xff4422`) → 만료 시 초록 복원, 데미지 숫자 `#ff6622`
+- `_burned` Map — `{ ticksLeft: 3, tickTimer: 1 }` (첫 틱은 부여 1초 뒤, 이후 1초 간격 → **총 3틱**)
+- 중첩 없음, 종료 후 재적용 가능
+- 데미지: 틱당 `max(4, floor(maxHp×2.5%))`, 방어력 관통
+- 시각: HP바 주황-빨강(`0xff4422`) → 종료 시 초록 복원, 데미지 숫자 `#ff6622`
 
 ### 빙결 (freeze)
-- `_frozen` Map — `{ timer: 3 }`
-- 중첩 없음: 발동 확률 30% (hit당), 만료 후 재발동 가능
+- `_frozen` Map — `{ timer: 3 }` (보스는 `BOSS_FREEZE_MULT 0.5` 로 1.5초)
+- 중첩 없음, 만료 후 재발동 가능
 - 효과: 매 프레임 velocity 강제 0 (이동 완전 불가)
 - 시각: HP바 하늘색(`0x88ccff`) → 만료 시 초록 복원
 

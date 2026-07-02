@@ -18,11 +18,11 @@
  *   hasPoison        false  근거리 명중 시 25% 확률 독 부여
  *   hasFire          false  근거리 명중 시 25% 확률 화상 부여
  *   hasIce           false  근거리 명중 시 25% 확률 빙결
- *   hasThunder       false  근거리 명중 시 25% 확률로 150px 반경 연쇄, hop마다 직전 데미지의 50% (≥2 유지, 최대 10hop)
+ *   hasThunder       false  근거리 명중 시 25% 확률로 150px 반경 연쇄, hop마다 직전 데미지의 50% (피해 ≥1 동안, 최대 20hop)
  *   healOnKill       0      적 처치 시 HP 회복량
- *   hasFireDisguise   false  불꽃 위장 — 트랩 스플래시 + 20% 화상
- *   hasIceDisguise    false  냉동 위장 — 트랩 스플래시 + 20% 빙결
- *   hasPoisonDisguise false  독성 위장 — 트랩 스플래시 + 20% 중독
+ *   hasFireDisguise   false  불꽃 위장 — 트랩 스플래시 + 30% 화상
+ *   hasIceDisguise    false  냉동 위장 — 트랩 스플래시 + 30% 빙결
+ *   hasPoisonDisguise false  독성 위장 — 트랩 스플래시 + 30% 중독
  *   trapCostBonus    0      트랩 코어 소모 감소
  *   trapSizeMult     1      트랩 크기 배율
  *   healItemMult     1.0    회복 아이템(상점 heal/heal_pct + 보스 RareItem) 효과 배율 — 대식가 +0.1
@@ -46,7 +46,7 @@
  *   hasSatiety       false  포만감 — 코어 ×0.1% 치명타 피해 증가(최대 +100%, 코어 1000 에서 도달). rollAttackDamage 에서 critMult 에 합산
  *   hasRabbitPoop    false  토끼똥 — B 트랩 3개 동시 설치, 최대 설치 수 ×3, 트랩 피해 ×0.5. AttackManager._startPlace/_placePoop 에 반영
  *   trapHits         1      트랩 1개가 버티는 피격 횟수 (변비 +1) — AttackManager._onPoopHitEnemy 가 소진 시에만 파괴+스플래시
- *   hasAutoTrap      false  장염 — 7초마다 발밑에 무료 트랩 자동 설치(코어 무소모); 토끼똥 소유 시 3개 동시. AttackManager._tryAutoTrap
+ *   hasAutoTrap      false  장염 — 5초마다 발밑에 무료 트랩 자동 설치(코어 무소모); 토끼똥 소유 시 3개 동시. AttackManager._tryAutoTrap
  *   dodgeRate        0      잔상 — 받는 공격을 확률로 완전 회피(피해·넉백 무효). takeDamage 진입부 굴림(DoT bypassArmor 는 제외)
  *   hasBerserk       false  야성 — HP 가 낮을수록 피해 증가(최대 +50% @0HP, 만피 +0%). rollAttackDamage 가 base 에 곱 → 근거리·트랩·스플래시 전부
  *   bodyScaleMult    1      채식주의 — 몸 크기 배율(×0.8). applyBodyScale() 이 시각(setScale)·히트박스(_applyBodySize)에 동기 반영
@@ -145,7 +145,7 @@ export default class Player {
     this.hasSatiety       = false; // 포만감 — 코어 ×0.1% 만큼 치명타 피해 증가(최대 +100%), rollAttackDamage 에서 critMult 에 합산
     this.hasRabbitPoop    = false; // 토끼똥 — B 트랩 3개 동시 설치, 최대 설치 수 ×3, 트랩 피해 ×0.5
     this.trapHits         = 1;     // 변비 — 트랩 1개가 버티는 피격 횟수(+1). AttackManager._onPoopHitEnemy 소진 시에만 파괴
-    this.hasAutoTrap      = false; // 장염 — 7초마다 발밑에 무료 트랩 자동 설치. AttackManager.update 타이머
+    this.hasAutoTrap      = false; // 장염 — 5초마다 발밑에 무료 트랩 자동 설치. AttackManager.update 타이머
     this.dodgeRate        = 0;     // 잔상 — 받는 공격 회피 확률(0~1). takeDamage 진입부 굴림, 성공 시 피해·넉백 무효
     this.hasBerserk       = false; // 야성 — HP 낮을수록 피해 증가(최대 +50% @0HP). rollAttackDamage 에서 base 에 곱
     this.bodyScaleMult    = 1;    // 채식주의 — 몸 크기 배율(×0.8). applyBodyScale() 이 시각·히트박스에 동기 반영
@@ -291,12 +291,14 @@ export default class Player {
    * @param {object|null} knockback
    * @param {object} [options]
    * @param {boolean} [options.bypassArmor] true 면 armor·damageReduction 무시 (독·화상 등 상태이상 DoT — 방어력 관통)
+   * @param {string}  [options.damageColor] 데미지 숫자 색상 (기본 '#ff5555'). DoT 등을 시각적으로 구분할 때 지정.
    * @returns {boolean} true = 사망
    */
   takeDamage(amount, knockback = null, options = {}) {
     if (this._invincible) return false;
 
-    const bypassArmor = options.bypassArmor === true;
+    const bypassArmor  = options.bypassArmor === true;
+    const damageColor  = options.damageColor ?? '#ff5555';
 
     // 잔상 — 일반 피격을 확률로 완전 회피(피해·넉백 무효). 독·화상 DoT(bypassArmor) 는 회피 불가.
     if (!bypassArmor && amount > 0 && this.dodgeRate > 0 && Math.random() < this.dodgeRate) {
@@ -355,7 +357,7 @@ export default class Player {
 
     this.hp = Math.max(0, this.hp - amount);
     this._invincible = true;
-    showDamageNumber(this.scene, this.x, this.y - DISPLAY_H / 2, amount, '#ff5555');
+    showDamageNumber(this.scene, this.x, this.y - DISPLAY_H / 2, amount, damageColor);
 
     if (knockback) {
       const { dx, dy, force, duration } = knockback;

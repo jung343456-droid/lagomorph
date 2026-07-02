@@ -91,6 +91,8 @@
 ### 3. 상태이상 Map은 인덱스로
 `_poisoned/_burned/_frozen`은 `Map<enemy, entry>`라 인스턴스 키를 직렬화할 수 없다. **live 배열 인덱스**로 변환해 저장하고, 복원 시 같은 순서로 재구성한 `enemies[idx]`를 키로 Map을 재구축한다. → 적 직렬화/복원 순서가 동일해야 idx가 유효.
 
+entry 스키마: 독·화상은 `{ ticksLeft, tickTimer }`(남은 틱 수 + 다음 틱까지 초), 빙결은 `{ timer }`(남은 초). `_serializeStatus`가 entry를 그대로 펼쳐 저장하므로 필드가 바뀌면 세이브 스키마도 함께 바뀐다 → `SaveManager.VERSION` 을 올려 구버전 저장본을 무효화할 것.
+
 ### 4. 복원 순서 제약 — 어기면 깨짐
 `GameScene.create()` 복원 블록은 **이벤트 핸들러 등록 후 + `scene.launch('UIScene')` 전**에 위치하며, 순서가 고정이다:
 

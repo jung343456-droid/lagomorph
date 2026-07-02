@@ -11,7 +11,7 @@ import PassiveItem, { ITEM_DEFS } from '../entities/PassiveItem';
 import Shopkeeper from '../entities/Shopkeeper';
 import Altar from '../entities/Altar';
 import MemoryTape from '../entities/MemoryTape';
-import { getMetaCores, beginMetaRun, commitMetaRun, addRunPickup, getGrimIntroShown, markGrimIntroShown, markVaultDiscovered, hasSeenDialogue, markDialogueSeen } from '../data/MetaProgress';
+import { getMetaCores, beginMetaRun, commitMetaRun, addRunPickup, getGrimIntroShown, markGrimIntroShown, markVaultDiscovered, hasSeenDialogue, markDialogueSeen, incrementPlayCount } from '../data/MetaProgress';
 import { saveRunState, loadRunSave, clearRunSave } from '../data/SaveManager';
 import { randomGrimTip } from '../data/GrimDialogue';
 
@@ -75,6 +75,9 @@ export default class GameScene extends Phaser.Scene {
     // 이어하기 — data.restore + 유효 저장본이 있을 때만 복원 모드. _restoring 동안 자동저장 차단.
     const save = data?.restore ? loadRunSave() : null;
     this._restoring = !!save;
+
+    // 플레이 횟수 — 신규 런 시작 시에만 +1 (이어하기/복원은 제외). 기록만, 소비처는 추후.
+    if (!save) incrementPlayCount();
 
     this.player        = new Player(this, ROOM_W / 2, ROOM_H / 2);
     this.input$        = new InputManager(this);
@@ -237,7 +240,7 @@ export default class GameScene extends Phaser.Scene {
         }
       }
 
-      // 코어 제단 방(비밀방 1/4 분기) — 제단방에 있으면 스폰, 떠나면 정리
+      // 코어 제단 방(비밀방 1/3 분기) — 제단방에 있으면 스폰, 떠나면 정리
       const isAltarRoom = roomData.type === 'secret_cache' && roomData.cacheSubtype === 'altar';
       if (isAltarRoom && !this._altar) {
         this._altar = new Altar(this, ROOM_W / 2, ROOM_H / 2);
@@ -271,11 +274,12 @@ export default class GameScene extends Phaser.Scene {
         );
       }
 
-      // 상자방(공동묘지) GRIM — 탁자·상점 없음, 근접 시 "....." 만 표시
+      // 상자방(공동묘지) GRIM — 탁자·상점 없음, 앞의 무덤 하나를 바라보는 뒷모습('grim_back').
+      // 근접해 말을 걸어도(grave-grim-near) 텍스처를 바꾸지 않아 돌아보지 않고 "....." 만 표시.
       if (this._graveGrim) { this._graveGrim.dispose(); this._graveGrim = null; }
       if (roomData.type === 'secret_cache' && roomData.cacheSubtype === 'chest') {
         this._graveGrim = new Shopkeeper(
-          this, CHEST_GRIM_X, CHEST_GRIM_Y, null, 'grave-grim-near', false,
+          this, CHEST_GRIM_X, CHEST_GRIM_Y, null, 'grave-grim-near', false, 'grim_back',
         );
       }
 
@@ -304,7 +308,8 @@ export default class GameScene extends Phaser.Scene {
         markGrimIntroShown();
         ui.openDialogue?.(GRIM_FIRST_LINES, () => ui.openShop?.(slots));
       } else {
-        ui.openDialogue?.(randomGrimTip(), () => ui.openShop?.(slots));
+        // 랜덤 팁은 GRIM 이 서 있는 층 기준 — 구역 3·4 상점에선 그 구역 적 정보 팁이 섞인다
+        ui.openDialogue?.(randomGrimTip(this.currentFloor), () => ui.openShop?.(slots));
       }
     });
 

@@ -2,7 +2,7 @@ import Hound from './Hound.js';
 
 /**
  * 사냥꾼 보스 ("수석 사냥꾼", HunterBoss) — 구역 3 표시 10층 / 구역 4 표시 10층 보스 (인간, 다페이즈)
- * HP 750 / 속도 155 / 데미지: 화살 18 · 단검 접촉 22 · 연타 14×n / 코어 22
+ * HP 1500 / 속도 155 / 데미지: 화살 18 · 단검 접촉 22 · 연타 14×n / 코어 22
  *
  * 단검 사냥꾼 + 활 사냥꾼의 특징을 모두 담은 마스터 — 거리·페이즈 가중치로 행동을 즉석 선택해
  * 사격 ↔ 기습 대시 연타 ↔ 구르기 이탈을 자유롭게 섞는다(고정 타이머가 아니라 _chooseAction 결정).
@@ -85,8 +85,8 @@ export default class HunterBoss {
   constructor(scene, x, y) {
     this.scene = scene;
 
-    this.hp     = 750;
-    this.maxHp  = 750;
+    this.hp     = 1500;
+    this.maxHp  = 1500;
     this.speed  = MOVE_SPEED;
     this.damage = DAGGER_DMG;   // 접촉 데미지(단검)
     this.displayName = '수석 사냥꾼';

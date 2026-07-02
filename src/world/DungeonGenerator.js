@@ -126,6 +126,7 @@ const OPP_DIR = { up: 'down', down: 'up', left: 'right', right: 'left' };
 const SECRET_CACHE_CHANCE_BASE = 0.5;  // 1층 보물방 출현 확률 (기본 50%)
 const SECRET_CACHE_CHANCE_MAX  = 0.75; // 출현 확률 상한 (75%)
 const SECRET_CACHE_CHANCE_STEP = 0.03; // 층당 증가폭 — 10층부터 상한 도달
+const CHEST_ROOM_CHANCE        = 0.1;  // 보물방 1개당 공동묘지(상자)방이 한쪽 벽에 추가로 붙을 확률 (10%)
 // 기억 보관실 고정 층(VAULT_FLOOR_MAP)·메타데이터는 src/data/Vaults.js 단일 출처에서 가져온다.
 
 /** combat 방에서 도어가 없는 방향 중 하나를 무작위 반환. 없으면 null. */
@@ -156,6 +157,7 @@ function _addSecretRooms(rooms, floorNum, ownedItemIds) {
     r.doors[OPP_DIR[dir]] = parent.id;
     rooms.push(r);
     parent.secretDoor = { dir, roomId: r.id, targetType: type };
+    return r;
   }
 
   // 보물방 — 층 진행에 따라 50% → 75%(상한)
@@ -170,11 +172,20 @@ function _addSecretRooms(rooms, floorNum, ownedItemIds) {
       .filter(({ dir }) => dir !== null);
     if (pool.length > 0) {
       const { r: parent, dir } = pool[Math.floor(Math.random() * pool.length)];
-      // 보물방(loot) / 제단방(altar) / 엘리트방(elite) / 상자방(chest, 공동묘지) = 각 1/4
+      // 보물방(loot) / 제단방(altar) / 엘리트방(elite) = 각 1/3
       const roll = Math.random();
-      const subtype = roll < 1 / 4 ? 'loot' : roll < 2 / 4 ? 'altar' : roll < 3 / 4 ? 'elite' : 'chest';
+      const subtype = roll < 1 / 3 ? 'loot' : roll < 2 / 3 ? 'altar' : 'elite';
       const reward  = subtype === 'loot' ? _pickCacheReward(ownedItemIds) : null;
-      makeSecretRoom(parent, dir, 'secret_cache', { cacheSubtype: subtype, cacheReward: reward });
+      const cache = makeSecretRoom(parent, dir, 'secret_cache', { cacheSubtype: subtype, cacheReward: reward });
+
+      // 공동묘지(상자)방 — 보물방 1개당 10% 확률로 보물방의 남은 벽 한쪽에 추가 비밀방으로 붙는다.
+      // 보물방 안에서 또 하나의 비밀 벽을 부수면 진입 (nested secret room). 타격 횟수는 보물방과 동일(3회).
+      if (Math.random() < CHEST_ROOM_CHANCE) {
+        const cdir = _getFreeWallDir(cache);
+        if (cdir !== null) {
+          makeSecretRoom(cache, cdir, 'secret_cache', { cacheSubtype: 'chest', cacheReward: null });
+        }
+      }
     }
   }
 

@@ -15,7 +15,7 @@
 import { getRunPicked } from './MetaProgress';
 
 const KEY     = 'lagomorph_run_save';
-const VERSION = 1; // 스키마 변경 시 +1 → 구버전 저장본은 무효(이어하기 미노출)
+const VERSION = 2; // 스키마 변경 시 +1 → 구버전 저장본은 무효(이어하기 미노출)
 
 /** 유효한(버전 일치) 저장본이 존재하는가. */
 export function hasRunSave() {

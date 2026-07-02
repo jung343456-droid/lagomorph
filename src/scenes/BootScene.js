@@ -247,6 +247,34 @@ export default class BootScene extends Phaser.Scene {
     g.fillRect(1, 28, 9, 2);
     g.generateTexture('grim', 40, 50);
 
+    // grim_back: 40x50 GRIM 뒷모습 (공동묘지방 — 무덤을 바라봄, 얼굴 없음 + 꼬리 + 가방끈)
+    g.clear();
+    // 귀 (좌·우)
+    g.fillStyle(FUR);
+    g.fillRoundedRect(13, 2, 4, 16, 2);
+    g.fillRoundedRect(23, 2, 4, 16, 2);
+    // 우측 귀 흉터 (뒤에서도 보이는 자국)
+    g.fillStyle(DARK);
+    g.fillRect(23, 8, 4, 2);
+    // 뒤통수 (얼굴 없음)
+    g.fillStyle(FUR);
+    g.fillCircle(20, 20, 10);
+    // 몸통(등)
+    g.fillRoundedRect(8, 24, 24, 22, 4);
+    // 등 중앙 척추 음영 (뒷모습 단서)
+    g.fillStyle(DARK);
+    g.fillRect(19, 26, 2, 15);
+    // 어깨 가방 끈 (등을 가로지르는 끈) — 앞모습의 좌측 가방이 뒤에서 반대편
+    g.fillStyle(0x4a2e1a);
+    g.fillRect(10, 27, 22, 2);
+    // 가방 (우측)
+    g.fillStyle(0x6b4226);
+    g.fillRoundedRect(30, 28, 9, 12, 2);
+    // 꼬리 (뒷모습 표식)
+    g.fillStyle(0xf0f0ec);
+    g.fillCircle(20, 45, 4);
+    g.generateTexture('grim_back', 40, 50);
+
     g.destroy();
   }
 }

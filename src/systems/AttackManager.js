@@ -20,9 +20,9 @@ const POOP_SIZE     = 22;   // 설치형 오브젝트 크기 (px)
 const MAX_POOPS     = 5;    // 동시에 배치 가능한 최대 설치물 수
 const POOP_COLOR    = 0x7B3F20; // 설치물 색상 (갈색)
 
-const SPLASH_RADIUS = 40;  // 위장 트랩 스플래시 반경 (px)
-const SPLASH_DMG    = 15;  // 위장 트랩 스플래시 데미지
-const DISGUISE_PROC = 0.5; // 위장 트랩 상태이상 발동 확률 (명중 enemy 1마리당, 위장 종류별 독립)
+const SPLASH_RADIUS    = 40;   // 위장 트랩 스플래시 반경 (px)
+const SPLASH_DMG_RATIO = 0.25; // 위장 트랩 스플래시 데미지 = 해당 트랩 직격 데미지 × 이 값 × 보유 위장 종류 수
+const DISGUISE_PROC    = 0.3;  // 위장 트랩 상태이상 발동 확률 (명중 enemy 1마리당, 위장 종류별 독립)
 
 const AUTO_TRAP_INTERVAL = 5; // 장염(hasAutoTrap) 자동 트랩 설치 간격 (초)
 
@@ -116,12 +116,24 @@ export default class AttackManager {
       this.bCooldownNormalized = 0;
     }
 
-    // 장염: 7초마다 발밑에 무료 트랩 자동 설치 (최대치 도달 시 이번 주기는 건너뜀)
+    // 장염: AUTO_TRAP_INTERVAL(5초)마다 발밑에 무료 트랩 자동 설치 (최대치 도달 시 이번 주기는 건너뜀)
     if (!this._disabled && this.player.hasAutoTrap) {
       this._autoTrapTimer += dt;
       if (this._autoTrapTimer >= AUTO_TRAP_INTERVAL) {
         this._autoTrapTimer = 0;
         this._tryAutoTrap();
+      }
+    }
+
+    // 변비(trapHits>1): 트랩 범위를 벗어난(또는 죽은) 적을 hitEnemies 에서 해제 — 같은 적이
+    // 다시 밟으면 남은 내구를 소모한다. 영구 차단 시 단독 보스가 밟은 트랩은 내구 1이 남은 채
+    // 영원히 제거되지 않는 죽은 트랩이 됐음. 밟고 있는 동안엔 Set 에 남아 반복 발동은 여전히 차단.
+    for (const poop of this._poops) {
+      for (const enemy of poop.hitEnemies) {
+        if (!enemy.alive || !enemy.gameObject?.active
+            || !this.scene.physics.overlap(poop.go, enemy.gameObject)) {
+          poop.hitEnemies.delete(enemy);
+        }
       }
     }
 
@@ -367,7 +379,8 @@ export default class AttackManager {
     go.body.setCircle(40);
     go.body.setImmovable(true);
     go.body.setAllowGravity(false);
-    // 변비(trapHits): 트랩 1개가 버티는 피격 횟수. hitEnemies 로 같은 적의 매 프레임 중복 발동 차단.
+    // 변비(trapHits): 트랩 1개가 버티는 피격 횟수. hitEnemies 로 밟고 있는 동안의 중복 발동 차단
+    // (범위 이탈 시 update() 가 해제 — 재진입하면 같은 적도 남은 내구 소모).
     this._poops.push({ go, damage: dmg, size, hits: this.player.trapHits ?? 1, hitEnemies: new Set() });
     this._poopGroup.add(go);
     this._spawnRing(x, y, POOP_COLOR, size * 2);
@@ -385,8 +398,8 @@ export default class AttackManager {
     // 오소리 잠행(땅속) 중엔 트랩을 밟지 않는다 (untargetable — 내구 소모·발동 없음)
     if (enemy.state === 'burrow') return;
 
-    // 변비(trapHits>1): 같은 적이 트랩 위에서 매 프레임 반복 발동하는 것을 막는다.
-    // 트랩당 적별 1회만 데미지/내구 소모 — 서로 다른 적이 밟아야 추가로 닳는다.
+    // 변비(trapHits>1): 같은 적이 트랩 위에 머무는 동안 매 프레임 반복 발동하는 것을 막는다.
+    // 범위를 벗어나면 update() 가 Set 에서 해제 — 같은 적도 다시 밟으면 남은 내구를 소모한다.
     if (poop.hitEnemies.has(enemy)) return;
     poop.hitEnemies.add(enemy);
 
@@ -421,13 +434,15 @@ export default class AttackManager {
     const splashY = poopGO.y;
     this._destroyPoop(poop);
 
-    // 위장 트랩 스플래시: 주변 적에게 폭발 데미지 + 상태이상 시도
+    // 위장 트랩 스플래시: 주변 적에게 폭발 데미지 + 상태이상 시도.
+    // 스플래시 base = 이 트랩 직격 데미지 × 25% × 보유 위장 종류 수 (1종 ×0.25 ~ 3종 ×0.75).
     if (this._anyDisguise()) {
+      const splashBase = Math.max(1, Math.round(poop.damage * SPLASH_DMG_RATIO * this._disguiseCount()));
       this._spawnRing(splashX, splashY, this._disguiseRingColor(), SPLASH_RADIUS * 2);
       em.enemies.forEach(other => {
         if (!other.alive || other === enemy || other.state === 'stun') return;
         if (Phaser.Math.Distance.Between(splashX, splashY, other.x, other.y) > SPLASH_RADIUS) return;
-        const { damage: splashDmg, isCrit: splashCrit } = this.player.rollAttackDamage(SPLASH_DMG);
+        const { damage: splashDmg, isCrit: splashCrit } = this.player.rollAttackDamage(splashBase);
         const splashDead = other.takeDamage(splashDmg, null, { noStagger: true });
         showDamageNumber(this.scene, other.x, other.y - other.gameObject.height / 2, splashDmg, '#ffffff', splashCrit);
         if (splashCrit && other.state !== 'spike' && this.player.critHealAmount > 0) {
@@ -448,6 +463,12 @@ export default class AttackManager {
   _anyDisguise() {
     const p = this.player;
     return p.hasFireDisguise || p.hasIceDisguise || p.hasPoisonDisguise;
+  }
+
+  /** 보유한 위장 트랩 종류 수 (0~3) — 스플래시 데미지 가산 배수. */
+  _disguiseCount() {
+    const p = this.player;
+    return (p.hasFireDisguise ? 1 : 0) + (p.hasIceDisguise ? 1 : 0) + (p.hasPoisonDisguise ? 1 : 0);
   }
 
   _applyDisguiseStatus(enemy, em) {

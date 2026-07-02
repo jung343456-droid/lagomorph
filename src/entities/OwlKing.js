@@ -7,7 +7,7 @@
  * 페이즈:
  *   Phase 1 (HP 100~60%) — 공중 정찰: shadow_dive(50%) + feather_volley(33%) + screech(17%)
  *   Phase 2 (HP 60~30%)  — feather_rain·whirlwind 추가, dive 2연속, dive 인디케이터 1.0→0.7s 단축
- *   Phase 3 (HP <30%)    — 광폭화: 첫 진입 시 박쥐 4 소환, 쿨다운 ×0.6, dive 3연속·인디케이터 0.4s,
+ *   Phase 3 (HP <30%)    — 광폭화: 첫 진입 시 정예 박쥐 6 소환(개별 드롭 억제), 쿨다운 ×0.6, dive 3연속·인디케이터 0.4s,
  *                          volley 16방향, rain 7발
  *
  * 패턴 (직전과 같은 패턴이면 1회 재추첨 — 연속 반복 완화):
@@ -79,7 +79,7 @@ const PHASE3_TINT       = 0xff6666;
 const HIT_STUN_DUR      = 0.3;
 
 const SUMMON_TYPE       = 'bat';
-const SUMMON_COUNT_P3   = 18;
+const SUMMON_COUNT_P3   = 6;   // Phase 3 진입 시 정예 박쥐 소환 수 (개별 드롭 억제 — _noEliteDrop)
 
 function calcDir(vx, vy) {
   if (Math.abs(vx) < 1 && Math.abs(vy) < 1) return null;
@@ -648,7 +648,11 @@ export default class OwlKing {
       const r     = 90 + Math.random() * 60;
       const sx    = Math.max(pad, Math.min(ROOM_W - pad, x + Math.cos(angle) * r));
       const sy    = Math.max(pad, Math.min(ROOM_H - pad, y + Math.sin(angle) * r));
-      em.spawnEnemy(SUMMON_TYPE, sx, sy);
+      // 정예 박쥐로 변이 — 단, 개별 elite-killed 드롭은 억제(_noEliteDrop).
+      // 소환수라 아이템이 개별로 쏟아지면 곤란하고, 보스방 드롭은 boss-cleared 로 별도 처리된다.
+      const bat = em.spawnEnemy(SUMMON_TYPE, sx, sy);
+      em._makeElite(bat);
+      bat._noEliteDrop = true;
     }
   }
 

@@ -1,7 +1,7 @@
 /**
  * 사냥개 (Hound) — 구역 3 표시 5층 보스 "사냥개 무리" 구성원 (2마리 + 정예 활사냥꾼 2와 함께 스폰)
  *   ※ 표시 3층 중간보스(Hound×2)에서도 사용. 무리 분노는 살아있는 사냥개 수만 셈.
- * HP 290 / 속도 240 / 데미지 28(접촉/돌진) / 코어 14
+ * HP 580 / 속도 240 / 데미지 28(접촉/돌진) / 코어 14
  *
  * 패턴 (무리 포위 + 치고 빠지기):
  *   chase    → 측면 포위 접근(_stalk): 멀면 직진 접근, 가까우면 선회해 플레이어를 에워쌈
@@ -49,8 +49,8 @@ export default class Hound {
   constructor(scene, x, y) {
     this.scene = scene;
 
-    this.hp     = 290;
-    this.maxHp  = 290;
+    this.hp     = 580;
+    this.maxHp  = 580;
     this.speed  = CHASE_SPEED;
     this.damage = 28;
     this.displayName = '사냥개';

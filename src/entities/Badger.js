@@ -17,7 +17,7 @@
  *   stun     → 피격 시 0.3초 경직 + 넉백 (i-frame)
  *
  * charge·burrow 중에는 넉백·경직 면역(탱커 무게감). burrow 중에는 피격 무효 + 접촉 무해 + 트랩 무시(밟지 않음).
- * 공격 예고/발동 시 공격 범위 표시(_drawAttackTelegraph): 할퀴기=정면 반원 부채꼴, 돌진=경로 레인.
+ * 공격 예고/발동 시 공격 범위 표시(_drawAttackTelegraph): 할퀴기=정면 반원 부채꼴. 돌진은 표시 없음(방향·모션으로만 예고).
  * speedMult: 공용 속도 배수 경유 (추격·잠행 이동에 적용, 돌진 속도는 고정)
  */
 const DETECT_R      = 360;
@@ -40,9 +40,7 @@ const BURROW_CD     = 6.0;
 const BURROW_DUR    = 1.2;
 const BURROW_SPEED  = 180;   // 잠행 이동속도 (기존 200의 90% — 회피 기회 완화)
 const EMERGE_DUR    = 0.3;
-const CLAW_COLOR    = 0xff5522;  // 할퀴기 범위 표시
-const CHARGE_COLOR  = 0xffaa33;  // 돌진 경로 표시
-const CHARGE_HALF_W = 24;        // 돌진 판정 폭(표시용, 접촉 판정과 대략 일치)
+const CLAW_COLOR    = 0xff5522;  // 할퀴기 범위 표시 (돌진은 텔레그래프 없음)
 const BG_W          = 32;
 const BG_H          = 26;
 const BG_DW         = 60;
@@ -347,7 +345,7 @@ export default class Badger {
   /**
    * 공격 범위 표시 — 매 프레임 갱신.
    *   할퀴기(windup/claw): 정면 반원(반경 CLAW_R, dot>0 판정과 일치) 부채꼴. windup=예고(옅게), claw=발동(진하게)
-   *   돌진(chargeWind/charge): 조준 방향 경로 레인. chargeWind=예고(옅게), charge=발동(진하게)
+   *   돌진(chargeWind/charge): 표시 없음 — 조준 방향과 예고 모션으로만 알린다.
    *   그 외 상태에서는 지운다.
    */
   _drawAttackTelegraph() {
@@ -368,19 +366,8 @@ export default class Badger {
       gfx.beginPath();
       gfx.arc(x, y, CLAW_R, a0, a1);
       gfx.strokePath();
-    } else if (s === 'chargeWind' || s === 'charge') {
-      const active = s === 'charge';
-      const reach = CHARGE_SPEED * CHARGE_DUR;
-      const ex = x + Math.cos(angle) * reach, ey = y + Math.sin(angle) * reach;
-      const px = -Math.sin(angle) * CHARGE_HALF_W, py = Math.cos(angle) * CHARGE_HALF_W;
-      gfx.fillStyle(CHARGE_COLOR, active ? 0.26 : 0.13);
-      gfx.fillPoints([
-        { x: x - px,  y: y - py },
-        { x: x + px,  y: y + py },
-        { x: ex + px, y: ey + py },
-        { x: ex - px, y: ey - py },
-      ], true);
     }
+    // 돌진(chargeWind/charge)은 공격 범위 표시 없음 — 조준 방향·모션으로만 예고.
   }
 
   _moveTo(dx, dy, dist, speed) {
